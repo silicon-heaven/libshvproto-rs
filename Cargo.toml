@@ -2,20 +2,20 @@ workspace = { members = ["libshvproto-macros"] }
 
 [package]
 name = "shvproto"
-version = "3.0.18"
+version = "3.0.19"
 edition = "2021"
 
 [dependencies]
 libshvproto-macros = { path = "./libshvproto-macros" }
-simple_logger = { git = "https://github.com/fvacek/rust-simple_logger.git", branch = "main", features = ["stderr"] }
-
 log = "0.4.21"
 bytes = "1.6.0"
 chrono = "0.4.38"
 hex = "0.4.3"
 clap = { version = "4.5.7", features = ["derive"] }
+simple_logger = { version = "5.0.0", features = ["stderr"], optional = true }
 
 [features]
+cp2cp = ["simple_logger"]
 
 # Enables feature `min_specialization` of nightly compiler and provides
 # special `impl From<Collection<RpcValue>> for RpcValue` to just move
@@ -24,3 +24,4 @@ specialization = []
 
 [[bin]]
 name = "cp2cp"
+required-features = ["cp2cp"]
