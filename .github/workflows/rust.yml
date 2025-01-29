@@ -39,7 +39,7 @@ jobs:
     - name: Build and Install Binary
       run: |
         mkdir -p ${{github.workspace}}/install
-        cargo install --path '${{github.workspace}}' --root '${{github.workspace}}/install' --target ${{ matrix.target }}
+        cargo install --path '${{github.workspace}}' --root '${{github.workspace}}/install' --target ${{ matrix.target }} --features cp2cp
       shell: bash
 
     - name: Upload Artifact
