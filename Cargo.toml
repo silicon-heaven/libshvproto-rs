@@ -15,7 +15,7 @@ clap = { version = "4.5.7", features = ["derive"] }
 simple_logger = { version = "5.0.0", features = ["stderr"], optional = true }
 
 [features]
-cp2cp = ["simple_logger"]
+cp2cp = ["dep:simple_logger"]
 
 # Enables feature `min_specialization` of nightly compiler and provides
 # special `impl From<Collection<RpcValue>> for RpcValue` to just move
