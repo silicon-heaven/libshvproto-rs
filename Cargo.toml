@@ -14,6 +14,11 @@ hex = "0.4.3"
 clap = { version = "4.5.7", features = ["derive"] }
 simple_logger = { version = "5.0.0", features = ["stderr"], optional = true }
 
+[dev-dependencies]
+assert_cmd = "2.0"
+# https://github.com/rust-lang/cargo/issues/2911#issuecomment-749580481
+shvproto = { path = ".", features = ["cp2cp"] }
+
 [features]
 cp2cp = ["dep:simple_logger"]
 
