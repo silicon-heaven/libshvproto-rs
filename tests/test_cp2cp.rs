@@ -1,4 +1,5 @@
 #[cfg(test)]
+#[cfg(feature = "cp2cp")]
 mod test {
     use assert_cmd::prelude::*;
     use shvproto::RpcValue;
