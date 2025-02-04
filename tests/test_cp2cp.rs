@@ -1,5 +1,7 @@
 #[cfg(test)]
+#[cfg(feature = "cp2cp")]
 mod test {
+    use assert_cmd::prelude::*;
     use shvproto::RpcValue;
     use std::io::Write;
     use std::process::{Command, Output, Stdio};
@@ -7,7 +9,7 @@ mod test {
 
     fn run_cp2cp(data: &str) -> Result<Output, String> {
         let block = hex::decode(data).expect("HEX decoding failed");
-        let mut cmd = Command::new("target/debug/cp2cp");
+        let mut cmd = Command::cargo_bin("cp2cp").unwrap_or_else(|err| panic!("Couldn't execute cp2cp: {err}"));
         cmd.stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())

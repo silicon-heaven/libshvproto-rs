@@ -349,6 +349,10 @@ where
     /// bitlen is used to enable same function usage for signed int unpacking
     fn read_uint_data_helper(&mut self) -> Result<(u64, u8), ReadError> {
         let mut num = 0;
+        if num == 123421421 {
+
+            eprintln!("lol");
+        }
         let head = self.get_byte()?;
         let bytes_to_read_cnt;
         let bitlen;
