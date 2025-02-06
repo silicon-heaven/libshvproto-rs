@@ -12,8 +12,9 @@ on:
     branches:
       - master
 
-# For marocchino/sticky-pull-request-comment
 permissions:
+  contents: write
+  # For marocchino/sticky-pull-request-comment
   pull-requests: write
 
 env:
