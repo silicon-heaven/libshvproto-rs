@@ -204,7 +204,13 @@ jobs:
             echo '</details>'
 
             echo
-            echo 'You can download HTML coverage reports [here](${{steps.html-reports.outputs.artifact-url}})'.
+            echo You can use GitHub CLI to download HTML coverage reports and open them automatically using this command:
+            echo '```bash'
+            echo 'gh run --repo "${{github.repository}}" download --name "${{env.PROJECT_NAME}}-coverage-html-${{github.sha}}" 2> /dev/null; for file in "${{env.PROJECT_NAME}}-pycobertura-"{diff,show}"-${{github.sha}}".html; do xdg-open "$file"; done'
+            echo '```'
+            echo
+            echo 'You can download the HTML reports manually [here](${{steps.html-reports.outputs.artifact-url}})'.
+            echo
           } > sticky-comment.md
 
       - name: Add Coverage PR Comment
