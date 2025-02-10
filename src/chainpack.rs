@@ -662,6 +662,11 @@ fn test_int() {
 }
 
 #[test]
+fn test_cstring() {
+    assert_eq!(chainpack_to_rpcvalue("8E41484F4A2100").as_str(), "AHOJ!");
+}
+
+#[test]
 fn test_try_read_meta_complete() {
     // <T:RpcMessage,id:4,method:"ls">i{}
     let buff = hex::decode("8B414148444A86026C73FF8AFF").unwrap();
