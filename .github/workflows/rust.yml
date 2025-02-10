@@ -178,6 +178,7 @@ jobs:
 
       - name: Generate sticky comment contents
         run: |
+          # shellcheck disable=SC2016
           {
             echo '# Code coverage report'
 
@@ -187,7 +188,7 @@ jobs:
             else
               echo All new changes were covered.
             fi
-            cat "${{github.workspace}}/${{env.PROJECT_NAME}}-pycobertura-diff-${{github.sha}}.markdown"
+            cat '${{github.workspace}}/${{env.PROJECT_NAME}}-pycobertura-diff-${{github.sha}}.markdown'
 
             echo
             echo
@@ -197,7 +198,7 @@ jobs:
             echo '<summary>Click to expand</summary>'
             echo '<span>'
             echo
-            cat "${{github.workspace}}/${{env.PROJECT_NAME}}-pycobertura-show-${{github.sha}}.markdown"
+            cat '${{github.workspace}}/${{env.PROJECT_NAME}}-pycobertura-show-${{github.sha}}.markdown'
             echo
             echo '</span>'
             echo '</details>'
