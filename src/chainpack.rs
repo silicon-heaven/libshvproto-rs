@@ -667,6 +667,11 @@ fn test_cstring() {
 }
 
 #[test]
+fn test_blob() {
+    assert_eq!(chainpack_to_rpcvalue("850AAAAAAAAAAAAAAAAAAAAA").as_blob(), [170, 170, 170, 170, 170, 170, 170, 170, 170, 170]);
+}
+
+#[test]
 fn test_try_read_meta_complete() {
     // <T:RpcMessage,id:4,method:"ls">i{}
     let buff = hex::decode("8B414148444A86026C73FF8AFF").unwrap();
