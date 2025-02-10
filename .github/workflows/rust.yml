@@ -173,7 +173,7 @@ jobs:
         id: html-reports
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-html-reports-${{github.sha}}
+          name: ${{env.PROJECT_NAME}}-coverage-html-${{github.sha}}
           path: ${{github.workspace}}/${{env.PROJECT_NAME}}-pycobertura-*-${{github.sha}}.html
 
       - name: Generate sticky comment contents
