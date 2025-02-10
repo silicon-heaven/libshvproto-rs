@@ -637,6 +637,30 @@ where
     }
 }
 
+#[cfg(test)]
+fn chainpack_to_rpcvalue(data: &str) -> RpcValue {
+    let buff = hex::decode(data).unwrap();
+    let mut data = &buff[..];
+    let mut rd = ChainPackReader::new(&mut data);
+    rd.read().unwrap()
+}
+
+#[test]
+fn test_int() {
+    // uint sizes
+    assert_eq!(chainpack_to_rpcvalue("02").as_u64(), 2);
+    assert_eq!(chainpack_to_rpcvalue("8178").as_u64(), 120);
+    assert_eq!(chainpack_to_rpcvalue("8181FC").as_u64(), 508);
+    assert_eq!(chainpack_to_rpcvalue("81CFFFFA").as_u64(), 1048570);
+    assert_eq!(chainpack_to_rpcvalue("81E1FFFFE0").as_u64(), 33554400);
+    assert_eq!(chainpack_to_rpcvalue("82F3138083FD18A37C").as_u64(), 5489328932823932);
+    assert_eq!(chainpack_to_rpcvalue("82F47FFFFFFFFFFFFFFF").as_u64(), 9223372036854775807);
+    assert_eq!(chainpack_to_rpcvalue("82F47FFFFFFFFFFFFFFF").as_u64(), 9223372036854775807);
+
+    // Negative int
+    assert_eq!(chainpack_to_rpcvalue("82E9FFFFE0").as_int(), -33554400);
+}
+
 #[test]
 fn test_try_read_meta_complete() {
     // <T:RpcMessage,id:4,method:"ls">i{}
