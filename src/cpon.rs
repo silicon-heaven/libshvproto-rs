@@ -109,6 +109,9 @@ impl<'a, W> CponWriter<'a, W>
     }
     
     fn write_byte(&mut self, b: u8) -> WriteResult {
+        if b == 5 {
+            eprintln!("Ha!");
+        }
         self.byte_writer.write_byte(b)
     }
     fn write_bytes(&mut self, b: &[u8]) -> WriteResult {
