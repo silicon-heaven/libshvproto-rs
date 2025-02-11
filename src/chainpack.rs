@@ -404,13 +404,8 @@ where
         loop {
             let b = self.get_byte()?;
             match &b {
-                0 => {
-                    // end of string
-                    break;
-                }
-                _ => {
-                    buff.push(b);
-                }
+                0 => break,
+                _ => buff.push(b),
             }
         }
         let s = std::str::from_utf8(&buff);
