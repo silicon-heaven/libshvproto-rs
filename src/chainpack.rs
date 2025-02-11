@@ -689,7 +689,7 @@ fn test_map() {
     });
 
     // Invalid key
-    assert!(chainpack_to_rpcvalue("898200").is_err());
+    assert_eq!(chainpack_to_rpcvalue("898200").unwrap_err().msg, "ChainPack read error - Invalid Map key '0'");
 }
 
 #[test]
@@ -701,7 +701,7 @@ fn test_imap() {
     ]));
 
     // Invalid key
-    assert!(chainpack_to_rpcvalue("8A8603626172").is_err());
+    assert_eq!(chainpack_to_rpcvalue("8A8603626172").unwrap_err().msg, "ChainPack read error - Invalid IMap key '\"bar\"'");
 }
 
 #[test]
