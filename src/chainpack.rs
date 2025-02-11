@@ -404,14 +404,6 @@ where
         loop {
             let b = self.get_byte()?;
             match &b {
-                b'\\' => {
-                    let b = self.get_byte()?;
-                    match &b {
-                        b'\\' => buff.push(b'\\'),
-                        b'0' => buff.push(b'\0'),
-                        _ => buff.push(b),
-                    }
-                }
                 0 => {
                     // end of string
                     break;
