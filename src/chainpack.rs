@@ -651,6 +651,9 @@ fn test_int() {
 #[test]
 fn test_cstring() {
     assert_eq!(chainpack_to_rpcvalue("8E41484F4A2100").unwrap().as_str(), "AHOJ!");
+
+    // Invalid UTF-8 string
+    assert!(chainpack_to_rpcvalue("8EC32800").is_err());
 }
 
 #[test]
