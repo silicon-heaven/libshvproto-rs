@@ -174,7 +174,7 @@ jobs:
         id: html-reports
         uses: actions/upload-artifact@v4
         with:
-          name: ${{env.PROJECT_NAME}}-coverage-html-${{env.HASH_FOR_FILENAMES}}
+          name: ${{env.PROJECT_NAME}}-cov-html-${{env.HASH_FOR_FILENAMES}}
           path: ${{github.workspace}}/${{env.PROJECT_NAME}}-pycobertura-*-${{env.HASH_FOR_FILENAMES}}.html
 
       - name: Generate sticky comment contents
@@ -208,7 +208,7 @@ jobs:
             echo '#### HTML reports'
             echo 'You can use _GitHub CLI_ to download HTML coverage reports and open them automatically using this command:'
             echo '```bash'
-            echo '(cd "$(mktemp -d)" && gh run -R '\''${{github.repository}}'\'' download -n '\''${{env.PROJECT_NAME}}-coverage-html-${{env.HASH_FOR_FILENAMES}}'\'' && ls -1 | xargs -n1 xdg-open)'
+            echo '(cd "$(mktemp -d)" && gh run -R '\''${{github.repository}}'\'' download -n '\''${{env.PROJECT_NAME}}-cov-html-${{env.HASH_FOR_FILENAMES}}'\'' && ls -1 | xargs -n1 xdg-open)'
             echo '```'
             echo
             echo 'You can download the HTML reports manually [here](${{steps.html-reports.outputs.artifact-url}})'.
