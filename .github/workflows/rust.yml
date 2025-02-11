@@ -181,7 +181,7 @@ jobs:
         run: |
           # shellcheck disable=SC2016
           {
-            echo '## Code coverage report'
+            echo '## Code coverage report for ${{env.HASH_FOR_FILENAMES}}'
 
             echo '#### Coverage difference'
             if [[ ${{ env.FAIL }} = yes ]]; then
