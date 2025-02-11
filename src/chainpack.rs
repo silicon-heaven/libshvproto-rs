@@ -693,6 +693,18 @@ fn test_map() {
 }
 
 #[test]
+fn test_imap() {
+    assert_eq!(chainpack_to_rpcvalue("8a418603666f6f42860362617282814d4fff").unwrap().as_imap(), &BTreeMap::from([
+        (1, "foo".into()),
+        (2, "bar".into()),
+        (333, 15.into()),
+    ]));
+
+    // Invalid key
+    assert!(chainpack_to_rpcvalue("8A8603626172").is_err());
+}
+
+#[test]
 fn test_try_read_meta_complete() {
     // <T:RpcMessage,id:4,method:"ls">i{}
     let buff = hex::decode("8B414148444A86026C73FF8AFF").unwrap();
