@@ -673,7 +673,7 @@ fn test_blob() {
 
 #[test]
 fn test_list() {
-    assert_eq!(chainpack_to_rpcvalue("8886016182807BFE88414243FF80FF").as_list().clone(), vec![<_ as Into<RpcValue>>::into("a"), 123.into(), true.into(), vec![(1), 2.into(), 3.into()].into(), RpcValue::null()]);
+    assert_eq!(chainpack_to_rpcvalue("8886016182807BFE88414243FF80FF").as_list().clone(), vec![<_ as Into<RpcValue>>::into("a"), 123.into(), true.into(), vec![1, 2, 3].into(), RpcValue::null()]);
 }
 
 #[test]
