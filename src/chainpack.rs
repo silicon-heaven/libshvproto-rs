@@ -625,42 +625,42 @@ where
 }
 
 #[cfg(test)]
-fn chainpack_to_rpcvalue(data: &str) -> RpcValue {
+fn chainpack_to_rpcvalue(data: &str) -> Result<RpcValue, ReadError> {
     let buff = hex::decode(data).unwrap();
     let mut data = &buff[..];
     let mut rd = ChainPackReader::new(&mut data);
-    rd.read().unwrap()
+    rd.read()
 }
 
 #[test]
 fn test_int() {
     // uint sizes
-    assert_eq!(chainpack_to_rpcvalue("02").as_u64(), 2);
-    assert_eq!(chainpack_to_rpcvalue("8178").as_u64(), 120);
-    assert_eq!(chainpack_to_rpcvalue("8181FC").as_u64(), 508);
-    assert_eq!(chainpack_to_rpcvalue("81CFFFFA").as_u64(), 1048570);
-    assert_eq!(chainpack_to_rpcvalue("81E1FFFFE0").as_u64(), 33554400);
-    assert_eq!(chainpack_to_rpcvalue("82F3138083FD18A37C").as_u64(), 5489328932823932);
-    assert_eq!(chainpack_to_rpcvalue("82F47FFFFFFFFFFFFFFF").as_u64(), 9223372036854775807);
-    assert_eq!(chainpack_to_rpcvalue("82F47FFFFFFFFFFFFFFF").as_u64(), 9223372036854775807);
+    assert_eq!(chainpack_to_rpcvalue("02").unwrap().as_u64(), 2);
+    assert_eq!(chainpack_to_rpcvalue("8178").unwrap().as_u64(), 120);
+    assert_eq!(chainpack_to_rpcvalue("8181FC").unwrap().as_u64(), 508);
+    assert_eq!(chainpack_to_rpcvalue("81CFFFFA").unwrap().as_u64(), 1048570);
+    assert_eq!(chainpack_to_rpcvalue("81E1FFFFE0").unwrap().as_u64(), 33554400);
+    assert_eq!(chainpack_to_rpcvalue("82F3138083FD18A37C").unwrap().as_u64(), 5489328932823932);
+    assert_eq!(chainpack_to_rpcvalue("82F47FFFFFFFFFFFFFFF").unwrap().as_u64(), 9223372036854775807);
+    assert_eq!(chainpack_to_rpcvalue("82F47FFFFFFFFFFFFFFF").unwrap().as_u64(), 9223372036854775807);
 
     // Negative int
-    assert_eq!(chainpack_to_rpcvalue("82E9FFFFE0").as_int(), -33554400);
+    assert_eq!(chainpack_to_rpcvalue("82E9FFFFE0").unwrap().as_int(), -33554400);
 }
 
 #[test]
 fn test_cstring() {
-    assert_eq!(chainpack_to_rpcvalue("8E41484F4A2100").as_str(), "AHOJ!");
+    assert_eq!(chainpack_to_rpcvalue("8E41484F4A2100").unwrap().as_str(), "AHOJ!");
 }
 
 #[test]
 fn test_blob() {
-    assert_eq!(chainpack_to_rpcvalue("850AAAAAAAAAAAAAAAAAAAAA").as_blob(), [170, 170, 170, 170, 170, 170, 170, 170, 170, 170]);
+    assert_eq!(chainpack_to_rpcvalue("850AAAAAAAAAAAAAAAAAAAAA").unwrap().as_blob(), [170, 170, 170, 170, 170, 170, 170, 170, 170, 170]);
 }
 
 #[test]
 fn test_list() {
-    assert_eq!(chainpack_to_rpcvalue("8886016182807BFE88414243FF80FF").as_list().clone(), vec![<_ as Into<RpcValue>>::into("a"), 123.into(), true.into(), vec![1, 2, 3].into(), RpcValue::null()]);
+    assert_eq!(chainpack_to_rpcvalue("8886016182807BFE88414243FF80FF").unwrap().as_list().clone(), vec![<_ as Into<RpcValue>>::into("a"), 123.into(), true.into(), vec![1, 2, 3].into(), RpcValue::null()]);
 }
 
 #[test]
