@@ -657,6 +657,12 @@ fn test_string() {
 }
 
 #[test]
+fn test_true_false_packing_schema() {
+    assert!(chainpack_to_rpcvalue("FE").unwrap().as_bool());
+    assert!(!chainpack_to_rpcvalue("FD").unwrap().as_bool());
+}
+
+#[test]
 fn test_cstring() {
     assert_eq!(chainpack_to_rpcvalue("8E41484F4A2100").unwrap().as_str(), "AHOJ!");
 
