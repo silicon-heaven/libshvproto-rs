@@ -681,6 +681,18 @@ fn test_list() {
 }
 
 #[test]
+fn test_map() {
+    assert_eq!(chainpack_to_rpcvalue("89860362617242860362617a438603666f6f884b4c4dffff").unwrap().as_map().clone(), crate::make_map!{
+        "bar" => 2,
+        "baz" => 3,
+        "foo" => vec![11,12,13]
+    });
+
+    // Invalid key
+    assert!(chainpack_to_rpcvalue("898200").is_err());
+}
+
+#[test]
 fn test_try_read_meta_complete() {
     // <T:RpcMessage,id:4,method:"ls">i{}
     let buff = hex::decode("8B414148444A86026C73FF8AFF").unwrap();
