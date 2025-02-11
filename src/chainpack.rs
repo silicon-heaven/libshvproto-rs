@@ -677,12 +677,12 @@ fn test_blob() {
 
 #[test]
 fn test_list() {
-    assert_eq!(chainpack_to_rpcvalue("8886016182807BFE88414243FF80FF").unwrap().as_list().clone(), vec![<_ as Into<RpcValue>>::into("a"), 123.into(), true.into(), vec![1, 2, 3].into(), RpcValue::null()]);
+    assert_eq!(chainpack_to_rpcvalue("8886016182807BFE88414243FF80FF").unwrap().as_list(), &vec![<_ as Into<RpcValue>>::into("a"), 123.into(), true.into(), vec![1, 2, 3].into(), RpcValue::null()]);
 }
 
 #[test]
 fn test_map() {
-    assert_eq!(chainpack_to_rpcvalue("89860362617242860362617a438603666f6f884b4c4dffff").unwrap().as_map().clone(), crate::make_map!{
+    assert_eq!(chainpack_to_rpcvalue("89860362617242860362617a438603666f6f884b4c4dffff").unwrap().as_map(), &crate::make_map!{
         "bar" => 2,
         "baz" => 3,
         "foo" => vec![11,12,13]
