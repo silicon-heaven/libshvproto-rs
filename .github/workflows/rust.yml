@@ -85,6 +85,11 @@ jobs:
         env:
           GH_TOKEN: ${{secrets.GITHUB_TOKEN}}
 
+      - uses: rickstaa/action-create-tag@v1
+        with:
+          tag: "nightly"
+          force_push_tag: true
+
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
