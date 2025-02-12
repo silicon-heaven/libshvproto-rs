@@ -733,6 +733,11 @@ fn test_double() {
 }
 
 #[test]
+fn test_decimal() {
+    assert_eq!(chainpack_to_rpcvalue("8C0000").unwrap(), crate::decimal::Decimal::new(0, 0).into());
+}
+
+#[test]
 fn test_try_read_meta_complete() {
     // <T:RpcMessage,id:4,method:"ls">i{}
     let buff = hex::decode("8B414148444A86026C73FF8AFF").unwrap();
