@@ -635,22 +635,22 @@ fn chainpack_to_rpcvalue(data: &str) -> Result<RpcValue, ReadError> {
 #[test]
 fn test_int() {
     // uint sizes
-    assert_eq!(chainpack_to_rpcvalue("02").unwrap().as_u64(), 2);
-    assert_eq!(chainpack_to_rpcvalue("8178").unwrap().as_u64(), 120);
-    assert_eq!(chainpack_to_rpcvalue("8181FC").unwrap().as_u64(), 508);
-    assert_eq!(chainpack_to_rpcvalue("81CFFFFA").unwrap().as_u64(), 1048570);
-    assert_eq!(chainpack_to_rpcvalue("81E1FFFFE0").unwrap().as_u64(), 33554400);
-    assert_eq!(chainpack_to_rpcvalue("82F3138083FD18A37C").unwrap().as_u64(), 5489328932823932);
-    assert_eq!(chainpack_to_rpcvalue("82F47FFFFFFFFFFFFFFF").unwrap().as_u64(), 9223372036854775807);
-    assert_eq!(chainpack_to_rpcvalue("82F47FFFFFFFFFFFFFFF").unwrap().as_u64(), 9223372036854775807);
+    assert_eq!(chainpack_to_rpcvalue("02").unwrap(), 2_u64.into());
+    assert_eq!(chainpack_to_rpcvalue("8178").unwrap(), 120_u64.into());
+    assert_eq!(chainpack_to_rpcvalue("8181FC").unwrap(), 508_u64.into());
+    assert_eq!(chainpack_to_rpcvalue("81CFFFFA").unwrap(), 1048570_u64.into());
+    assert_eq!(chainpack_to_rpcvalue("81E1FFFFE0").unwrap(), 33554400_u64.into());
+    assert_eq!(chainpack_to_rpcvalue("82F3138083FD18A37C").unwrap(), 5489328932823932_i64.into());
+    assert_eq!(chainpack_to_rpcvalue("82F47FFFFFFFFFFFFFFF").unwrap(), 9223372036854775807_i64.into());
+    assert_eq!(chainpack_to_rpcvalue("82F47FFFFFFFFFFFFFFF").unwrap(), 9223372036854775807_i64.into());
 
     // Negative int
-    assert_eq!(chainpack_to_rpcvalue("82E9FFFFE0").unwrap().as_int(), -33554400);
+    assert_eq!(chainpack_to_rpcvalue("82E9FFFFE0").unwrap(), (-33554400).into());
 }
 
 #[test]
 fn test_string() {
-    assert_eq!(chainpack_to_rpcvalue("860541484F4A21").unwrap().as_str(), "AHOJ!");
+    assert_eq!(chainpack_to_rpcvalue("860541484F4A21").unwrap(), "AHOJ!".into());
 
     // Invalid UTF-8 string
     assert!(chainpack_to_rpcvalue("8602C328").is_err());
@@ -658,13 +658,13 @@ fn test_string() {
 
 #[test]
 fn test_true_false_packing_schema() {
-    assert!(chainpack_to_rpcvalue("FE").unwrap().as_bool());
-    assert!(!chainpack_to_rpcvalue("FD").unwrap().as_bool());
+    assert_eq!(chainpack_to_rpcvalue("FE").unwrap(), true.into());
+    assert_eq!(chainpack_to_rpcvalue("FD").unwrap(), false.into());
 }
 
 #[test]
 fn test_cstring() {
-    assert_eq!(chainpack_to_rpcvalue("8E41484F4A2100").unwrap().as_str(), "AHOJ!");
+    assert_eq!(chainpack_to_rpcvalue("8E41484F4A2100").unwrap(), "AHOJ!".into());
 
     // Invalid UTF-8 string
     assert!(chainpack_to_rpcvalue("8EC32800").is_err());
@@ -672,21 +672,21 @@ fn test_cstring() {
 
 #[test]
 fn test_blob() {
-    assert_eq!(chainpack_to_rpcvalue("850AAAAAAAAAAAAAAAAAAAAA").unwrap().as_blob(), [170, 170, 170, 170, 170, 170, 170, 170, 170, 170]);
+    assert_eq!(chainpack_to_rpcvalue("850AAAAAAAAAAAAAAAAAAAAA").unwrap(), vec![170u8, 170, 170, 170, 170, 170, 170, 170, 170, 170].into());
 }
 
 #[test]
 fn test_list() {
-    assert_eq!(chainpack_to_rpcvalue("8886016182807BFE88414243FF80FF").unwrap().as_list(), &vec![<_ as Into<RpcValue>>::into("a"), 123.into(), true.into(), vec![1, 2, 3].into(), RpcValue::null()]);
+    assert_eq!(chainpack_to_rpcvalue("8886016182807BFE88414243FF80FF").unwrap(), RpcValue::from(vec!["a".into(), 123.into(), true.into(), vec![1, 2, 3].into(), RpcValue::null()]));
 }
 
 #[test]
 fn test_map() {
-    assert_eq!(chainpack_to_rpcvalue("89860362617242860362617a438603666f6f884b4c4dffff").unwrap().as_map(), &crate::make_map!{
+    assert_eq!(chainpack_to_rpcvalue("89860362617242860362617a438603666f6f884b4c4dffff").unwrap(), crate::make_map!{
         "bar" => 2,
         "baz" => 3,
         "foo" => vec![11,12,13]
-    });
+    }.into());
 
     // Invalid key
     assert_eq!(chainpack_to_rpcvalue("898200").unwrap_err().msg, "ChainPack read error - Invalid Map key '0'");
@@ -694,11 +694,11 @@ fn test_map() {
 
 #[test]
 fn test_imap() {
-    assert_eq!(chainpack_to_rpcvalue("8a418603666f6f42860362617282814d4fff").unwrap().as_imap(), &BTreeMap::from([
+    assert_eq!(chainpack_to_rpcvalue("8a418603666f6f42860362617282814d4fff").unwrap(), BTreeMap::<i32,RpcValue>::from([
         (1, "foo".into()),
         (2, "bar".into()),
         (333, 15.into()),
-    ]));
+    ]).into());
 
     // Invalid key
     assert_eq!(chainpack_to_rpcvalue("8A8603626172").unwrap_err().msg, "ChainPack read error - Invalid IMap key '\"bar\"'");
