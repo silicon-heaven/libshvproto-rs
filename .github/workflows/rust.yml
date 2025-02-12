@@ -140,7 +140,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           path: master
-          ref: master
+          ref: ${{github.event.pull_request.base.ref || github.event.before}}
 
       - name: Generate code coverage
         run: |
