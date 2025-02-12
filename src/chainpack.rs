@@ -705,6 +705,28 @@ fn test_imap() {
 }
 
 #[test]
+fn test_datetime() {
+    assert_eq!(chainpack_to_rpcvalue("8D04").unwrap(), DateTime::from_epoch_msec_tz(1517529600001, 0).into());
+    assert_eq!(chainpack_to_rpcvalue("8D8211").unwrap(), DateTime::from_epoch_msec_tz(1517529600001, 3600).into());
+    assert_eq!(chainpack_to_rpcvalue("8DE63DDA02").unwrap(), DateTime::from_epoch_msec_tz(1543708800000, 0).into());
+    assert_eq!(chainpack_to_rpcvalue("8DE8A8BFFE").unwrap(), DateTime::from_epoch_msec_tz(1514764800000, 0).into());
+    assert_eq!(chainpack_to_rpcvalue("8DE6DC0E02").unwrap(), DateTime::from_epoch_msec_tz(1546300800000, 0).into());
+    assert_eq!(chainpack_to_rpcvalue("8DF00E60DC02").unwrap(), DateTime::from_epoch_msec_tz(1577836800000, 0).into());
+    assert_eq!(chainpack_to_rpcvalue("8DF015EAF002").unwrap(), DateTime::from_epoch_msec_tz(1609459200000, 0).into());
+    assert_eq!(chainpack_to_rpcvalue("8DF061258802").unwrap(), DateTime::from_epoch_msec_tz(1924992000000, 0).into());
+    assert_eq!(chainpack_to_rpcvalue("8DF100AC656602").unwrap(), DateTime::from_epoch_msec_tz(2240611200000, 0).into());
+    assert_eq!(chainpack_to_rpcvalue("8DF156D74D495F").unwrap(), DateTime::from_epoch_msec_tz(2246004900000, -36900).into());
+    assert_eq!(chainpack_to_rpcvalue("8DF301533905E2375D").unwrap(), DateTime::from_epoch_msec_tz(2246004900123, -36900).into());
+    assert_eq!(chainpack_to_rpcvalue("8DF18169CEA7FE").unwrap(), DateTime::from_epoch_msec_tz(0, 0).into());
+    assert_eq!(chainpack_to_rpcvalue("8DEDA8E7F2").unwrap(), DateTime::from_epoch_msec_tz(1493790723000, 0).into());
+    assert_eq!(chainpack_to_rpcvalue("8DF1961334BEB4").unwrap(), DateTime::from_epoch_msec_tz(1493826723923, 0).into());
+    assert_eq!(chainpack_to_rpcvalue("8DF28B0DE42CD95F").unwrap(), DateTime::from_epoch_msec_tz(1493790751123, 36000).into());
+    assert_eq!(chainpack_to_rpcvalue("8DEDA6B572").unwrap(), DateTime::from_epoch_msec_tz(1493826723000, 0).into());
+    assert_eq!(chainpack_to_rpcvalue("8DF182D3308815").unwrap(), DateTime::from_epoch_msec_tz(1493832123000, -5400).into());
+    assert_eq!(chainpack_to_rpcvalue("8DF1961334BEB4").unwrap(), DateTime::from_epoch_msec_tz(1493826723923, 0).into());
+}
+
+#[test]
 fn test_try_read_meta_complete() {
     // <T:RpcMessage,id:4,method:"ls">i{}
     let buff = hex::decode("8B414148444A86026C73FF8AFF").unwrap();
