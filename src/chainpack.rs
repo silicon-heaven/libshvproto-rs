@@ -726,6 +726,12 @@ fn test_datetime() {
     assert_eq!(chainpack_to_rpcvalue("8DF1961334BEB4").unwrap(), DateTime::from_epoch_msec_tz(1493826723923, 0).into());
 }
 
+
+#[test]
+fn test_double() {
+    assert_eq!(chainpack_to_rpcvalue("830000000000C208B8").unwrap(), RpcValue::from(-9.09458397889606716980695E-39_f64));
+}
+
 #[test]
 fn test_try_read_meta_complete() {
     // <T:RpcMessage,id:4,method:"ls">i{}
