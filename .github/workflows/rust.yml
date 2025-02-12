@@ -19,6 +19,7 @@ permissions:
 
 env:
   PROJECT_NAME: libshvproto
+  HASH_FOR_FILENAMES: ${{github.event.pull_request.head.sha || github.sha}}
 
 jobs:
   build:
@@ -70,7 +71,7 @@ jobs:
 
       - name: Rename artifacts
         run: |
-          CP2CP_FILE_NAME="$(printf "cp2cp-nightly-g%s" "$(head -c 7 <<< '${{github.sha}}')")"
+          CP2CP_FILE_NAME="$(printf "cp2cp-nightly-g%s" "$(head -c 7 <<< '${{env.HASH_FOR_FILENAMES}}')")"
           mv cp2cp "${CP2CP_FILE_NAME}"
           mv cp2cp.exe "${CP2CP_FILE_NAME}.exe"
 
@@ -149,7 +150,7 @@ jobs:
               show \
               --format "$FORMAT" \
               --source '${{github.workspace}}/pr-head' \
-              --output "${{github.workspace}}/${{env.PROJECT_NAME}}-pycobertura-show-${{github.sha}}.$FORMAT" \
+              --output "${{github.workspace}}/${{env.PROJECT_NAME}}-pycobertura-show-${{env.HASH_FOR_FILENAMES}}.$FORMAT" \
               '${{github.workspace}}/pr-head/${{env.PROJECT_NAME}}-cobertura.xml' || FAIL=yes
 
             pycobertura \
@@ -158,14 +159,14 @@ jobs:
               --no-color \
               --source1 '${{github.workspace}}/master' \
               --source2 '${{github.workspace}}/pr-head' \
-              --output "${{github.workspace}}/${{env.PROJECT_NAME}}-pycobertura-diff-${{github.sha}}.$FORMAT" \
+              --output "${{github.workspace}}/${{env.PROJECT_NAME}}-pycobertura-diff-${{env.HASH_FOR_FILENAMES}}.$FORMAT" \
               '${{github.workspace}}/master/${{env.PROJECT_NAME}}-cobertura.xml' \
               '${{github.workspace}}/pr-head/${{env.PROJECT_NAME}}-cobertura.xml' || FAIL=yes
           done
 
-          cat '${{github.workspace}}/${{env.PROJECT_NAME}}-pycobertura-show-${{github.sha}}.markdown'
+          cat '${{github.workspace}}/${{env.PROJECT_NAME}}-pycobertura-show-${{env.HASH_FOR_FILENAMES}}.markdown'
           echo
-          cat '${{github.workspace}}/${{env.PROJECT_NAME}}-pycobertura-diff-${{github.sha}}.markdown'
+          cat '${{github.workspace}}/${{env.PROJECT_NAME}}-pycobertura-diff-${{env.HASH_FOR_FILENAMES}}.markdown'
 
           echo "FAIL=$FAIL" >> "$GITHUB_ENV"
 
@@ -173,43 +174,50 @@ jobs:
         id: html-reports
         uses: actions/upload-artifact@v4
         with:
-          name: ${{env.PROJECT_NAME}}-coverage-html-${{github.sha}}
-          path: ${{github.workspace}}/${{env.PROJECT_NAME}}-pycobertura-*-${{github.sha}}.html
+          name: ${{env.PROJECT_NAME}}-cov-html-${{env.HASH_FOR_FILENAMES}}
+          path: ${{github.workspace}}/${{env.PROJECT_NAME}}-pycobertura-*-${{env.HASH_FOR_FILENAMES}}.html
 
       - name: Generate sticky comment contents
         run: |
+          # shellcheck disable=SC2016
           {
-            echo '# Code coverage report'
+            echo '## Code coverage report for ${{env.HASH_FOR_FILENAMES}}'
 
-            echo '## Coverage difference'
+            echo '#### Coverage difference'
             if [[ ${{ env.FAIL }} = yes ]]; then
               echo Code coverage worsened.
             else
               echo All new changes were covered.
             fi
-            cat "${{github.workspace}}/${{env.PROJECT_NAME}}-pycobertura-diff-${{github.sha}}.markdown"
+            cat '${{github.workspace}}/${{env.PROJECT_NAME}}-pycobertura-diff-${{env.HASH_FOR_FILENAMES}}.markdown'
 
             echo
             echo
 
-            echo '## Overall coverage'
+            echo '#### Overall coverage'
             echo '<details>'
             echo '<summary>Click to expand</summary>'
             echo '<span>'
             echo
-            cat "${{github.workspace}}/${{env.PROJECT_NAME}}-pycobertura-show-${{github.sha}}.markdown"
+            cat '${{github.workspace}}/${{env.PROJECT_NAME}}-pycobertura-show-${{env.HASH_FOR_FILENAMES}}.markdown'
             echo
             echo '</span>'
             echo '</details>'
 
             echo
-            echo 'You can download HTML coverage reports [here](${{steps.html-reports.outputs.artifact-url}})'.
+            echo '#### HTML reports'
+            echo 'You can use _GitHub CLI_ to download HTML coverage reports and open them automatically using this command:'
+            echo '```bash'
+            echo '(cd "$(mktemp -d)" && gh run -R ${{github.repository}} download -n ${{env.PROJECT_NAME}}-cov-html-${{env.HASH_FOR_FILENAMES}} && ls -1 | xargs -n1 xdg-open)'
+            echo '```'
+            echo
+            echo 'You can download the HTML reports manually [here](${{steps.html-reports.outputs.artifact-url}})'.
+            echo
           } > sticky-comment.md
 
       - name: Add Coverage PR Comment
         uses: marocchino/sticky-pull-request-comment@v2
         with:
-          recreate: true
           path: sticky-comment.md
       - name: Fail if coverage is worse
         run: |
