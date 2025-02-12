@@ -85,6 +85,10 @@ jobs:
         env:
           GH_TOKEN: ${{secrets.GITHUB_TOKEN}}
 
+      # Needed for action-create-tag
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - uses: rickstaa/action-create-tag@v1
         with:
           tag: "nightly"
