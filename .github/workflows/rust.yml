@@ -14,12 +14,8 @@ on:
 
 permissions:
   contents: write
-  # For marocchino/sticky-pull-request-comment
+  # For syyyr/rust-pycobertura-action
   pull-requests: write
-
-env:
-  PROJECT_NAME: libshvproto
-  HASH_FOR_FILENAMES: ${{github.event.pull_request.head.sha || github.sha}}
 
 jobs:
   build:
@@ -111,125 +107,7 @@ jobs:
     name: Code coverage
     runs-on: ubuntu-latest
     steps:
-      - name: Setup Rust
-        uses: actions-rust-lang/setup-rust-toolchain@v1
+      - name: Generate coverage
+        uses: syyyr/rust-pycobertura-action@v1.1.1
         with:
-          target: x86_64-unknown-linux-gnu
-          toolchain: nightly
-          override: true
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@cargo-llvm-cov
-
-      - name: Install pycobertura
-        uses: insightsengineering/pip-action@v2
-        with:
-          packages: pycobertura==3.3.2
-
-      - name: Checkout PR HEAD
-        uses: actions/checkout@v4
-        with:
-          path: pr-head
-
-      - name: Checkout master
-        uses: actions/checkout@v4
-        with:
-          path: master
-          ref: master
-
-      - name: Generate code coverage
-        run: |
-          for CODE_DIR in master pr-head; do
-            (
-              cd "${{github.workspace}}/$CODE_DIR"
-              cargo llvm-cov --all-features --cobertura --output-path '${{env.PROJECT_NAME}}-cobertura.xml'
-            )
-          done
-
-      - name: Generate pycobertura text and HTML report
-        run: |
-          FAIL=no
-          for FORMAT in markdown html; do
-            pycobertura \
-              show \
-              --format "$FORMAT" \
-              --source '${{github.workspace}}/pr-head' \
-              --output "${{github.workspace}}/${{env.PROJECT_NAME}}-pycobertura-show-${{env.HASH_FOR_FILENAMES}}.$FORMAT" \
-              '${{github.workspace}}/pr-head/${{env.PROJECT_NAME}}-cobertura.xml' || FAIL=yes
-
-            pycobertura \
-              diff \
-              --format "$FORMAT" \
-              --no-color \
-              --source1 '${{github.workspace}}/master' \
-              --source2 '${{github.workspace}}/pr-head' \
-              --output "${{github.workspace}}/${{env.PROJECT_NAME}}-pycobertura-diff-${{env.HASH_FOR_FILENAMES}}.$FORMAT" \
-              '${{github.workspace}}/master/${{env.PROJECT_NAME}}-cobertura.xml' \
-              '${{github.workspace}}/pr-head/${{env.PROJECT_NAME}}-cobertura.xml' || FAIL=yes
-          done
-
-          cat '${{github.workspace}}/${{env.PROJECT_NAME}}-pycobertura-show-${{env.HASH_FOR_FILENAMES}}.markdown'
-          echo
-          cat '${{github.workspace}}/${{env.PROJECT_NAME}}-pycobertura-diff-${{env.HASH_FOR_FILENAMES}}.markdown'
-
-          echo "FAIL=$FAIL" >> "$GITHUB_ENV"
-
-      - name: Upload HTML reports
-        id: html-reports
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{env.PROJECT_NAME}}-cov-html-${{env.HASH_FOR_FILENAMES}}
-          path: ${{github.workspace}}/${{env.PROJECT_NAME}}-pycobertura-*-${{env.HASH_FOR_FILENAMES}}.html
-
-      - name: Generate sticky comment contents
-        run: |
-          # shellcheck disable=SC2016
-          {
-            echo '## Code coverage report for ${{env.HASH_FOR_FILENAMES}}'
-
-            echo '#### Coverage difference'
-            if [[ ${{ env.FAIL }} = yes ]]; then
-              echo Code coverage worsened.
-            else
-              echo All new changes were covered.
-            fi
-            cat '${{github.workspace}}/${{env.PROJECT_NAME}}-pycobertura-diff-${{env.HASH_FOR_FILENAMES}}.markdown'
-
-            echo
-            echo
-
-            echo '#### Overall coverage'
-            echo '<details>'
-            echo '<summary>Click to expand</summary>'
-            echo '<span>'
-            echo
-            cat '${{github.workspace}}/${{env.PROJECT_NAME}}-pycobertura-show-${{env.HASH_FOR_FILENAMES}}.markdown'
-            echo
-            echo '</span>'
-            echo '</details>'
-
-            echo
-            echo '#### HTML reports'
-            echo 'You can use _GitHub CLI_ to download HTML coverage reports and open them automatically using this command:'
-            echo '```bash'
-            echo '(cd "$(mktemp -d)" && gh run -R ${{github.repository}} download -n ${{env.PROJECT_NAME}}-cov-html-${{env.HASH_FOR_FILENAMES}} && ls -1 | xargs -n1 xdg-open)'
-            echo '```'
-            echo
-            echo 'You can download the HTML reports manually [here](${{steps.html-reports.outputs.artifact-url}})'.
-            echo
-          } > sticky-comment.md
-
-      - name: Add Coverage PR Comment
-        uses: marocchino/sticky-pull-request-comment@v2
-        with:
-          path: sticky-comment.md
-      - name: Fail if coverage is worse
-        run: |
-          if [[ ${{ env.FAIL }} = yes ]]; then
-            false
-          fi
+          project_name: libshvproto
