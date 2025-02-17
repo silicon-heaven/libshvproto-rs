@@ -59,6 +59,15 @@ jobs:
     needs: [build]
     runs-on: ubuntu-latest
     steps:
+      # Needed for action-create-tag
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - uses: rickstaa/action-create-tag@v1
+        with:
+          tag: "nightly"
+          force_push_tag: true
+
       - name: Consolidate artifacts
         uses: actions/download-artifact@v4
         with:
@@ -80,15 +89,6 @@ jobs:
           done
         env:
           GH_TOKEN: ${{secrets.GITHUB_TOKEN}}
-
-      # Needed for action-create-tag
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - uses: rickstaa/action-create-tag@v1
-        with:
-          tag: "nightly"
-          force_push_tag: true
 
       - name: Release
         uses: softprops/action-gh-release@v2
