@@ -642,7 +642,6 @@ fn test_int() {
     assert_eq!(chainpack_to_rpcvalue("81E1FFFFE0").unwrap(), 33554400_u64.into());
     assert_eq!(chainpack_to_rpcvalue("82F3138083FD18A37C").unwrap(), 5489328932823932_i64.into());
     assert_eq!(chainpack_to_rpcvalue("82F47FFFFFFFFFFFFFFF").unwrap(), 9223372036854775807_i64.into());
-    assert_eq!(chainpack_to_rpcvalue("82F47FFFFFFFFFFFFFFF").unwrap(), 9223372036854775807_i64.into());
 
     // Negative int
     assert_eq!(chainpack_to_rpcvalue("82E9FFFFE0").unwrap(), (-33554400).into());
