@@ -729,7 +729,7 @@ fn test_datetime() {
 
 #[test]
 fn test_double() {
-    assert_eq!(chainpack_to_rpcvalue("830000000000C208B8").unwrap(), RpcValue::from(-9.09458397889606716980695E-39_f64));
+    assert_eq!(chainpack_to_rpcvalue("830000000000C208B8").unwrap(), RpcValue::from(-9.094_583_978_896_067E-39_f64));
 }
 
 #[test]
