@@ -762,6 +762,14 @@ fn test_try_read_meta_string_key() {
 }
 
 #[test]
+fn test_try_read_meta_invalid_key() {
+    let buff = hex::decode("8B88FF00").unwrap();
+    let mut data = &buff[..];
+    let mut rd = ChainPackReader::new(&mut data);
+    assert_eq!(rd.try_read_meta().unwrap_err().msg, "ChainPack read error - MetaMap key must be int or string, got: List");
+}
+
+#[test]
 fn test_try_read_meta_incomplete() {
     // <T:RpcMessage,id:4,method:"ls">i{}
     let buff = hex::decode("8B414148444A86026C73").unwrap();
@@ -781,3 +789,4 @@ fn test_try_read_meta_missing() {
     let val = rd.read().unwrap();
     assert!(val.is_imap());
 }
+
