@@ -749,6 +749,18 @@ fn test_try_read_meta_complete() {
     let val = rd.read().unwrap();
     assert!(val.is_imap());
 }
+
+#[test]
+fn test_try_read_meta_string_key() {
+    let buff = hex::decode("8B8608736F6D655F6B6579860576616C7565FF8AFF").unwrap();
+    let mut data = &buff[..];
+    let mut rd = ChainPackReader::new(&mut data);
+    let meta = rd.try_read_meta().unwrap().unwrap();
+    assert_eq!(meta.get("some_key").unwrap().as_str(), "value");
+    let val = rd.read().unwrap();
+    assert!(val.is_imap());
+}
+
 #[test]
 fn test_try_read_meta_incomplete() {
     // <T:RpcMessage,id:4,method:"ls">i{}
