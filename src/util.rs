@@ -7,8 +7,8 @@ pub fn parse_log_verbosity<'a>(verbosity: &'a str, module_path: &'a str) -> Vec<
             let (name, level) = module_level_str
                 .split_once('=')
                 .unwrap_or((module_level_str, "D"));
-            let level = if level == "" { "D" } else { level };
-            let module = if name == "" {
+            let level = if level.is_empty() { "D" } else { level };
+            let module = if name.is_empty() {
                 None
             } else if name == "." {
                 Some(module_path)
