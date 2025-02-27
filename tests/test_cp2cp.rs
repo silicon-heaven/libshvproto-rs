@@ -40,8 +40,8 @@ mod test {
         let rv = RpcValue::from_cpon(&cpon).unwrap();
         assert!(rv.is_imap());
         // println!("{}", rv.to_cpon());
-        assert_eq!(rv.meta().get(8).unwrap().as_int(), 4);
-        assert_eq!(rv.meta().get(10).unwrap().as_str(), "ls");
+        assert_eq!(rv.meta.as_ref().unwrap().get(8).unwrap().as_int(), 4);
+        assert_eq!(rv.meta.as_ref().unwrap().get(10).unwrap().as_str(), "ls");
         Ok(())
     }
     #[test]

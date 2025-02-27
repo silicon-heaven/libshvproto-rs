@@ -156,7 +156,7 @@ pub fn derive_from_rpcvalue(item: TokenStream) -> TokenStream {
                 impl #struct_generics_with_bounds TryFrom<shvproto::RpcValue> for #struct_identifier #struct_generics_without_bounds {
                     type Error = String;
                     fn try_from(value: shvproto::RpcValue) -> Result<Self, <Self as TryFrom<shvproto::RpcValue>>::Error> {
-                        if let shvproto::Value::Map(value) = value.value() {
+                        if let shvproto::Value::Map(value) = &value.value {
                             value.try_into()
                         } else {
                             Err("Value is not a map".into())
@@ -167,7 +167,7 @@ pub fn derive_from_rpcvalue(item: TokenStream) -> TokenStream {
                 impl #struct_generics_with_bounds TryFrom<&shvproto::RpcValue> for #struct_identifier #struct_generics_without_bounds {
                     type Error = String;
                     fn try_from(value: &shvproto::RpcValue) -> Result<Self, <Self as TryFrom<&shvproto::RpcValue>>::Error> {
-                        if let shvproto::Value::Map(value) = value.value() {
+                        if let shvproto::Value::Map(value) = &value.value {
                             value.as_ref().try_into()
                         } else {
                             Err("Value is not a map".into())
@@ -420,7 +420,7 @@ pub fn derive_from_rpcvalue(item: TokenStream) -> TokenStream {
                 impl TryFrom<shvproto::RpcValue> for #struct_identifier {
                     type Error = String;
                     fn try_from(value: shvproto::RpcValue) -> Result<Self, <Self as TryFrom<shvproto::RpcValue>>::Error> {
-                        match value.value() {
+                        match &value.value {
                             #(#match_arms_de),*,
                             _ => Err("Couldn't deserialize into `".to_owned() + stringify!(#struct_identifier) + "` enum, allowed types: " + [#(#allowed_types),*].join("|").as_ref() + ", got: " + value.type_name())
                         }

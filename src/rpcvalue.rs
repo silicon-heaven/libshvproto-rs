@@ -3,7 +3,7 @@ use std::fmt;
 
 use crate::chainpack::ChainPackReader;
 use crate::chainpack::ChainPackWriter;
-use crate::decimal;
+use crate::{decimal, JsonReader, JsonWriter};
 use crate::metamap::MetaMap;
 use crate::reader::Reader;
 use crate::writer::Writer;
@@ -19,7 +19,6 @@ const EMPTY_BYTES_REF: &[u8] = EMPTY_STR_REF.as_bytes();
 static EMPTY_LIST: OnceLock<List> = OnceLock::new();
 static EMPTY_MAP: OnceLock<Map> = OnceLock::new();
 static EMPTY_IMAP: OnceLock<IMap> = OnceLock::new();
-static EMPTY_METAMAP: OnceLock<MetaMap> = OnceLock::new();
 
 #[macro_export(local_inner_macros)]
 macro_rules! make_map {
@@ -855,7 +854,7 @@ where
 macro_rules! is_xxx {
     ($name:ident, $variant:pat) => {
         pub fn $name(&self) -> bool {
-            match self.value() {
+            match &self.value {
                 $variant => true,
                 _ => false,
             }
@@ -893,8 +892,8 @@ impl GetIndex for usize {
 
 #[derive(PartialEq, Clone)]
 pub struct RpcValue {
-    meta: Option<Box<MetaMap>>,
-    value: Value,
+    pub meta: Option<Box<MetaMap>>,
+    pub value: Value,
 }
 
 impl RpcValue {
@@ -910,62 +909,27 @@ impl RpcValue {
             value: v,
         }
     }
-    /*
-    pub fn new<I>(val: I) -> RpcValue
-        where I: FromValue
-    {
-        RpcValue {
-            meta: None,
-            value: val.chainpack_make_value(),
-        }
-    }
-    pub fn new_with_meta<I>(val: I, meta: Option<MetaMap>) -> RpcValue
-        where I: FromValue
-    {
-        let mm = match meta {
-            None => None,
-            Some(m) => Some(Box::new(m)),
-        };
-        RpcValue {
-            meta: mm,
-            value: val.chainpack_make_value(),
-        }
-    }
-        pub fn set_meta(&mut self, m: MetaMap) {
-        if m.is_empty() {
-            self.meta = None;
-        }
-        else {
-            self.meta = Some(Box::new(m));
-        }
-    }
-    */
-    pub fn set_meta(mut self, meta: Option<MetaMap>) -> Self {
-        self.meta = meta.map(Box::new);
-        self
-    }
-    pub fn has_meta(&self) -> bool {
-        self.meta.is_some()
-    }
-    pub fn meta(&self) -> &MetaMap {
-        self.meta.as_ref().map_or_else(
-            || EMPTY_METAMAP.get_or_init(MetaMap::new),
-            <Box<MetaMap>>::as_ref,
-        )
-    }
-    pub fn meta_mut(&mut self) -> Option<&mut MetaMap> {
-        self.meta.as_mut().map(<Box<MetaMap>>::as_mut)
-    }
-    pub fn clear_meta(&mut self) {
-        self.meta = None;
-    }
 
-    pub fn value(&self) -> &Value {
-        &self.value
-    }
-    pub fn value_mut(&mut self) -> &mut Value {
-        &mut self.value
-    }
+    // pub fn set_meta(mut self, meta: Option<MetaMap>) -> Self {
+    //     self.meta = meta.map(Box::new);
+    //     self
+    // }
+    // pub fn meta(&self) -> Option<&MetaMap> {
+    //     self.meta.as_ref().map(<Box<MetaMap>>::as_ref)
+    // }
+    // pub fn meta_mut(&mut self) -> Option<&mut MetaMap> {
+    //     self.meta.as_mut().map(<Box<MetaMap>>::as_mut)
+    // }
+    // pub fn clear_meta(&mut self) {
+    //     self.meta = None;
+    // }
+    //
+    // pub fn value(&self) -> &Value {
+    //     &self.value
+    // }
+    // pub fn value_mut(&mut self) -> &mut Value {
+    //     &mut self.value
+    // }
 
     pub fn type_name(&self) -> &'static str {
         self.value.type_name()
@@ -1097,6 +1061,13 @@ impl RpcValue {
             },
         }
     }
+    pub fn to_json(&self) -> String {
+        let mut buff: Vec<u8> = Vec::new();
+        let mut wr = JsonWriter::new(&mut buff);
+        let r = wr.write(self);
+        let buff = r.map_or_else(|_| Vec::new(), |_| buff);
+        String::from_utf8(buff).unwrap_or_else(|_| "".to_string())
+    }
     pub fn to_cpon(&self) -> String {
         self.to_cpon_indented("")
     }
@@ -1118,6 +1089,11 @@ impl RpcValue {
         r.map_or_else(|_| Vec::new(), |_| buff)
     }
 
+    pub fn from_json(s: &str) -> ReadResult {
+        let mut buff = s.as_bytes();
+        let mut rd = JsonReader::new(&mut buff);
+        rd.read()
+    }
     pub fn from_cpon(s: &str) -> ReadResult {
         let mut buff = s.as_bytes();
         let mut rd = CponReader::new(&mut buff);

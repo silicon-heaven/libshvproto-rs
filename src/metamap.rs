@@ -121,48 +121,6 @@ impl MetaMap {
         }
         None
     }
-    /*
-    pub fn value<Idx>(&self, ix: Idx) -> Option<&RpcValue>
-        where Idx: IntoMetaKeyRef
-    {
-        match self.find1(ix) {
-            Some(ix) => Some(&self.0[ix].value),
-            None => None,
-        }
-    }
-    pub fn value_or_default<'a, Idx>(&'a self, ix: Idx, def_val: &'a RpcValue) -> &'a RpcValue
-        where Idx: IntoMetaKeyRef
-    {
-        match self.find1(ix) {
-            Some(ix) => &self.0[ix].value,
-            None => def_val,
-        }
-    }
-    fn find1<I>(&self, key: I) -> Option<usize>
-        where I: IntoMetaKeyRef
-    {
-        let mut ix = 0;
-        for kv in self.0.iter() {
-            let mk = key.to_metakeyref();
-            match &kv.key {
-                MetaKey::Str(k1) => {
-                    match &mk {
-                        MetaKeyRef::Str(k2) => if k1 == k2 {return Some(ix)}
-                        _ 		=> (),
-                    }
-                },
-                MetaKey::Int(k1) => {
-                    match &mk {
-                        MetaKeyRef::Int(k2) => if k1 == k2 {return Some(ix)}
-                        _ 		=> (),
-                    }
-                },
-            }
-            ix = ix + 1;
-        }
-        None
-    }
-    */
 }
 impl fmt::Debug for MetaMap {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

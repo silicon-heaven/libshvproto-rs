@@ -282,11 +282,11 @@ where
     }
     fn write(&mut self, val: &RpcValue) -> WriteResult {
         let cnt = self.byte_writer.count();
-        let mm = val.meta();
-        if !mm.is_empty() {
+        let mm = &val.meta;
+        if let Some(mm) = mm {
             self.write_meta(mm)?;
         }
-        self.write_value(val.value())?;
+        self.write_value(&val.value)?;
         Ok(self.byte_writer.count() - cnt)
     }
     fn write_value(&mut self, val: &Value) -> WriteResult {

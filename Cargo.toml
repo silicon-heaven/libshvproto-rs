@@ -2,8 +2,8 @@ workspace = { members = ["libshvproto-macros"] }
 
 [package]
 name = "shvproto"
-version = "3.1.0"
-edition = "2021"
+version = "3.2.0"
+edition = "2024"
 
 [dependencies]
 libshvproto-macros = { path = "./libshvproto-macros" }
