@@ -1,0 +1,780 @@
+use std::io::{Write, Read};
+use crate::{RpcValue, MetaMap, Value, Decimal, DateTime, ReadResult};
+use std::collections::BTreeMap;
+use crate::datetime::{IncludeMilliseconds, ToISOStringOptions};
+use crate::writer::{WriteResult, Writer, ByteWriter};
+use crate::metamap::MetaKey;
+use crate::reader::{Reader, ByteReader, ReadError, ReadErrorReason};
+use crate::rpcvalue::{Map};
+
+pub struct JsonWriter<'a, W>
+    where W: Write
+{
+    byte_writer: ByteWriter<'a, W>,
+    wrappers_stack: Vec<bool>,
+}
+
+impl<'a, W> JsonWriter<'a, W>
+    where W: Write
+{
+    pub fn new(write: &'a mut W) -> Self {
+        JsonWriter {
+            byte_writer: ByteWriter::new(write),
+            wrappers_stack: vec![],
+        }
+    }
+
+    fn write_byte(&mut self, b: u8) -> WriteResult {
+        self.byte_writer.write_byte(b)
+    }
+    fn write_bytes(&mut self, b: &[u8]) -> WriteResult {
+        self.byte_writer.write_bytes(b)
+    }
+
+    fn write_int(&mut self, n: i64) -> WriteResult {
+        let s = n.to_string();
+        let cnt = self.write_bytes(s.as_bytes())?;
+                Ok(self.byte_writer.count() - cnt)
+    }
+    fn write_double(&mut self, n: f64) -> WriteResult {
+        let s = format!("{:e}", n);
+        let cnt = self.write_bytes(s.as_bytes())?;
+        Ok(self.byte_writer.count() - cnt)
+    }
+    fn write_string(&mut self, s: &str) -> WriteResult {
+        let cnt = self.byte_writer.count();
+        self.write_byte(b'"')?;
+        for ch in s.chars() {
+            match ch {
+                '"'  => self.write_bytes(b"\\\"")?,  // Escape double quotes
+                '\\' => self.write_bytes(b"\\\"")?,  // Escape backslashes
+                '\x08' => self.write_bytes(b"\\\"")?,   // Escape newline
+                '\x0c' => self.write_bytes(b"\\\"")?,   // Escape newline
+                '\n' => self.write_bytes(b"\\\"")?,   // Escape newline
+                '\r' => self.write_bytes(b"\\\"")?,   // Escape carriage return
+                '\t' => self.write_bytes(b"\\\"")?,   // Escape tab
+                // '\u{2028}' => escaped.push_str("\\u2028"), // Escape line separator (U+2028)
+                // '\u{2029}' => escaped.push_str("\\u2029"), // Escape paragraph separator (U+2029)
+                ch if ch > '\u{7F}' => {
+                    // Escape Unicode characters beyond ASCII (i.e., non-ASCII characters)
+                    self.write_bytes(format!("\\u{:04X}", ch as u32).as_bytes())?
+                },
+                ch => self.write_byte(ch as u32 as u8)?,
+            };
+        }
+        self.write_byte(b'"')?;
+        Ok(self.byte_writer.count() - cnt)
+    }
+    /// Escape blob to be UTF8 compatible
+    fn write_blob(&mut self, bytes: &[u8]) -> WriteResult {
+        let cnt = self.byte_writer.count();
+        self.add_wrap_type_tag("Blob")?;
+        self.write_byte(b'"')?;
+        for b in bytes {
+            self.write_byte(crate::to_hex(*b / 16))?;
+            self.write_byte(crate::to_hex(*b % 16))?;
+        }
+        self.write_byte(b'"')?;
+        Ok(self.byte_writer.count() - cnt)
+    }
+    fn write_decimal(&mut self, decimal: &Decimal) -> WriteResult {
+        let s = decimal.to_cpon_string();
+        let cnt = self.write_bytes(s.as_bytes())?;
+        Ok(self.byte_writer.count() - cnt)
+    }
+    fn write_datetime(&mut self, dt: &DateTime) -> WriteResult {
+        let cnt = self.byte_writer.count();
+        self.add_wrap_type_tag("DateTime")?;
+        self.write_byte(b'"')?;
+        let s = dt.to_iso_string_opt(&ToISOStringOptions {
+            include_millis: IncludeMilliseconds::WhenNonZero,
+            include_timezone: true
+        });
+        self.write_bytes(s.as_bytes())?;
+        self.write_byte(b'"')?;
+        Ok(self.byte_writer.count() - cnt)
+    }
+    fn write_list(&mut self, lst: &[RpcValue]) -> WriteResult {
+        let cnt = self.byte_writer.count();
+        self.write_byte(b'[')?;
+        for (n, v) in lst.iter().enumerate() {
+            if n > 0 {
+                self.write_byte(b',')?;
+            }
+            self.write(v)?;
+        }
+        self.write_byte(b']')?;
+        Ok(self.byte_writer.count() - cnt)
+    }
+    fn write_map(&mut self, map: &Map) -> WriteResult {
+        let cnt = self.byte_writer.count();
+        self.write_byte(b'{')?;
+        for (n, (k, v)) in map.iter().enumerate() {
+            if n > 0 {
+                self.write_byte(b',')?;
+            }
+            self.write_string(k)?;
+            self.write_byte(b':')?;
+            self.write(v)?;
+        }
+        self.write_byte(b'}')?;
+        Ok(self.byte_writer.count() - cnt)
+    }
+    fn write_imap(&mut self, map: &BTreeMap<i32, RpcValue>) -> WriteResult {
+        let cnt = self.byte_writer.count();
+        self.add_wrap_type_tag("IMap")?;
+        self.write_byte(b'{')?;
+        for (n, (k, v)) in map.iter().enumerate() {
+            if n > 0 {
+                self.write_byte(b',')?;
+            }
+            self.write_int(*k as i64)?;
+            self.write_byte(b':')?;
+            self.write(v)?;
+        }
+        self.write_byte(b'}')?;
+        Ok(self.byte_writer.count() - cnt)
+    }
+    fn push_wrap_state(&mut self) {
+        self.wrappers_stack.push(false);
+    }
+    fn add_wrap_tag(&mut self, tag: &str, val: Option<&str>) -> WriteResult {
+        if let Some(b) = self.wrappers_stack.last_mut() {
+            if !*b {
+                *b = true;
+                self.write_byte(b'[')?;
+            }
+        };
+        self.write_string(tag)?;
+        self.write_byte(b',')?;
+        if let Some(val) = val {
+            self.write_string(val)?;
+            self.write_byte(b',')?;
+        }
+        Ok(tag.len() + 1)
+    }
+    fn add_wrap_meta_tag(&mut self) -> WriteResult { self.add_wrap_tag(TAG_META, None) }
+    fn add_wrap_type_tag(&mut self, type_str: &str) -> WriteResult { self.add_wrap_tag(TAG_TYPE, Some(type_str)) }
+    fn pop_wrap_state(&mut self) -> WriteResult {
+        if let Some(b) = self.wrappers_stack.pop() {
+            if b {
+                return self.write_byte(b']')
+            }
+        }
+        Ok(0)
+    }
+}
+
+const TAG_META: &str = "!shvMeta";
+const TAG_TYPE: &str = "!shvType";
+
+impl<W> Writer for JsonWriter<'_, W>
+    where W: Write
+{
+    fn write(&mut self, val: &RpcValue) -> WriteResult {
+        self.push_wrap_state();
+        let cnt = self.byte_writer.count();
+        if let Some(mm) = &val.meta {
+            self.write_meta(mm)?;
+        }
+        self.write_value(&val.value)?;
+        self.pop_wrap_state()?;
+        Ok(self.byte_writer.count() - cnt)
+    }
+    fn write_meta(&mut self, map: &MetaMap) -> WriteResult {
+        let cnt: usize = self.byte_writer.count();
+        self.add_wrap_meta_tag()?;
+        self.write_byte(b'{')?;
+        for (n, k) in map.0.iter().enumerate() {
+            if n > 0 {
+                self.write_byte(b',')?;
+            }
+            match &k.key {
+                MetaKey::Str(s) => {
+                    self.write_string(s)?;
+                },
+                MetaKey::Int(i) => {
+                    self.write_string(&i.to_string())?;
+                },
+            }
+            self.write_byte(b':')?;
+            self.write(&k.value)?;
+        }
+        self.write_byte(b'}')?;
+        Ok(self.byte_writer.count() - cnt)
+    }
+    fn write_value(&mut self, val: &Value) -> WriteResult {
+        let cnt: usize = self.byte_writer.count();
+        match val {
+            Value::Null => self.write_bytes("null".as_bytes()),
+            Value::Bool(b) => if *b {
+                self.write_bytes("true".as_bytes())
+            } else {
+                self.write_bytes("false".as_bytes())
+            },
+            Value::Int(n) => self.write_int(*n),
+            Value::UInt(n) => self.write_int(*n as i64),
+            Value::String(s) => self.write_string(s),
+            Value::Blob(b) => self.write_blob(b),
+            Value::Double(n) => self.write_double(*n),
+            Value::Decimal(d) => self.write_decimal(d),
+            Value::DateTime(d) => self.write_datetime(d),
+            Value::List(lst) => self.write_list(lst),
+            Value::Map(map) => self.write_map(map),
+            Value::IMap(map) => self.write_imap(map),
+        }?;
+        Ok(self.byte_writer.count() - cnt)
+    }
+}
+
+pub struct JsonReader<'a, R>
+    where R: Read
+{
+    byte_reader: ByteReader<'a, R>,
+}
+struct ReadInt {
+    value: i64,
+    digit_cnt: i32,
+    is_negative: bool,
+    is_overflow: bool,
+}
+impl<'a, R> JsonReader<'a, R>
+    where R: Read
+{
+    pub fn new(read: &'a mut R) -> Self {
+        JsonReader { byte_reader: ByteReader::new(read) }
+    }
+
+    fn peek_byte(&mut self) -> u8 {
+        self.byte_reader.peek_byte()
+    }
+    fn get_byte(&mut self) -> Result<u8, ReadError> {
+        self.byte_reader.get_byte()
+    }
+    fn make_error(&self, msg: &str, reason: ReadErrorReason) -> ReadError {
+        self.byte_reader.make_error(&format!("Cpon read error - {}", msg), reason)
+    }
+
+    fn skip_white_insignificant(&mut self) -> Result<(), ReadError> {
+        loop {
+            let b = self.peek_byte();
+            if b == 0 {
+                break;
+            }
+            if b > b' ' {
+                match b {
+                    b'/' => {
+                        self.get_byte()?;
+                        let b = self.get_byte()?;
+                        match b {
+                            b'*' => {
+                                // multiline_comment_entered
+                                loop {
+                                    let b = self.get_byte()?;
+                                    if b == b'*' {
+                                        let b = self.get_byte()?;
+                                        if b == b'/' {
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                            b'/' => {
+                                // to end of line comment entered
+                                loop {
+                                    let b = self.get_byte()?;
+                                    if b == b'\n' {
+                                        break;
+                                    }
+                                }
+                            }
+                            _ => {
+                                return Err(self.make_error("Malformed comment", ReadErrorReason::InvalidCharacter))
+                            }
+                        }
+                    }
+                    b':' => {
+                        self.get_byte()?; // skip key delimiter
+                    }
+                    b',' => {
+                        self.get_byte()?; // skip val delimiter
+                    }
+                    _ => {
+                        break;
+                    }
+                }
+            }
+            else {
+                self.get_byte()?;
+            }
+        }
+        Ok(())
+    }
+    fn read_string(&mut self) -> Result<Value, ReadError> {
+        let mut buff: Vec<u8> = Vec::new();
+        self.get_byte()?; // eat "
+        loop {
+            let b = self.get_byte()?;
+            match &b {
+                b'\\' => {
+                    let b = self.get_byte()?;
+                    match &b {
+                        b'"' => buff.push(b'"'),
+                        b'\\' => buff.push(b'\\'),
+                        b'b' => buff.push(b'\x08'),
+                        b'f' => buff.push(b'\x0c'),
+                        b'n' => buff.push(b'\n'),
+                        b'r' => buff.push(b'\r'),
+                        b't' => buff.push(b'\t'),
+                        b'0' => buff.push(b'\0'),
+                        b'u' => {
+                            // \uXXXX
+                            let mut hex = "".to_string();
+                            hex.push(self.get_byte()? as char);
+                            hex.push(self.get_byte()? as char);
+                            hex.push(self.get_byte()? as char);
+                            hex.push(self.get_byte()? as char);
+                            let code_point = u32::from_str_radix(&hex, 16).map_err(|e| self.make_error(&format!("Invalid unicode escape sequence: {:?} - {}", hex, e), ReadErrorReason::InvalidCharacter))?;
+                            let ch = char::from_u32(code_point).ok_or(self.make_error(&format!("Invalid code point: {code_point}"), ReadErrorReason::InvalidCharacter))?;
+                            let mut utf8 = [0; 4];
+                            let s = ch.encode_utf8(&mut utf8);
+                            for b in s.as_bytes() {
+                                buff.push(*b)
+                            }
+                        }
+                        _ => {
+                            buff.push(b)
+                        },
+                    }
+                }
+                b'"' => {
+                    // end of string
+                    break;
+                }
+                _ => {
+                    buff.push(b);
+                }
+            }
+        }
+        let s = std::str::from_utf8(&buff);
+        match s {
+            Ok(s) => Ok(Value::from(s)),
+            Err(e) => Err(self.make_error(&format!("Invalid String, Utf8 error: {}", e), ReadErrorReason::InvalidCharacter)),
+        }
+    }
+    fn read_int(&mut self, init_val: i64, no_signum: bool) -> Result<ReadInt, ReadError> {
+        let mut base = 10;
+        let mut value: i64 = init_val;
+        let mut is_negative = false;
+        let mut n = 0;
+        let mut digit_cnt = 0;
+        let mut is_overflow = false;
+        fn add_digit(val: i64, base: i64, digit: u8) -> Option<i64> {
+            let res = val.checked_mul(base)?;
+            let res = res.checked_add(digit as i64)?;
+            Some(res)
+        }
+        loop {
+            let b = self.peek_byte();
+            let digit = match b {
+                0 => break,
+                b'+' | b'-' => {
+                    if n != 0 {
+                        break;
+                    }
+                    if no_signum {
+                        return Err(self.make_error("Unexpected signum", ReadErrorReason::InvalidCharacter))
+                    }
+                    let b = self.get_byte()?;
+                    if b == b'-' {
+                        is_negative = true;
+                    }
+                    None
+                }
+                b'x' | b'X' => {
+                    if n == 1 && value != 0 {
+                        break;
+                    }
+                    if n != 1 {
+                        break;
+                    }
+                    self.get_byte()?;
+                    base = 16;
+                    None
+                }
+                b'0' ..= b'9' => {
+                    self.get_byte()?;
+                    Some(b - b'0')
+                }
+                b'A' ..= b'F' => {
+                    if base != 16 {
+                        break;
+                    }
+                    self.get_byte()?;
+                    Some(10 + (b - b'A'))
+                }
+                b'a' ..= b'f' => {
+                    if base != 16 {
+                        break;
+                    }
+                    self.get_byte()?;
+                    Some(10 + (b - b'a'))
+                }
+                _ => break,
+            };
+            if let Some(digit) = digit {
+                if !is_overflow {
+                    if let Some(val) = add_digit(value, base, digit) {
+                        value = val;
+                        digit_cnt += 1;
+                    } else {
+                        is_overflow = true;
+                    }
+                }
+            }
+            n += 1;
+        }
+        Ok(ReadInt {
+            value,
+            digit_cnt,
+            is_negative,
+            is_overflow,
+        })
+    }
+    fn read_number(&mut self) -> Result<Value, ReadError> {
+        let mut mantissa;
+        let mut exponent = 0;
+        let mut dec_cnt = 0;
+        let mut is_decimal = false;
+        let mut is_uint = false;
+        let mut is_negative = false;
+        let mut decimal_overflow = false;
+
+        let b = self.peek_byte();
+        if b == b'+' {
+            is_negative = false;
+            self.get_byte()?;
+        }
+        else if b == b'-' {
+            is_negative = true;
+            self.get_byte()?;
+        }
+
+        let ReadInt{ value, digit_cnt, is_overflow, .. } = self.read_int(0, false)?;
+        decimal_overflow = decimal_overflow || is_overflow;
+        if digit_cnt == 0 {
+            return Err(self.make_error("Number should contain at least one digit.", ReadErrorReason::InvalidCharacter))
+        }
+        mantissa = value;
+        #[derive(PartialEq)]
+        enum State { Mantissa, Decimals,  }
+        let mut state = State::Mantissa;
+        loop {
+            let b = self.peek_byte();
+            match b {
+                b'u' => {
+                    is_uint = true;
+                    self.get_byte()?;
+                    break;
+                }
+                b'.' => {
+                    if state != State::Mantissa {
+                        return Err(self.make_error("Unexpected decimal point.", ReadErrorReason::InvalidCharacter))
+                    }
+                    state = State::Decimals;
+                    is_decimal = true;
+                    self.get_byte()?;
+                    let ReadInt{ value, digit_cnt, is_overflow, .. } = self.read_int(mantissa, true)?;
+                    decimal_overflow = decimal_overflow || is_overflow;
+                    mantissa = value;
+                    dec_cnt = digit_cnt as i64;
+                }
+                b'e' | b'E' => {
+                    if state != State::Mantissa && state != State::Decimals {
+                        return Err(self.make_error("Unexpected exponent mark.", ReadErrorReason::InvalidCharacter))
+                    }
+                    //state = State::Exponent;
+                    is_decimal = true;
+                    self.get_byte()?;
+                    let ReadInt{ value, digit_cnt, is_negative, is_overflow } = self.read_int(0, false)?;
+                    decimal_overflow = decimal_overflow || is_overflow;
+                    exponent = value;
+                    if is_negative { exponent = -exponent; }
+                    if digit_cnt == 0 {
+                        return Err(self.make_error("Malformed number exponential part.", ReadErrorReason::InvalidCharacter))
+                    }
+                    break;
+                }
+                _ => { break; }
+            }
+        }
+        let mantissa = if is_negative { -mantissa } else { mantissa };
+        if is_decimal {
+            if decimal_overflow && dec_cnt == 0 {
+                return Ok(Value::from(Decimal::new(if is_negative {i64::MIN} else {i64::MAX}, 0)))
+            }
+            return Ok(Value::from(Decimal::new(mantissa, (exponent - dec_cnt) as i8)))
+        }
+        if is_uint {
+            if decimal_overflow {
+                return Ok(Value::from(i64::MAX as u64))
+            }
+            return Ok(Value::from(mantissa as u64))
+        }
+        if decimal_overflow {
+            return Ok(Value::from(if is_negative { i64::MIN } else { i64::MAX }))
+        }
+        Ok(Value::from(mantissa))
+    }
+    fn read_list(&mut self) -> Result<Value, ReadError> {
+        let mut lst = Vec::new();
+        self.get_byte()?; // eat '['
+        loop {
+            self.skip_white_insignificant()?;
+            let b = self.peek_byte();
+            if b == b']' {
+                self.get_byte()?;
+                break;
+            }
+            let val = self.read()?;
+            lst.push(val);
+        }
+        Ok(Value::from(lst))
+    }
+
+    fn read_map(&mut self) -> Result<Value, ReadError> {
+        let mut map: Map = Map::new();
+        self.get_byte()?; // eat '{'
+        loop {
+            self.skip_white_insignificant()?;
+            let b = self.peek_byte();
+            if b == b'}' {
+                self.get_byte()?;
+                break;
+            }
+            let key = self.read_string();
+            let skey = match &key {
+                Ok(b) => {
+                    match b {
+                        Value::String(s) => {
+                            s
+                        },
+                        _ => return Err(self.make_error("Read MetaMap key internal error", ReadErrorReason::InvalidCharacter)),
+                    }
+                },
+                _ => return Err(self.make_error(&format!("Invalid Map key '{}'", b), ReadErrorReason::InvalidCharacter)),
+            };
+            self.skip_white_insignificant()?;
+            let val = self.read()?;
+            map.insert(skey.to_string(), val);
+        }
+        Ok(Value::from(map))
+    }
+    fn read_true(&mut self) -> Result<Value, ReadError> {
+        self.read_token("true")?;
+        Ok(Value::from(true))
+    }
+    fn read_false(&mut self) -> Result<Value, ReadError> {
+        self.read_token("false")?;
+        Ok(Value::from(false))
+    }
+    fn read_null(&mut self) -> Result<Value, ReadError> {
+        self.read_token("null")?;
+        Ok(Value::from(()))
+    }
+    fn read_token(&mut self, token: &str) -> Result<(), ReadError> {
+        for c in token.as_bytes() {
+            let b = self.get_byte()?;
+            if b != *c {
+                return Err(self.make_error(&format!("Incomplete '{}' literal.", token), ReadErrorReason::InvalidCharacter))
+            }
+        }
+        Ok(())
+    }
+    fn retype_value(&self, m: Option<&RpcValue>, t: Option<&str>, v: &Value) -> Result<RpcValue, ReadError> {
+        let meta = 'a: {
+            if let Some(rv) = m {
+                if let Value::Map(m) = &rv.value {
+                    let mut mm = MetaMap::default();
+                    for (k, v) in m.iter() {
+                        if let Ok(i) = k.parse::<i32>() {
+                            mm.insert(i, v.clone());
+                        } else {
+                            mm.insert(k.as_str(), v.clone());
+                        }
+                    }
+                    break 'a Some(mm)
+                }
+            }
+            None
+        };
+        let val = match t {
+            Some("Blob") => {
+                if let Value::String(hex) = v {
+                    let data = hex::decode(hex.as_str()).map_err(|e| self.make_error(&format!("Hex blob decode error: {}.", e), ReadErrorReason::InvalidCharacter))?;
+                    Value::from(data)
+                } else {
+                    return Err(self.make_error("Blob must be encoded as hex string.", ReadErrorReason::InvalidCharacter))
+                }
+            }
+            Some("DateTime") => {
+                if let Value::String(dt) = v {
+                    let dt = DateTime::from_iso_str(&dt).map_err(|e| self.make_error(&format!("DateTime decode error: {}.", e), ReadErrorReason::InvalidCharacter))?;
+                    Value::from(dt)
+                } else {
+                    return Err(self.make_error("DateTime must be encoded as ISO string.", ReadErrorReason::InvalidCharacter))
+                }
+            }
+            Some("IMap") => {
+                if let Value::Map(im) = v {
+                    let mut imap = crate::IMap::default();
+                    for (k, v) in im.iter() {
+                        let ik = k.parse::<i32>().map_err(|e| self.make_error(&format!("IMap key decode error: {}.", e), ReadErrorReason::InvalidCharacter))?;
+                        imap.insert(ik, v.clone());
+                    }
+                    Value::from(imap)
+                } else {
+                    // let s = RpcValue::new(v.clone(), None).to_cpon();
+                    return Err(self.make_error("IMap must be encoded as map with indexes converted to string keys.", ReadErrorReason::InvalidCharacter))
+                }
+            }
+            _ => { v.clone() }
+        };
+        Ok(RpcValue::new(val, meta))
+    }
+}
+
+impl<R> Reader for JsonReader<'_, R>
+    where R: Read
+{
+    fn read(&mut self) -> ReadResult {
+        let val = self.read_value()?;
+        let rv = 'a: {
+            if let Value::List(list1) = &val {
+                match &list1[..] {
+                    [meta_tag, meta, type_tag, typestr, val] if meta_tag.as_str() == TAG_META && type_tag.as_str() == TAG_TYPE => {
+                        break 'a self.retype_value(Some(meta), Some(typestr.as_str()), &val.value)?;
+                    }
+                    [meta_tag, _meta, type_tag, _typestr] if meta_tag.as_str() == TAG_META && type_tag.as_str() == TAG_TYPE => {
+                        return Err(self.make_error("Value part of encoded meta with type missing.", ReadErrorReason::InvalidCharacter));
+                    }
+
+                    [meta_tag, meta, val] if meta_tag.as_str() == TAG_META => {
+                        break 'a self.retype_value(Some(meta), None, &val.value)?;
+                    }
+                    [meta_tag, _meta] if meta_tag.as_str() == TAG_META => {
+                        return Err(self.make_error("Value part of encoded meta missing.", ReadErrorReason::InvalidCharacter));
+                    }
+
+                    [type_tag, typestr, val] if type_tag.as_str() == TAG_TYPE => {
+                        break 'a self.retype_value(None, Some(typestr.as_str()), &val.value)?;
+                    }
+                    [type_tag, _typestr] if type_tag.as_str() == TAG_TYPE => {
+                        return Err(self.make_error("Value part of encoded type missing.", ReadErrorReason::InvalidCharacter));
+                    }
+                    _ => {
+                        break 'a RpcValue::new(val, None);
+                    }
+                }
+            };
+            break 'a RpcValue::new(val, None);
+        };
+        Ok(rv)
+    }
+    fn try_read_meta(&mut self) -> Result<Option<MetaMap>, ReadError> {
+        Ok(None)
+    }
+    fn read_value(&mut self) -> Result<Value, ReadError> {
+        self.skip_white_insignificant()?;
+        let b = self.peek_byte();
+        let v = match &b {
+            b'0' ..= b'9' | b'+' | b'-' => self.read_number(),
+            b'"' => self.read_string(),
+            b'[' => self.read_list(),
+            b'{' => self.read_map(),
+            b't' => self.read_true(),
+            b'f' => self.read_false(),
+            b'n' => self.read_null(),
+            _ => Err(self.make_error(&format!("Invalid char {}, code: {}", char::from(b), b), ReadErrorReason::InvalidCharacter)),
+        }?;
+        Ok(v)
+    }
+}
+
+#[cfg(test)]
+mod test
+{
+    use chrono::{Duration, FixedOffset, LocalResult};
+    use crate::json::{TAG_META, TAG_TYPE};
+    use crate::{DateTime, Decimal, IMap, RpcValue};
+
+    fn fix_tags(json: &str) -> String {
+        let ret = json.replace("!shvM", TAG_META);
+        let ret = ret.replace("!shvT", TAG_TYPE);
+        ret
+    }
+
+    #[test]
+    fn test_read_imap() {
+        assert!(RpcValue::from_json(&fix_tags(r#"["!shvT", "IMap"]"#)).is_err());
+        assert_eq!(RpcValue::from_json(&fix_tags(r#"["!shvT", "IMap", {}]"#)).unwrap().as_imap(), &IMap::default());
+        assert_eq!(RpcValue::from_json(&fix_tags(r#"["!shvT", "IMap", {"1": 2}]"#)).unwrap().as_imap(), &IMap::from([(1, 2.into())]));
+    }
+
+    #[test]
+    fn test_read_datetime() {
+        use chrono::TimeZone;
+        const MINUTE: i32 = 60;
+        const HOUR: i32 = 60 * MINUTE;
+
+        #[allow(clippy::too_many_arguments)]
+        fn dt_from_ymd_hms_milli_tz_offset(year: i32, month: u32, day: u32, hour: u32, min: u32, sec: u32, milli: i64, tz_offset: i32) -> chrono::DateTime<FixedOffset> {
+            if let LocalResult::Single(dt) = FixedOffset::east_opt(tz_offset).unwrap()
+                .with_ymd_and_hms(year, month, day, hour, min, sec) {
+                dt.checked_add_signed(Duration::milliseconds(milli)).unwrap()
+            } else {
+                panic!("Invalid date time");
+            }
+        }
+        fn make_json(dtstr: &str) -> String {
+            fix_tags(&format!(r#"["!shvT","DateTime","{dtstr}"]"#))
+        }
+        for (dt_str, dt) in &[
+            ("2021-11-08T01:02:03+05", dt_from_ymd_hms_milli_tz_offset(2021, 11, 8, 1, 2, 3, 0, 5 * HOUR)),
+            ("2021-11-08T01:02:03-0815", dt_from_ymd_hms_milli_tz_offset(2021, 11, 8, 1, 2, 3, 0, -8 * HOUR - 15 * MINUTE)),
+            ("2021-11-08T01:02:03.456-0815", dt_from_ymd_hms_milli_tz_offset(2021, 11, 8, 1, 2, 3, 456, -8 * HOUR - 15 * MINUTE)),
+        ] {
+            let json = make_json(dt_str);
+            assert_eq!(RpcValue::from_json(&json).unwrap().as_datetime(), DateTime::from_datetime(&dt));
+            assert_eq!(RpcValue::from_json(&make_json(dt_str)).unwrap().to_json(), json);
+        }
+    }
+
+    #[test]
+    fn test_read_too_long_numbers() {
+        // read very long decimal without overflow error, value is capped
+        assert_eq!(RpcValue::from_json("123456789012345678901234567890123456789012345678901234567890").unwrap().as_int(), i64::MAX);
+
+        assert_eq!(RpcValue::from_json("9223372036854775806").unwrap().as_int(), 9223372036854775806_i64);
+        assert_eq!(RpcValue::from_json("9223372036854775807").unwrap().as_int(), i64::MAX);
+        assert_eq!(RpcValue::from_json("9223372036854775808").unwrap().as_int(), i64::MAX);
+
+        assert_eq!(RpcValue::from_json("0x7FFFFFFFFFFFFFFE").unwrap().as_int(), 0x7FFFFFFFFFFFFFFE_i64);
+        assert_eq!(RpcValue::from_json("0x7FFFFFFFFFFFFFFF").unwrap().as_int(), i64::MAX);
+        assert_eq!(RpcValue::from_json("0x8000000000000000").unwrap().as_int(), i64::MAX);
+
+        assert_eq!(RpcValue::from_json("-123456789012345678901234567890123456789012345678901234567890").unwrap().as_int(), i64::MIN);
+
+        assert_eq!(RpcValue::from_json("-9223372036854775807").unwrap().as_int(), -9223372036854775807_i64);
+        assert_eq!(RpcValue::from_json("-9223372036854775808").unwrap().as_int(), i64::MIN);
+        assert_eq!(RpcValue::from_json("-9223372036854775809").unwrap().as_int(), i64::MIN);
+
+        assert_eq!(RpcValue::from_json("-0x7FFFFFFFFFFFFFFF").unwrap().as_int(), -0x7FFFFFFFFFFFFFFF_i64);
+        assert_eq!(RpcValue::from_json("-0x8000000000000000").unwrap().as_int(), i64::MIN);
+        assert_eq!(RpcValue::from_json("-0x8000000000000001").unwrap().as_int(), i64::MIN);
+
+        assert_eq!(RpcValue::from_json("1.23456789012345678901234567890123456789012345678901234567890").unwrap().as_decimal(), Decimal::new(1234567890123456789, -18));
+        assert_eq!(RpcValue::from_json("12345678901234567890123456789012345678901234567890123456.7890").unwrap().as_decimal(), Decimal::new(i64::MAX, 0));
+        assert_eq!(RpcValue::from_json("123456789012345678901234567890123456789012345678901234567890.").unwrap().as_decimal(), Decimal::new(i64::MAX, 0));
+    }
+}

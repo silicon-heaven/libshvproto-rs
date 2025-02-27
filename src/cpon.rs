@@ -34,7 +34,7 @@ impl<'a, W> CponWriter<'a, W>
             return false;
         }
         for it in lst.iter() {
-            match it.value() {
+            match &it.value {
                 Value::List(_) => return false,
                 Value::Map(_) => return false,
                 Value::IMap(_) => return false,
@@ -51,7 +51,7 @@ impl<'a, W> CponWriter<'a, W>
             }
             match iter.next() {
                 Some(val) => {
-                    match val.1.value() {
+                    match &val.1.value {
                         Value::List(_) => return false,
                         Value::Map(_) => return false,
                         Value::IMap(_) => return false,
@@ -70,7 +70,7 @@ impl<'a, W> CponWriter<'a, W>
             return false;
         }
         for k in map.0.iter() {
-            match k.value.value() {
+            match &k.value.value {
                 Value::List(_) => return false,
                 Value::Map(_) => return false,
                 Value::IMap(_) => return false,
@@ -199,16 +199,8 @@ impl<'a, W> CponWriter<'a, W>
                 _ => {
                     if *b < 0x20 || *b >= 0x7f {
                         self.write_byte(b'\\')?;
-                        fn to_hex(b: u8) -> u8 {
-                            if b < 10 {
-                                b'0' + b
-                            }
-                            else {
-                                b'a' + (b - 10)
-                            }
-                        }
-                        self.write_byte(to_hex(*b / 16))?;
-                        self.write_byte(to_hex(*b % 16))?;
+                        self.write_byte(crate::to_hex(*b / 16))?;
+                        self.write_byte(crate::to_hex(*b % 16))?;
                     } else {
                         self.write_byte(*b)?;
                     }
@@ -301,11 +293,11 @@ impl<W> Writer for CponWriter<'_, W>
 {
     fn write(&mut self, val: &RpcValue) -> WriteResult {
         let cnt = self.byte_writer.count();
-        let mm = val.meta();
-        if !mm.is_empty() {
+        let mm = &val.meta;
+        if let Some(mm) = mm {
             self.write_meta(mm)?;
         }
-        self.write_value(val.value())?;
+        self.write_value(&val.value)?;
         Ok(self.byte_writer.count() - cnt)
     }
     fn write_meta(&mut self, map: &MetaMap) -> WriteResult {
@@ -476,7 +468,7 @@ impl<'a, R> CponReader<'a, R>
             Err(e) => Err(self.make_error(&format!("Invalid String, Utf8 error: {}", e), ReadErrorReason::InvalidCharacter)),
         }
     }
-    fn decode_byte(&self, b: u8) -> Result<u8, ReadError> {
+    fn decode_hex_byte(&self, b: u8) -> Result<u8, ReadError> {
         match b {
             b'A' ..= b'F' => Ok(b - b'A' + 10),
             b'a' ..= b'f' => Ok(b - b'a' + 10),
@@ -502,7 +494,7 @@ impl<'a, R> CponReader<'a, R>
                         _ => {
                             let hi = b;
                             let lo = self.get_byte()?;
-                            let b = self.decode_byte(hi)? * 16 + self.decode_byte(lo)?;
+                            let b = self.decode_hex_byte(hi)? * 16 + self.decode_hex_byte(lo)?;
                             buff.push(b)
                         },
                     }
@@ -535,7 +527,7 @@ impl<'a, R> CponReader<'a, R>
                 break;
             }
             let b2 = self.get_byte()?;
-            let b = self.decode_byte(b1)? * 16 + self.decode_byte(b2)?;
+            let b = self.decode_hex_byte(b1)? * 16 + self.decode_hex_byte(b2)?;
             buff.push(b);
         }
         Ok(Value::from(buff))
