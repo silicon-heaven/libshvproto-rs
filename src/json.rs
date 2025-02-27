@@ -128,7 +128,9 @@ impl<'a, W> JsonWriter<'a, W>
             if n > 0 {
                 self.write_byte(b',')?;
             }
+            self.write_byte(b'"')?;
             self.write_int(*k as i64)?;
+            self.write_byte(b'"')?;
             self.write_byte(b':')?;
             self.write(v)?;
         }
@@ -619,7 +621,7 @@ impl<'a, R> JsonReader<'a, R>
             }
             Some("DateTime") => {
                 if let Value::String(dt) = v {
-                    let dt = DateTime::from_iso_str(&dt).map_err(|e| self.make_error(&format!("DateTime decode error: {}.", e), ReadErrorReason::InvalidCharacter))?;
+                    let dt = DateTime::from_iso_str(dt).map_err(|e| self.make_error(&format!("DateTime decode error: {}.", e), ReadErrorReason::InvalidCharacter))?;
                     Value::from(dt)
                 } else {
                     return Err(self.make_error("DateTime must be encoded as ISO string.", ReadErrorReason::InvalidCharacter))
@@ -715,14 +717,23 @@ mod test
     }
 
     #[test]
-    fn test_read_imap() {
+    fn test_imap() {
         assert!(RpcValue::from_json(&fix_tags(r#"["!shvT", "IMap"]"#)).is_err());
-        assert_eq!(RpcValue::from_json(&fix_tags(r#"["!shvT", "IMap", {}]"#)).unwrap().as_imap(), &IMap::default());
-        assert_eq!(RpcValue::from_json(&fix_tags(r#"["!shvT", "IMap", {"1": 2}]"#)).unwrap().as_imap(), &IMap::from([(1, 2.into())]));
+        assert!(RpcValue::from_json(&fix_tags(r#"["!shvT", "IMap", {"foo": "bar"}]"#)).is_err());
+        for (json, imap) in &[
+            // (r#"["!shvT", "IMap"]"#, None),
+            (r#"["!shvT", "IMap", {}]"#, IMap::default()),
+            (r#"["!shvT", "IMap", {"1": 2}]"#, IMap::from([(1, 2.into())])),
+        ] {
+            let json = fix_tags(json);
+            let rv = RpcValue::from_json(&json).unwrap();
+            assert_eq!(rv.as_imap(), imap);
+            assert_eq!(rv.to_json(), json.replace(" ", ""));
+        }
     }
 
     #[test]
-    fn test_read_datetime() {
+    fn test_datetime() {
         use chrono::TimeZone;
         const MINUTE: i32 = 60;
         const HOUR: i32 = 60 * MINUTE;
@@ -745,8 +756,9 @@ mod test
             ("2021-11-08T01:02:03.456-0815", dt_from_ymd_hms_milli_tz_offset(2021, 11, 8, 1, 2, 3, 456, -8 * HOUR - 15 * MINUTE)),
         ] {
             let json = make_json(dt_str);
-            assert_eq!(RpcValue::from_json(&json).unwrap().as_datetime(), DateTime::from_datetime(&dt));
-            assert_eq!(RpcValue::from_json(&make_json(dt_str)).unwrap().to_json(), json);
+            let rv = RpcValue::from_json(&json).unwrap();
+            assert_eq!(rv.as_datetime(), DateTime::from_datetime(&dt));
+            assert_eq!(rv.to_json(), json);
         }
     }
 
