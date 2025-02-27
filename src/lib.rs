@@ -10,6 +10,7 @@ pub mod reader;
 pub mod rpcvalue;
 pub mod util;
 pub mod writer;
+mod textrdwr;
 
 pub use datetime::DateTime;
 pub use decimal::Decimal;

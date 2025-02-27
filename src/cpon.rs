@@ -1,3 +1,4 @@
+use crate::textrdwr::ReadInt;
 use std::io::{Write, Read};
 use crate::{RpcValue, MetaMap, Value, Decimal, DateTime};
 use std::collections::BTreeMap;
@@ -6,6 +7,7 @@ use crate::writer::{WriteResult, Writer, ByteWriter};
 use crate::metamap::MetaKey;
 use crate::reader::{Reader, ByteReader, ReadError, ReadErrorReason};
 use crate::rpcvalue::{Map};
+use crate::textrdwr::{TextReader};
 
 pub struct CponWriter<'a, W>
     where W: Write
@@ -210,14 +212,6 @@ impl<'a, W> CponWriter<'a, W>
         self.write_byte(b'"')?;
         Ok(self.byte_writer.count() - cnt)
     }
-    // fn write_bytes_hex(&mut self, b: &[u8]) -> WriteResult {
-    //     let cnt = self.byte_writer.count();
-    //     self.write_bytes(b"x\"")?;
-    //     let s = hex::encode(b);
-    //     self.write_bytes(s.as_bytes())?;
-    //     self.write_byte(b'"')?;
-    //     Ok(self.byte_writer.count() - cnt)
-    // }
     fn write_decimal(&mut self, decimal: &Decimal) -> WriteResult {
         let s = decimal.to_cpon_string();
         let cnt = self.write_bytes(s.as_bytes())?;
@@ -357,12 +351,6 @@ pub struct CponReader<'a, R>
 {
     byte_reader: ByteReader<'a, R>,
 }
-struct ReadInt {
-    value: i64,
-    digit_cnt: i32,
-    is_negative: bool,
-    is_overflow: bool,
-}
 impl<'a, R> CponReader<'a, R>
     where R: Read
 {
@@ -370,104 +358,6 @@ impl<'a, R> CponReader<'a, R>
         CponReader { byte_reader: ByteReader::new(read) }
     }
 
-    fn peek_byte(&mut self) -> u8 {
-        self.byte_reader.peek_byte()
-    }
-    fn get_byte(&mut self) -> Result<u8, ReadError> {
-        self.byte_reader.get_byte()
-    }
-    fn make_error(&self, msg: &str, reason: ReadErrorReason) -> ReadError {
-        self.byte_reader.make_error(&format!("Cpon read error - {}", msg), reason)
-    }
-
-    fn skip_white_insignificant(&mut self) -> Result<(), ReadError> {
-        loop {
-            let b = self.peek_byte();
-            if b == 0 {
-                break;
-            }
-            if b > b' ' {
-                match b {
-                    b'/' => {
-                        self.get_byte()?;
-                        let b = self.get_byte()?;
-                        match b {
-                            b'*' => {
-                                // multiline_comment_entered
-                                loop {
-                                    let b = self.get_byte()?;
-                                    if b == b'*' {
-                                        let b = self.get_byte()?;
-                                        if b == b'/' {
-                                            break;
-                                        }
-                                    }
-                                }
-                            }
-                            b'/' => {
-                                // to end of line comment entered
-                                loop {
-                                    let b = self.get_byte()?;
-                                    if b == b'\n' {
-                                        break;
-                                    }
-                                }
-                            }
-                            _ => {
-                                return Err(self.make_error("Malformed comment", ReadErrorReason::InvalidCharacter))
-                            }
-                        }
-                    }
-                    b':' => {
-                        self.get_byte()?; // skip key delimiter
-                    }
-                    b',' => {
-                        self.get_byte()?; // skip val delimiter
-                    }
-                    _ => {
-                        break;
-                    }
-                }
-            }
-            else {
-                self.get_byte()?;
-            }
-        }
-        Ok(())
-    }
-    fn read_string(&mut self) -> Result<Value, ReadError> {
-        let mut buff: Vec<u8> = Vec::new();
-        self.get_byte()?; // eat "
-        loop {
-            let b = self.get_byte()?;
-            match &b {
-                b'\\' => {
-                    let b = self.get_byte()?;
-                    match &b {
-                        b'\\' => buff.push(b'\\'),
-                        b'"' => buff.push(b'"'),
-                        b'n' => buff.push(b'\n'),
-                        b'r' => buff.push(b'\r'),
-                        b't' => buff.push(b'\t'),
-                        b'0' => buff.push(b'\0'),
-                        _ => buff.push(b),
-                    }
-                }
-                b'"' => {
-                    // end of string
-                    break;
-                }
-                _ => {
-                    buff.push(b);
-                }
-            }
-        }
-        let s = std::str::from_utf8(&buff);
-        match s {
-            Ok(s) => Ok(Value::from(s)),
-            Err(e) => Err(self.make_error(&format!("Invalid String, Utf8 error: {}", e), ReadErrorReason::InvalidCharacter)),
-        }
-    }
     fn decode_hex_byte(&self, b: u8) -> Result<u8, ReadError> {
         match b {
             b'A' ..= b'F' => Ok(b - b'A' + 10),
@@ -532,214 +422,6 @@ impl<'a, R> CponReader<'a, R>
         }
         Ok(Value::from(buff))
     }
-    fn read_int(&mut self, init_val: i64, no_signum: bool) -> Result<ReadInt, ReadError> {
-        let mut base = 10;
-        let mut value: i64 = init_val;
-        let mut is_negative = false;
-        let mut n = 0;
-        let mut digit_cnt = 0;
-        let mut is_overflow = false;
-        fn add_digit(val: i64, base: i64, digit: u8) -> Option<i64> {
-            let res = val.checked_mul(base)?;
-            let res = res.checked_add(digit as i64)?;
-            Some(res)
-        }
-        loop {
-            let b = self.peek_byte();
-            let digit = match b {
-                0 => break,
-                b'+' | b'-' => {
-                    if n != 0 {
-                        break;
-                    }
-                    if no_signum {
-                        return Err(self.make_error("Unexpected signum", ReadErrorReason::InvalidCharacter))
-                    }
-                    let b = self.get_byte()?;
-                    if b == b'-' {
-                        is_negative = true;
-                    }
-                    None
-                }
-                b'x' | b'X' => {
-                    if n == 1 && value != 0 {
-                        break;
-                    }
-                    if n != 1 {
-                        break;
-                    }
-                    self.get_byte()?;
-                    base = 16;
-                    None
-                }
-                b'0' ..= b'9' => {
-                    self.get_byte()?;
-                    Some(b - b'0')
-                }
-                b'A' ..= b'F' => {
-                    if base != 16 {
-                        break;
-                    }
-                    self.get_byte()?;
-                    Some(10 + (b - b'A'))
-                }
-                b'a' ..= b'f' => {
-                    if base != 16 {
-                        break;
-                    }
-                    self.get_byte()?;
-                    Some(10 + (b - b'a'))
-                }
-                _ => break,
-            };
-            if let Some(digit) = digit {
-                if !is_overflow {
-                    if let Some(val) = add_digit(value, base, digit) {
-                        value = val;
-                        digit_cnt += 1;
-                    } else {
-                        is_overflow = true;
-                    }
-                }
-            }
-            n += 1;
-        }
-        Ok(ReadInt {
-            value,
-            digit_cnt,
-            is_negative,
-            is_overflow,
-        })
-    }
-    fn read_number(&mut self) -> Result<Value, ReadError> {
-        let mut mantissa;
-        let mut exponent = 0;
-        let mut dec_cnt = 0;
-        let mut is_decimal = false;
-        let mut is_uint = false;
-        let mut is_negative = false;
-        let mut decimal_overflow = false;
-
-        let b = self.peek_byte();
-        if b == b'+' {
-            is_negative = false;
-            self.get_byte()?;
-        }
-        else if b == b'-' {
-            is_negative = true;
-            self.get_byte()?;
-        }
-
-        let ReadInt{ value, digit_cnt, is_overflow, .. } = self.read_int(0, false)?;
-        decimal_overflow = decimal_overflow || is_overflow;
-        if digit_cnt == 0 {
-            return Err(self.make_error("Number should contain at least one digit.", ReadErrorReason::InvalidCharacter))
-        }
-        mantissa = value;
-        #[derive(PartialEq)]
-        enum State { Mantissa, Decimals,  }
-        let mut state = State::Mantissa;
-        loop {
-            let b = self.peek_byte();
-            match b {
-                b'u' => {
-                    is_uint = true;
-                    self.get_byte()?;
-                    break;
-                }
-                b'.' => {
-                    if state != State::Mantissa {
-                        return Err(self.make_error("Unexpected decimal point.", ReadErrorReason::InvalidCharacter))
-                    }
-                    state = State::Decimals;
-                    is_decimal = true;
-                    self.get_byte()?;
-                    let ReadInt{ value, digit_cnt, is_overflow, .. } = self.read_int(mantissa, true)?;
-                    decimal_overflow = decimal_overflow || is_overflow;
-                    mantissa = value;
-                    dec_cnt = digit_cnt as i64;
-                }
-                b'e' | b'E' => {
-                    if state != State::Mantissa && state != State::Decimals {
-                        return Err(self.make_error("Unexpected exponent mark.", ReadErrorReason::InvalidCharacter))
-                    }
-                    //state = State::Exponent;
-                    is_decimal = true;
-                    self.get_byte()?;
-                    let ReadInt{ value, digit_cnt, is_negative, is_overflow } = self.read_int(0, false)?;
-                    decimal_overflow = decimal_overflow || is_overflow;
-                    exponent = value;
-                    if is_negative { exponent = -exponent; }
-                    if digit_cnt == 0 {
-                        return Err(self.make_error("Malformed number exponential part.", ReadErrorReason::InvalidCharacter))
-                    }
-                    break;
-                }
-                _ => { break; }
-            }
-        }
-        let mantissa = if is_negative { -mantissa } else { mantissa };
-        if is_decimal {
-            if decimal_overflow && dec_cnt == 0 {
-                return Ok(Value::from(Decimal::new(if is_negative {i64::MIN} else {i64::MAX}, 0)))
-            }
-            return Ok(Value::from(Decimal::new(mantissa, (exponent - dec_cnt) as i8)))
-        }
-        if is_uint {
-            if decimal_overflow {
-                return Ok(Value::from(i64::MAX as u64))
-            }
-            return Ok(Value::from(mantissa as u64))
-        }
-        if decimal_overflow {
-            return Ok(Value::from(if is_negative { i64::MIN } else { i64::MAX }))
-        }
-        Ok(Value::from(mantissa))
-    }
-    fn read_list(&mut self) -> Result<Value, ReadError> {
-        let mut lst = Vec::new();
-        self.get_byte()?; // eat '['
-        loop {
-            self.skip_white_insignificant()?;
-            let b = self.peek_byte();
-            if b == b']' {
-                self.get_byte()?;
-                break;
-            }
-            let val = self.read()?;
-            lst.push(val);
-        }
-        Ok(Value::from(lst))
-    }
-
-    fn read_map(&mut self) -> Result<Value, ReadError> {
-        let mut map: Map = Map::new();
-        self.get_byte()?; // eat '{'
-        loop {
-            self.skip_white_insignificant()?;
-            let b = self.peek_byte();
-            if b == b'}' {
-                self.get_byte()?;
-                break;
-            }
-            let key = self.read_string();
-            let skey = match &key {
-                Ok(b) => {
-                    match b {
-                        Value::String(s) => {
-                            s
-                        },
-                        _ => return Err(self.make_error("Read MetaMap key internal error", ReadErrorReason::InvalidCharacter)),
-                    }
-                },
-                _ => return Err(self.make_error(&format!("Invalid Map key '{}'", b), ReadErrorReason::InvalidCharacter)),
-            };
-            self.skip_white_insignificant()?;
-            let val = self.read()?;
-            map.insert(skey.to_string(), val);
-        }
-        Ok(Value::from(map))
-    }
     fn read_imap(&mut self) -> Result<Value, ReadError> {
         self.get_byte()?; // eat 'i'
         let b = self.get_byte()?; // eat '{'
@@ -789,16 +471,53 @@ impl<'a, R> CponReader<'a, R>
         self.read_token("null")?;
         Ok(Value::from(()))
     }
-    fn read_token(&mut self, token: &str) -> Result<(), ReadError> {
-        for c in token.as_bytes() {
+
+}
+impl<R> TextReader for CponReader<'_, R>
+where R: Read
+{
+    fn peek_byte(&mut self) -> u8 {
+        self.byte_reader.peek_byte()
+    }
+    fn get_byte(&mut self) -> Result<u8, ReadError> {
+        self.byte_reader.get_byte()
+    }
+    fn make_error(&self, msg: &str, reason: ReadErrorReason) -> ReadError {
+        self.byte_reader.make_error(&format!("Cpon read error - {}", msg), reason)
+    }
+    fn read_string(&mut self) -> Result<Value, ReadError> {
+        let mut buff: Vec<u8> = Vec::new();
+        self.get_byte()?; // eat "
+        loop {
             let b = self.get_byte()?;
-            if b != *c {
-                return Err(self.make_error(&format!("Incomplete '{}' literal.", token), ReadErrorReason::InvalidCharacter))
+            match &b {
+                b'\\' => {
+                    let b = self.get_byte()?;
+                    match &b {
+                        b'\\' => buff.push(b'\\'),
+                        b'"' => buff.push(b'"'),
+                        b'n' => buff.push(b'\n'),
+                        b'r' => buff.push(b'\r'),
+                        b't' => buff.push(b'\t'),
+                        b'0' => buff.push(b'\0'),
+                        _ => buff.push(b),
+                    }
+                }
+                b'"' => {
+                    // end of string
+                    break;
+                }
+                _ => {
+                    buff.push(b);
+                }
             }
         }
-        Ok(())
+        let s = std::str::from_utf8(&buff);
+        match s {
+            Ok(s) => Ok(Value::from(s)),
+            Err(e) => Err(self.make_error(&format!("Invalid String, Utf8 error: {}", e), ReadErrorReason::InvalidCharacter)),
+        }
     }
-
 }
 
 impl<R> Reader for CponReader<'_, R>
@@ -910,8 +629,6 @@ mod test
         let dt = chrono::DateTime::<Utc>::from_naive_utc_and_offset(ndt, Utc);
         assert_eq!(RpcValue::from_cpon(r#"d"2022-01-02T12:59:06Z""#).unwrap().as_datetime(), DateTime::from_datetime(&dt));
 
-        let minute = 60;
-        let hour = 60 * minute;
 
         // Allow in tests
         #[allow(clippy::too_many_arguments)]
@@ -924,18 +641,21 @@ mod test
             }
         }
 
+        const MINUTE: i32 = 60;
+        const HOUR: i32 = 60 * MINUTE;
+
         let dt_str = r#"d"2021-11-08T01:02:03+05""#;
-        let dt = dt_from_ymd_hms_milli_tz_offset(2021, 11, 8, 1, 2, 3, 0, 5 * hour);
+        let dt = dt_from_ymd_hms_milli_tz_offset(2021, 11, 8, 1, 2, 3, 0, 5 * HOUR);
         assert_eq!(RpcValue::from_cpon(dt_str).unwrap().as_datetime(), DateTime::from_datetime(&dt));
         assert_eq!(RpcValue::from_cpon(dt_str).unwrap().to_cpon(), dt_str.to_string());
 
         let dt_str = r#"d"2021-11-08T01:02:03-0815""#;
-        let dt = dt_from_ymd_hms_milli_tz_offset(2021, 11, 8, 1, 2, 3, 0, -8 * hour - 15 * minute);
+        let dt = dt_from_ymd_hms_milli_tz_offset(2021, 11, 8, 1, 2, 3, 0, -8 * HOUR - 15 * MINUTE);
         assert_eq!(RpcValue::from_cpon(dt_str).unwrap().as_datetime(), DateTime::from_datetime(&dt));
         assert_eq!(RpcValue::from_cpon(dt_str).unwrap().to_cpon(), dt_str.to_string());
 
         let dt_str = r#"d"2021-11-08T01:02:03.456-0815""#;
-        let dt = dt_from_ymd_hms_milli_tz_offset(2021, 11, 8, 1, 2, 3, 456, -8 * hour - 15 * minute);
+        let dt = dt_from_ymd_hms_milli_tz_offset(2021, 11, 8, 1, 2, 3, 456, -8 * HOUR - 15 * MINUTE);
         assert_eq!(RpcValue::from_cpon(dt_str).unwrap().as_datetime(), DateTime::from_datetime(&dt));
         assert_eq!(RpcValue::from_cpon(dt_str).unwrap().to_cpon(), dt_str.to_string());
 
