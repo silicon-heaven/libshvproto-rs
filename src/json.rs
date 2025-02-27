@@ -1,12 +1,12 @@
 use std::io::{Write, Read};
-use crate::{RpcValue, MetaMap, Value, Decimal, DateTime, ReadResult};
+use crate::{RpcValue, MetaMap, Value, DateTime, ReadResult};
 use std::collections::BTreeMap;
 use crate::datetime::{IncludeMilliseconds, ToISOStringOptions};
 use crate::writer::{WriteResult, Writer, ByteWriter};
 use crate::metamap::MetaKey;
 use crate::reader::{Reader, ByteReader, ReadError, ReadErrorReason};
 use crate::rpcvalue::{Map};
-use crate::textrdwr::TextReader;
+use crate::textrdwr::{TextReader, TextWriter};
 
 pub struct JsonWriter<'a, W>
     where W: Write
@@ -23,24 +23,6 @@ impl<'a, W> JsonWriter<'a, W>
             byte_writer: ByteWriter::new(write),
             wrappers_stack: vec![],
         }
-    }
-
-    fn write_byte(&mut self, b: u8) -> WriteResult {
-        self.byte_writer.write_byte(b)
-    }
-    fn write_bytes(&mut self, b: &[u8]) -> WriteResult {
-        self.byte_writer.write_bytes(b)
-    }
-
-    fn write_int(&mut self, n: i64) -> WriteResult {
-        let s = n.to_string();
-        let cnt = self.write_bytes(s.as_bytes())?;
-                Ok(self.byte_writer.count() - cnt)
-    }
-    fn write_double(&mut self, n: f64) -> WriteResult {
-        let s = format!("{:e}", n);
-        let cnt = self.write_bytes(s.as_bytes())?;
-        Ok(self.byte_writer.count() - cnt)
     }
     fn write_string(&mut self, s: &str) -> WriteResult {
         let cnt = self.byte_writer.count();
@@ -76,11 +58,6 @@ impl<'a, W> JsonWriter<'a, W>
             self.write_byte(crate::to_hex(*b % 16))?;
         }
         self.write_byte(b'"')?;
-        Ok(self.byte_writer.count() - cnt)
-    }
-    fn write_decimal(&mut self, decimal: &Decimal) -> WriteResult {
-        let s = decimal.to_cpon_string();
-        let cnt = self.write_bytes(s.as_bytes())?;
         Ok(self.byte_writer.count() - cnt)
     }
     fn write_datetime(&mut self, dt: &DateTime) -> WriteResult {
@@ -171,8 +148,23 @@ impl<'a, W> JsonWriter<'a, W>
 const TAG_META: &str = "!shvMeta";
 const TAG_TYPE: &str = "!shvType";
 
+impl<W> TextWriter for JsonWriter<'_, W>
+where W: Write
+{
+    fn write_count(&self) -> usize {
+        self.byte_writer.count()
+    }
+
+    fn write_byte(&mut self, b: u8) -> WriteResult {
+        self.byte_writer.write_byte(b)
+    }
+    fn write_bytes(&mut self, b: &[u8]) -> WriteResult {
+        self.byte_writer.write_bytes(b)
+    }
+}
+
 impl<W> Writer for JsonWriter<'_, W>
-    where W: Write
+where W: Write
 {
     fn write(&mut self, val: &RpcValue) -> WriteResult {
         self.push_wrap_state();
@@ -229,7 +221,6 @@ impl<W> Writer for JsonWriter<'_, W>
         Ok(self.byte_writer.count() - cnt)
     }
 }
-
 pub struct JsonReader<'a, R>
     where R: Read
 {

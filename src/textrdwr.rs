@@ -1,5 +1,27 @@
-use crate::{Decimal, Map, ReadError, Reader, Value};
+use crate::{Decimal, Map, ReadError, Reader, Value, WriteResult, Writer};
 use crate::reader::ReadErrorReason;
+
+pub trait TextWriter : Writer {
+    fn write_count(&self) -> usize;
+
+    fn write_byte(&mut self, b: u8) -> WriteResult;
+    fn write_bytes(&mut self, b: &[u8]) -> WriteResult;
+    fn write_int(&mut self, n: i64) -> WriteResult {
+        let s = n.to_string();
+        let cnt = self.write_bytes(s.as_bytes())?;
+        Ok(self.write_count() - cnt)
+    }
+    fn write_double(&mut self, n: f64) -> WriteResult {
+        let s = format!("{:e}", n);
+        let cnt = self.write_bytes(s.as_bytes())?;
+        Ok(self.write_count() - cnt)
+    }
+    fn write_decimal(&mut self, decimal: &Decimal) -> WriteResult {
+        let s = decimal.to_cpon_string();
+        let cnt = self.write_bytes(s.as_bytes())?;
+        Ok(self.write_count() - cnt)
+    }
+}
 
 pub struct ReadInt {
     pub value: i64,
@@ -298,3 +320,4 @@ pub trait TextReader : Reader {
         Ok(Value::from(map))
     }
 }
+

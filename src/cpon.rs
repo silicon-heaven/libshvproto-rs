@@ -1,6 +1,6 @@
-use crate::textrdwr::ReadInt;
+use crate::textrdwr::{ReadInt, TextWriter};
 use std::io::{Write, Read};
-use crate::{RpcValue, MetaMap, Value, Decimal, DateTime};
+use crate::{RpcValue, MetaMap, Value, DateTime};
 use std::collections::BTreeMap;
 use crate::datetime::{IncludeMilliseconds, ToISOStringOptions};
 use crate::writer::{WriteResult, Writer, ByteWriter};
@@ -109,28 +109,11 @@ impl<'a, W> CponWriter<'a, W>
         }
         Ok(self.byte_writer.count() - cnt)
     }
-    
-    fn write_byte(&mut self, b: u8) -> WriteResult {
-        self.byte_writer.write_byte(b)
-    }
-    fn write_bytes(&mut self, b: &[u8]) -> WriteResult {
-        self.byte_writer.write_bytes(b)
-    }
 
-    fn write_int(&mut self, n: i64) -> WriteResult {
-        let s = n.to_string();
-        let cnt = self.write_bytes(s.as_bytes())?;
-                Ok(self.byte_writer.count() - cnt)
-    }
     fn write_uint(&mut self, n: u64) -> WriteResult {
         let s = n.to_string();
         let cnt = self.write_bytes(s.as_bytes())?;
                 Ok(self.byte_writer.count() - cnt)
-    }
-    fn write_double(&mut self, n: f64) -> WriteResult {
-        let s = format!("{:e}", n);
-        let cnt = self.write_bytes(s.as_bytes())?;
-        Ok(self.byte_writer.count() - cnt)
     }
     fn write_string(&mut self, s: &str) -> WriteResult {
         let cnt = self.byte_writer.count();
@@ -172,7 +155,6 @@ impl<'a, W> CponWriter<'a, W>
         self.write_byte(b'"')?;
         Ok(self.byte_writer.count() - cnt)
     }
-    /// Escape blob to be UTF8 compatible
     fn write_blob(&mut self, bytes: &[u8]) -> WriteResult {
         let cnt = self.byte_writer.count();
         self.write_bytes(b"b\"")?;
@@ -210,11 +192,6 @@ impl<'a, W> CponWriter<'a, W>
             }
         }
         self.write_byte(b'"')?;
-        Ok(self.byte_writer.count() - cnt)
-    }
-    fn write_decimal(&mut self, decimal: &Decimal) -> WriteResult {
-        let s = decimal.to_cpon_string();
-        let cnt = self.write_bytes(s.as_bytes())?;
         Ok(self.byte_writer.count() - cnt)
     }
     fn write_datetime(&mut self, dt: &DateTime) -> WriteResult {
@@ -279,6 +256,20 @@ impl<'a, W> CponWriter<'a, W>
         self.end_block(is_oneliner)?;
         self.write_byte(b'}')?;
         Ok(self.byte_writer.count() - cnt)
+    }
+}
+impl<W> TextWriter for CponWriter<'_, W>
+where W: Write
+{
+    fn write_count(&self) -> usize {
+        self.byte_writer.count()
+    }
+
+    fn write_byte(&mut self, b: u8) -> WriteResult {
+        self.byte_writer.write_byte(b)
+    }
+    fn write_bytes(&mut self, b: &[u8]) -> WriteResult {
+        self.byte_writer.write_bytes(b)
     }
 }
 
