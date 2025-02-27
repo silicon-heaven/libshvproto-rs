@@ -724,6 +724,7 @@ mod test
             // (r#"["!shvT", "IMap"]"#, None),
             (r#"["!shvT", "IMap", {}]"#, IMap::default()),
             (r#"["!shvT", "IMap", {"1": 2}]"#, IMap::from([(1, 2.into())])),
+            (r#"["!shvT", "IMap", {"1": 2, "2": "foo"}]"#, IMap::from([(1, 2.into()), (2, "foo".into())])),
         ] {
             let json = fix_tags(json);
             let rv = RpcValue::from_json(&json).unwrap();
