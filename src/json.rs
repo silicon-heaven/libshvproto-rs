@@ -413,28 +413,32 @@ mod test
 {
     use chrono::{Duration, FixedOffset, LocalResult};
     use crate::json::{TAG_META, TAG_TYPE};
-    use crate::{DateTime, Decimal, IMap, RpcValue};
+    use crate::{Decimal, IMap, RpcValue};
 
     fn fix_tags(json: &str) -> String {
         let ret = json.replace("!shvM", TAG_META);
         let ret = ret.replace("!shvT", TAG_TYPE);
         ret
     }
-
+    fn test_json_round_trip<T>(json: &str, val: T) where RpcValue: From<T> {
+        let json = fix_tags(json);
+        let rv1 = RpcValue::from_json(&json).unwrap();
+        let rv2 = RpcValue::from(val);
+        assert_eq!(rv1, rv2);
+        let json2 = rv1.to_json();
+        assert_eq!(&json.replace(" ", ""), &json2);
+    }
     #[test]
     fn test_imap() {
         assert!(RpcValue::from_json(&fix_tags(r#"["!shvT", "IMap"]"#)).is_err());
         assert!(RpcValue::from_json(&fix_tags(r#"["!shvT", "IMap", {"foo": "bar"}]"#)).is_err());
-        for (json, imap) in &[
+        for (json, imap) in [
             // (r#"["!shvT", "IMap"]"#, None),
             (r#"["!shvT", "IMap", {}]"#, IMap::default()),
             (r#"["!shvT", "IMap", {"1": 2}]"#, IMap::from([(1, 2.into())])),
             (r#"["!shvT", "IMap", {"1": 2, "2": "foo"}]"#, IMap::from([(1, 2.into()), (2, "foo".into())])),
         ] {
-            let json = fix_tags(json);
-            let rv = RpcValue::from_json(&json).unwrap();
-            assert_eq!(rv.as_imap(), imap);
-            assert_eq!(rv.to_json(), json.replace(" ", ""));
+            test_json_round_trip(json, imap);
         }
     }
 
@@ -453,18 +457,16 @@ mod test
                 panic!("Invalid date time");
             }
         }
-        fn make_json(dtstr: &str) -> String {
-            fix_tags(&format!(r#"["!shvT","DateTime","{dtstr}"]"#))
+        fn make_json_dt(dtstr: &str) -> String {
+            format!(r#"["!shvT","DateTime","{dtstr}"]"#)
         }
         for (dt_str, dt) in &[
             ("2021-11-08T01:02:03+05", dt_from_ymd_hms_milli_tz_offset(2021, 11, 8, 1, 2, 3, 0, 5 * HOUR)),
             ("2021-11-08T01:02:03-0815", dt_from_ymd_hms_milli_tz_offset(2021, 11, 8, 1, 2, 3, 0, -8 * HOUR - 15 * MINUTE)),
             ("2021-11-08T01:02:03.456-0815", dt_from_ymd_hms_milli_tz_offset(2021, 11, 8, 1, 2, 3, 456, -8 * HOUR - 15 * MINUTE)),
         ] {
-            let json = make_json(dt_str);
-            let rv = RpcValue::from_json(&json).unwrap();
-            assert_eq!(rv.as_datetime(), DateTime::from_datetime(&dt));
-            assert_eq!(rv.to_json(), json);
+            let json = make_json_dt(dt_str);
+            test_json_round_trip(&json, dt);
         }
     }
 

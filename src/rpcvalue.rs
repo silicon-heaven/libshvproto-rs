@@ -12,8 +12,6 @@ use crate::{datetime, DateTime, Decimal};
 use crate::{CponReader, ReadResult};
 use std::sync::OnceLock;
 
-// see https://github.com/rhysd/tinyjson/blob/master/src/json_value.rs
-
 const EMPTY_STR_REF: &str = "";
 const EMPTY_BYTES_REF: &[u8] = EMPTY_STR_REF.as_bytes();
 static EMPTY_LIST: OnceLock<List> = OnceLock::new();
@@ -90,104 +88,118 @@ impl From<()> for Value {
         Value::Null
     }
 }
+
 impl From<bool> for Value {
     fn from(val: bool) -> Self {
         Value::Bool(val)
     }
 }
+
 impl From<&str> for Value {
     fn from(val: &str) -> Self {
         Value::String(Box::new(val.to_string()))
     }
 }
+
 impl From<String> for Value {
     fn from(val: String) -> Self {
         Value::String(Box::new(val))
     }
 }
-impl From<&String> for Value {
-    fn from(val: &String) -> Self {
-        Value::String(Box::new(val.clone()))
-    }
-}
+
 impl From<Vec<u8>> for Value {
     fn from(val: Vec<u8>) -> Self {
         Value::Blob(Box::new(val))
     }
 }
+
 impl From<&[u8]> for Value {
     fn from(val: &[u8]) -> Self {
         Value::Blob(Box::new(val.to_vec()))
     }
 }
+
 impl From<i32> for Value {
     fn from(val: i32) -> Self {
         Value::Int(val.into())
     }
 }
+
 impl From<i64> for Value {
     fn from(val: i64) -> Self {
         Value::Int(val)
     }
 }
+
 impl From<isize> for Value {
     fn from(val: isize) -> Self {
         Value::Int(val as i64)
     }
 }
+
 impl From<u32> for Value {
     fn from(val: u32) -> Self {
         Value::UInt(val.into())
     }
 }
+
 impl From<u64> for Value {
     fn from(val: u64) -> Self {
         Value::UInt(val)
     }
 }
+
 impl From<usize> for Value {
     fn from(val: usize) -> Self {
         Value::UInt(val as u64)
     }
 }
+
 impl From<f64> for Value {
     fn from(val: f64) -> Self {
         Value::Double(val)
     }
 }
+
 impl From<Decimal> for Value {
     fn from(val: Decimal) -> Self {
         Value::Decimal(val)
     }
 }
+
 impl From<List> for Value {
     fn from(val: List) -> Self {
         Value::List(Box::new(val))
     }
 }
+
 impl From<Map> for Value {
     fn from(val: Map) -> Self {
         Value::Map(Box::new(val))
     }
 }
+
 impl From<IMap> for Value {
     fn from(val: IMap) -> Self {
         Value::IMap(Box::new(val))
     }
 }
+
 impl From<datetime::DateTime> for Value {
     fn from(val: datetime::DateTime) -> Self {
         Value::DateTime(val)
     }
 }
-impl From<chrono::NaiveDateTime> for Value {
-    fn from(val: chrono::NaiveDateTime) -> Self {
-        Value::DateTime(DateTime::from_naive_datetime(&val))
+
+impl From<&chrono::NaiveDateTime> for Value {
+    fn from(val: &chrono::NaiveDateTime) -> Self {
+        Value::DateTime(DateTime::from_naive_datetime(val))
     }
 }
-impl<Tz: chrono::TimeZone> From<chrono::DateTime<Tz>> for Value {
-    fn from(item: chrono::DateTime<Tz>) -> Self {
-        Value::DateTime(datetime::DateTime::from_datetime(&item))
+
+impl<Tz: chrono::TimeZone> From<&chrono::DateTime<Tz>> for Value {
+    fn from(item: &chrono::DateTime<Tz>) -> Self {
+        Value::DateTime(datetime::DateTime::from_datetime(item))
     }
 }
 
@@ -208,7 +220,6 @@ impl_from_type_for_rpcvalue!(());
 impl_from_type_for_rpcvalue!(bool);
 impl_from_type_for_rpcvalue!(&str);
 impl_from_type_for_rpcvalue!(String);
-impl_from_type_for_rpcvalue!(&String);
 impl_from_type_for_rpcvalue!(&[u8]);
 impl_from_type_for_rpcvalue!(i32);
 impl_from_type_for_rpcvalue!(i64);
@@ -218,17 +229,32 @@ impl_from_type_for_rpcvalue!(u64);
 impl_from_type_for_rpcvalue!(f64);
 impl_from_type_for_rpcvalue!(Decimal);
 impl_from_type_for_rpcvalue!(DateTime);
-impl_from_type_for_rpcvalue!(chrono::NaiveDateTime);
+impl_from_type_for_rpcvalue!(&chrono::NaiveDateTime);
 
-impl<Tz: chrono::TimeZone> From<chrono::DateTime<Tz>> for RpcValue {
-    fn from(value: chrono::DateTime<Tz>) -> Self {
+impl From<chrono::NaiveDateTime> for RpcValue {
+    fn from(value: chrono::NaiveDateTime) -> Self {
+        RpcValue {
+            meta: None,
+            value: (&value).into(),
+        }
+    }
+}
+impl<Tz: chrono::TimeZone> From<&chrono::DateTime<Tz>> for RpcValue {
+    fn from(value: &chrono::DateTime<Tz>) -> Self {
         RpcValue {
             meta: None,
             value: value.into(),
         }
     }
 }
-
+impl<Tz: chrono::TimeZone> From<chrono::DateTime<Tz>> for RpcValue {
+    fn from(value: chrono::DateTime<Tz>) -> Self {
+        RpcValue {
+            meta: None,
+            value: (&value).into(),
+        }
+    }
+}
 impl From<Vec<u8>> for RpcValue {
     fn from(val: Vec<u8>) -> Self {
         RpcValue {
@@ -348,7 +374,6 @@ fn from_imap_rpcvalue_for_rpcvalue<T: Into<RpcValue>>(value: BTreeMap<i32, T>) -
         ))
     }
 }
-
 
 
 fn format_err_try_from(expected_type: &str, actual_type: &str) -> String {
@@ -909,27 +934,6 @@ impl RpcValue {
             value: v,
         }
     }
-
-    // pub fn set_meta(mut self, meta: Option<MetaMap>) -> Self {
-    //     self.meta = meta.map(Box::new);
-    //     self
-    // }
-    // pub fn meta(&self) -> Option<&MetaMap> {
-    //     self.meta.as_ref().map(<Box<MetaMap>>::as_ref)
-    // }
-    // pub fn meta_mut(&mut self) -> Option<&mut MetaMap> {
-    //     self.meta.as_mut().map(<Box<MetaMap>>::as_mut)
-    // }
-    // pub fn clear_meta(&mut self) {
-    //     self.meta = None;
-    // }
-    //
-    // pub fn value(&self) -> &Value {
-    //     &self.value
-    // }
-    // pub fn value_mut(&mut self) -> &mut Value {
-    //     &mut self.value
-    // }
 
     pub fn type_name(&self) -> &'static str {
         self.value.type_name()
