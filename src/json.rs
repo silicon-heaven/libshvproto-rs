@@ -30,25 +30,28 @@ impl<'a, W> JsonWriter<'a, W>
         for ch in s.chars() {
             match ch {
                 '"'  => self.write_bytes(b"\\\"")?,  // Escape double quotes
-                '\\' => self.write_bytes(b"\\\"")?,  // Escape backslashes
-                '\x08' => self.write_bytes(b"\\\"")?,   // Escape newline
-                '\x0c' => self.write_bytes(b"\\\"")?,   // Escape newline
-                '\n' => self.write_bytes(b"\\\"")?,   // Escape newline
-                '\r' => self.write_bytes(b"\\\"")?,   // Escape carriage return
-                '\t' => self.write_bytes(b"\\\"")?,   // Escape tab
+                '\\' => self.write_bytes(b"\\\\")?,  // Escape backslashes
+                // '\x08' => self.write_bytes(b"\\b")?,   // Escape newline
+                // '\x0c' => self.write_bytes(b"\\f")?,   // Escape newline
+                '\n' => self.write_bytes(b"\\n")?,   // Escape newline
+                '\r' => self.write_bytes(b"\\r")?,   // Escape carriage return
+                '\t' => self.write_bytes(b"\\t")?,   // Escape tab
                 // '\u{2028}' => escaped.push_str("\\u2028"), // Escape line separator (U+2028)
                 // '\u{2029}' => escaped.push_str("\\u2029"), // Escape paragraph separator (U+2029)
-                ch if ch > '\u{7F}' => {
-                    // Escape Unicode characters beyond ASCII (i.e., non-ASCII characters)
-                    self.write_bytes(format!("\\u{:04X}", ch as u32).as_bytes())?
+                // ch if ch > '\u{7F}' => {
+                //     // Escape Unicode characters beyond ASCII (i.e., non-ASCII characters)
+                //     self.write_bytes(format!("\\u{:04X}", ch as u32).as_bytes())?
+                // },
+                ch => {
+                    let mut b = [0; 4];
+                    let s = ch.encode_utf8(&mut b);
+                    self.write_bytes(s.as_bytes())?
                 },
-                ch => self.write_byte(ch as u32 as u8)?,
             };
         }
         self.write_byte(b'"')?;
         Ok(self.byte_writer.count() - cnt)
     }
-    /// Escape blob to be UTF8 compatible
     fn write_blob(&mut self, bytes: &[u8]) -> WriteResult {
         let cnt = self.byte_writer.count();
         self.add_wrap_type_tag("Blob")?;
@@ -302,18 +305,19 @@ where R: Read
         self.get_byte()?; // eat "
         loop {
             let b = self.get_byte()?;
+            // println!(".....{}", b as char);
             match &b {
                 b'\\' => {
                     let b = self.get_byte()?;
+                    // println!("\\{}", b as char);
                     match &b {
                         b'"' => buff.push(b'"'),
                         b'\\' => buff.push(b'\\'),
-                        b'b' => buff.push(b'\x08'),
-                        b'f' => buff.push(b'\x0c'),
+                        // b'b' => buff.push(b'\x08'),
+                        // b'f' => buff.push(b'\x0c'),
                         b'n' => buff.push(b'\n'),
                         b'r' => buff.push(b'\r'),
                         b't' => buff.push(b'\t'),
-                        b'0' => buff.push(b'\0'),
                         b'u' => {
                             // \uXXXX
                             let mut hex = "".to_string();
@@ -429,6 +433,22 @@ mod test
         assert_eq!(&json.replace(" ", ""), &json2);
     }
     #[test]
+    fn test_string() {
+        for (text, json) in [
+            // (r#"["!shvT", "IMap"]"#, None),
+            ("", r#""""#),
+            ("foo", r#""foo""#),
+            ("ěščřžýáí", r#""ěščřžýáí""#),
+            ("foo\tbar\nbaz\"single quote", r#""foo\tbar\nbaz\"single quote""#),
+            ("😀👾🤖", r#""😀👾🤖""#),
+        ] {
+            let rv1 = RpcValue::from(text);
+            let rv2 = RpcValue::from_json(&json).unwrap();
+            assert_eq!(rv1, rv2);
+            assert_eq!(rv1.to_json(), json);
+        }
+    }
+        #[test]
     fn test_imap() {
         assert!(RpcValue::from_json(&fix_tags(r#"["!shvT", "IMap"]"#)).is_err());
         assert!(RpcValue::from_json(&fix_tags(r#"["!shvT", "IMap", {"foo": "bar"}]"#)).is_err());
