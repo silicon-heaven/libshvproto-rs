@@ -199,6 +199,7 @@ where W: Write
             self.write(&k.value)?;
         }
         self.write_byte(b'}')?;
+        self.write_byte(b',')?;
         Ok(self.byte_writer.count() - cnt)
     }
     fn write_value(&mut self, val: &Value) -> WriteResult {
@@ -369,6 +370,9 @@ impl<R> Reader for JsonReader<'_, R>
                     [meta_tag, _meta, type_tag, _typestr] if meta_tag.as_str() == TAG_META && type_tag.as_str() == TAG_TYPE => {
                         return Err(self.make_error("Value part of encoded meta with type missing.", ReadErrorReason::InvalidCharacter));
                     }
+                    [type_tag, _typestr, meta_tag, _meta, _val @ ..] if meta_tag.as_str() == TAG_META && type_tag.as_str() == TAG_TYPE => {
+                        return Err(self.make_error("Meta tag must be first.", ReadErrorReason::InvalidCharacter));
+                    }
 
                     [meta_tag, meta, val] if meta_tag.as_str() == TAG_META => {
                         break 'a self.retype_value(Some(meta), None, &val.value)?;
@@ -415,7 +419,8 @@ impl<R> Reader for JsonReader<'_, R>
 #[cfg(test)]
 mod test
 {
-    use chrono::{Duration, FixedOffset, LocalResult};
+    use crate::Map;
+use chrono::{Duration, FixedOffset, LocalResult};
     use crate::json::{TAG_META, TAG_TYPE};
     use crate::{Decimal, IMap, RpcValue};
 
@@ -431,6 +436,15 @@ mod test
         assert_eq!(rv1, rv2);
         let json2 = rv1.to_json();
         assert_eq!(&json.replace(" ", ""), &json2);
+    }
+    fn test_cpon_cross_check(json: &str, cpon: &str) {
+        let json1 = fix_tags(json);
+        let rv1 = RpcValue::from_json(&json1).unwrap();
+        let rv2 = RpcValue::from_cpon(cpon).unwrap();
+        assert_eq!(rv1, rv2);
+        let json2 = rv1.to_json();
+        // println!("{json2} <=> {json2}");
+        assert_eq!(&json1.replace(" ", ""), &json2);
     }
     #[test]
     fn test_string() {
@@ -448,7 +462,17 @@ mod test
             assert_eq!(rv1.to_json(), json);
         }
     }
-        #[test]
+    #[test]
+    fn test_blob() {
+        for (json, cpon) in [
+            (r#"["!shvT", "Blob", ""]"#, r#"b"""#),
+            (r#"["!shvT", "Blob", "6162a1"]"#, r#"x"6162a1""#),
+            (r#"["!shvT", "Blob", "6162a1"]"#, r#"b"ab\a1""#),
+        ] {
+            test_cpon_cross_check(json, cpon);
+        }
+    }
+    #[test]
     fn test_imap() {
         assert!(RpcValue::from_json(&fix_tags(r#"["!shvT", "IMap"]"#)).is_err());
         assert!(RpcValue::from_json(&fix_tags(r#"["!shvT", "IMap", {"foo": "bar"}]"#)).is_err());
@@ -457,6 +481,17 @@ mod test
             (r#"["!shvT", "IMap", {}]"#, IMap::default()),
             (r#"["!shvT", "IMap", {"1": 2}]"#, IMap::from([(1, 2.into())])),
             (r#"["!shvT", "IMap", {"1": 2, "2": "foo"}]"#, IMap::from([(1, 2.into()), (2, "foo".into())])),
+        ] {
+            test_json_round_trip(json, imap);
+        }
+    }
+    #[test]
+    fn test_map() {
+        for (json, imap) in [
+            // (r#"["!shvT", "IMap"]"#, None),
+            (r#"{}"#, Map::default()),
+            (r#"{"foo": 2}"#, Map::from([("foo".into(), 2.into())])),
+            (r#"{"bar": "baz", "foo": 2}"#, Map::from([("foo".into(), 2.into()), ("bar".into(), "baz".into())])),
         ] {
             test_json_round_trip(json, imap);
         }
@@ -487,6 +522,19 @@ mod test
         ] {
             let json = make_json_dt(dt_str);
             test_json_round_trip(&json, dt);
+        }
+    }
+    #[test]
+    fn test_meta() {
+        assert!(RpcValue::from_json(&fix_tags(r#"["!shvM", {}]"#)).is_err());
+        assert!(RpcValue::from_json(&fix_tags(r#"["!shvM", {"1":2}, "!shvT", "IMap"]"#)).is_err());
+        assert!(RpcValue::from_json(&fix_tags(r#"["!shvT", "IMap", "!shvM", {"1":2}, {"42": 7}]"#)).is_err());
+        for (json, cpon) in [
+            (r#"["!shvM", {"1":2}, 42]"#, r#"<1:2>42"#),
+            (r#"["!shvM", {"1":2}, "!shvT", "IMap", {"42": 7}]"#, r#"<1:2>i{42:7}"#),
+            (r#"["!shvM", {"1": 2, "foo": "bar"}, [1,2,3]]"#, r#"<1:2, "foo":"bar">[1,2,3]"#),
+        ] {
+            test_cpon_cross_check(json, cpon);
         }
     }
 
