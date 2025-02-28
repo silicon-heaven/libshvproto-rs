@@ -453,7 +453,7 @@ use chrono::{Duration, FixedOffset, LocalResult};
             ("", r#""""#),
             ("foo", r#""foo""#),
             ("ěščřžýáí", r#""ěščřžýáí""#),
-            ("foo\tbar\nbaz\"single quote", r#""foo\tbar\nbaz\"single quote""#),
+            ("foo\tbar\nbaz\"single\\quote\r", r#""foo\tbar\nbaz\"single\\quote\r""#),
             ("😀👾🤖", r#""😀👾🤖""#),
         ] {
             let rv1 = RpcValue::from(text);
@@ -473,11 +473,21 @@ use chrono::{Duration, FixedOffset, LocalResult};
         }
     }
     #[test]
+    fn test_primitive_types() {
+        test_json_round_trip("null", ());
+        test_json_round_trip("true", true);
+        test_json_round_trip("false", false);
+        test_json_round_trip("42", 42);
+    }
+    #[test]
+    fn test_implicit_conversions() {
+        assert_eq!(RpcValue::from(42_u32).to_json(), "42");
+    }
+    #[test]
     fn test_imap() {
         assert!(RpcValue::from_json(&fix_tags(r#"["!shvT", "IMap"]"#)).is_err());
         assert!(RpcValue::from_json(&fix_tags(r#"["!shvT", "IMap", {"foo": "bar"}]"#)).is_err());
         for (json, imap) in [
-            // (r#"["!shvT", "IMap"]"#, None),
             (r#"["!shvT", "IMap", {}]"#, IMap::default()),
             (r#"["!shvT", "IMap", {"1": 2}]"#, IMap::from([(1, 2.into())])),
             (r#"["!shvT", "IMap", {"1": 2, "2": "foo"}]"#, IMap::from([(1, 2.into()), (2, "foo".into())])),
