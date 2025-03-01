@@ -12,7 +12,7 @@ pub trait TextWriter : Writer {
         Ok(self.write_count() - cnt)
     }
     fn write_double(&mut self, n: f64) -> WriteResult {
-        let s = format!("{:e}", n);
+        let s = format!("{}", n);
         let cnt = self.write_bytes(s.as_bytes())?;
         Ok(self.write_count() - cnt)
     }

@@ -420,7 +420,7 @@ impl<R> Reader for JsonReader<'_, R>
 mod test
 {
     use crate::Map;
-use chrono::{Duration, FixedOffset, LocalResult};
+    use chrono::{Duration, FixedOffset, LocalResult};
     use crate::json::{TAG_META, TAG_TYPE};
     use crate::{Decimal, IMap, RpcValue};
 
@@ -482,6 +482,8 @@ use chrono::{Duration, FixedOffset, LocalResult};
     #[test]
     fn test_implicit_conversions() {
         assert_eq!(RpcValue::from(42_u32).to_json(), "42");
+        assert_eq!(RpcValue::from(4.2).to_json(), "4.2");
+        assert_eq!(RpcValue::from(Decimal::new(42, -1)).to_json(), "4.2");
     }
     #[test]
     fn test_imap() {

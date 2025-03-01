@@ -944,6 +944,7 @@ impl RpcValue {
     is_xxx!(is_int, Value::Int(_));
     is_xxx!(is_uint, Value::UInt(_));
     is_xxx!(is_decimal, Value::Decimal(_));
+    is_xxx!(is_double, Value::Double(_));
     is_xxx!(is_string, Value::String(_));
     is_xxx!(is_blob, Value::Blob(_));
     is_xxx!(is_list, Value::List(_));
