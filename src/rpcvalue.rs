@@ -31,6 +31,15 @@ macro_rules! make_map {
 }
 
 #[macro_export(local_inner_macros)]
+macro_rules! make_imap {
+    ($( $key: expr => $val: expr ),* $(,)?) => {{
+        let mut imap = $crate::rpcvalue::IMap::new();
+        $( imap.insert($key, $crate::RpcValue::from($val)); )*
+        imap
+    }}
+}
+
+#[macro_export(local_inner_macros)]
 macro_rules! make_list {
     ($( $val: expr ),* $(,)?) => {{
         Vec::from([$( $crate::RpcValue::from($val), )*])
