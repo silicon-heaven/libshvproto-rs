@@ -700,7 +700,7 @@ fn test_blob() {
 
 #[test]
 fn test_list() {
-    let list = vec!["a".into(), 123.into(), true.into(), vec![1, 2, 3].into(), RpcValue::null()];
+    let list = crate::make_list!["a", 123, true, crate::make_list![1, 2, 3], RpcValue::null()];
     assert_eq!(chainpack_to_rpcvalue("8886016182807BFE88414243FF80FF").unwrap(), RpcValue::from(list.clone()));
     assert_eq!(rpcvalue_to_chainpack(RpcValue::from(list)), "8886016182807BFE88414243FF80FF");
 }
