@@ -700,7 +700,7 @@ fn test_blob() {
 
 #[test]
 fn test_list() {
-    let list = vec!["a".into(), 123.into(), true.into(), vec![1, 2, 3].into(), RpcValue::null()];
+    let list = crate::make_list!["a", 123, true, crate::make_list![1, 2, 3], RpcValue::null()];
     assert_eq!(chainpack_to_rpcvalue("8886016182807BFE88414243FF80FF").unwrap(), RpcValue::from(list.clone()));
     assert_eq!(rpcvalue_to_chainpack(RpcValue::from(list)), "8886016182807BFE88414243FF80FF");
 }
@@ -721,11 +721,11 @@ fn test_map() {
 
 #[test]
 fn test_imap() {
-    let imap = BTreeMap::<i32,RpcValue>::from([
-        (1, "foo".into()),
-        (2, "bar".into()),
-        (333, 15.into()),
-    ]);
+    let imap = crate::make_imap!{
+        1 => "foo",
+        2 => "bar",
+        333 => 15,
+    };
 
     assert_eq!(chainpack_to_rpcvalue("8A418603666F6F42860362617282814D4FFF").unwrap(), imap.clone().into());
     assert_eq!(rpcvalue_to_chainpack(imap.into()), "8A418603666F6F42860362617282814D4FFF");
