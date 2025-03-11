@@ -106,6 +106,11 @@ impl From<String> for Value {
         Value::String(Box::new(val))
     }
 }
+impl From<&String> for Value {
+    fn from(val: &String) -> Self {
+        Value::String(Box::new(val.to_string()))
+    }
+}
 
 impl From<Vec<u8>> for Value {
     fn from(val: Vec<u8>) -> Self {
@@ -220,6 +225,7 @@ impl_from_type_for_rpcvalue!(());
 impl_from_type_for_rpcvalue!(bool);
 impl_from_type_for_rpcvalue!(&str);
 impl_from_type_for_rpcvalue!(String);
+impl_from_type_for_rpcvalue!(&String);
 impl_from_type_for_rpcvalue!(&[u8]);
 impl_from_type_for_rpcvalue!(i32);
 impl_from_type_for_rpcvalue!(i64);
