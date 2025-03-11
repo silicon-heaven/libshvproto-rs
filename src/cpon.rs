@@ -183,8 +183,9 @@ impl<'a, W> CponWriter<'a, W>
                 _ => {
                     if *b < 0x20 || *b >= 0x7f {
                         self.write_byte(b'\\')?;
-                        self.write_byte(crate::to_hex(*b / 16))?;
-                        self.write_byte(crate::to_hex(*b % 16))?;
+                        let (high, low) = crate::u8_to_hex(*b);
+                        self.write_byte(high)?;
+                        self.write_byte(low)?;
                     } else {
                         self.write_byte(*b)?;
                     }

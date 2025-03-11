@@ -26,12 +26,15 @@ pub use json::{JsonReader, JsonWriter};
 
 pub use libshvproto_macros::TryFromRpcValue;
 
-fn to_hex(b: u8) -> u8 {
-    if b < 10 {
+fn u8_to_hex(num: u8) -> (u8, u8) {
+    let nibble_to_hex = |b| if b < 10 {
         b'0' + b
     }
     else {
         b'a' + (b - 10)
-    }
+    };
+    let high = num / 16;
+    let low = num % 16;
+    (nibble_to_hex(high), nibble_to_hex(low))
 }
 

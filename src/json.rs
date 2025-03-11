@@ -57,8 +57,9 @@ impl<'a, W> JsonWriter<'a, W>
         self.add_wrap_type_tag("Blob")?;
         self.write_byte(b'"')?;
         for b in bytes {
-            self.write_byte(crate::to_hex(*b / 16))?;
-            self.write_byte(crate::to_hex(*b % 16))?;
+            let (high, low) = crate::u8_to_hex(*b);
+            self.write_byte(high)?;
+            self.write_byte(low)?;
         }
         self.write_byte(b'"')?;
         Ok(self.byte_writer.count() - cnt)
