@@ -2,7 +2,7 @@
 mod test {
     use std::collections::BTreeMap;
 
-    use shvproto::TryFromRpcValue;
+    use shvproto::{RpcValue,TryFromRpcValue};
 
     #[derive(Clone,Debug,PartialEq,TryFromRpcValue)]
     pub struct EmptyStruct {
@@ -31,6 +31,7 @@ mod test {
         vec_empty_struct_field: Vec<EmptyStruct>,
         map_int_field: BTreeMap<String, i32>,
         imap_field: BTreeMap<i32, i32>,
+        rpc_value_field: RpcValue,
     }
 
     #[derive(Debug,PartialEq,TryFromRpcValue)]
@@ -84,6 +85,7 @@ mod test {
             "vecEmptyStructField" => vec![shvproto::make_map!(), shvproto::make_map!()].into_iter().map(shvproto::RpcValue::from).collect::<Vec<_>>(),
             "mapIntField" => [("aaa".to_string(), 111)].into_iter().collect::<BTreeMap<_,_>>(),
             "imapField" => [(420, 111)].into_iter().collect::<BTreeMap<_,_>>(),
+            "rpcValueField" => RpcValue::from(42),
         ).into();
 
         let y: TestStruct = x.clone().try_into().expect("Failed to parse");
