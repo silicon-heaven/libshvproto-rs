@@ -286,6 +286,12 @@ impl From<Vec<u8>> for RpcValue {
     }
 }
 
+impl From<&RpcValue> for RpcValue {
+    fn from(value: &RpcValue) -> Self {
+        value.clone()
+    }
+}
+
 impl<T> From<Option<T>> for RpcValue
 where
     RpcValue: From<T>,
