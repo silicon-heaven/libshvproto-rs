@@ -1104,14 +1104,14 @@ impl RpcValue {
     pub fn to_cpon(&self) -> String {
         self.to_cpon_indented("")
     }
-    pub fn to_cpon_indented(&self, indent: &str) -> String {
-        let buff = self.to_cpon_bytes_indented(indent.as_bytes());
+    pub fn to_cpon_indented(&self, indent: impl AsRef<str>) -> String {
+        let buff = self.to_cpon_bytes_indented(indent.as_ref().as_bytes());
         String::from_utf8(buff).unwrap_or_else(|_| "".to_string())
     }
-    pub fn to_cpon_bytes_indented(&self, indent: &[u8]) -> Vec<u8> {
+    pub fn to_cpon_bytes_indented(&self, indent: impl AsRef<[u8]>) -> Vec<u8> {
         let mut buff: Vec<u8> = Vec::new();
         let mut wr = CponWriter::new(&mut buff);
-        wr.set_indent(indent);
+        wr.set_indent(indent.as_ref());
         let r = wr.write(self);
         r.map_or_else(|_| Vec::new(), |_| buff)
     }
@@ -1122,18 +1122,18 @@ impl RpcValue {
         r.map_or_else(|_| Vec::new(), |_| buff)
     }
 
-    pub fn from_json(s: &str) -> ReadResult {
-        let mut buff = s.as_bytes();
+    pub fn from_json(s: impl AsRef<str>) -> ReadResult {
+        let mut buff = s.as_ref().as_bytes();
         let mut rd = JsonReader::new(&mut buff);
         rd.read()
     }
-    pub fn from_cpon(s: &str) -> ReadResult {
-        let mut buff = s.as_bytes();
+    pub fn from_cpon(s: impl AsRef<str>) -> ReadResult {
+        let mut buff = s.as_ref().as_bytes();
         let mut rd = CponReader::new(&mut buff);
         rd.read()
     }
-    pub fn from_chainpack(b: &[u8]) -> ReadResult {
-        let mut buff = b;
+    pub fn from_chainpack(b: impl AsRef<[u8]>) -> ReadResult {
+        let mut buff = b.as_ref();
         let mut rd = ChainPackReader::new(&mut buff);
         rd.read()
     }
