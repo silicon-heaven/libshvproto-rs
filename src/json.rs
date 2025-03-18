@@ -426,9 +426,8 @@ mod test
     use crate::{Decimal, IMap, RpcValue};
 
     fn fix_tags(json: &str) -> String {
-        let ret = json.replace("!shvM", TAG_META);
-        let ret = ret.replace("!shvT", TAG_TYPE);
-        ret
+        json.replace("!shvM", TAG_META)
+            .replace("!shvT", TAG_TYPE)
     }
     fn test_json_round_trip<T>(json: &str, val: T) where RpcValue: From<T> {
         let json = fix_tags(json);
@@ -458,7 +457,7 @@ mod test
             ("😀👾🤖", r#""😀👾🤖""#),
         ] {
             let rv1 = RpcValue::from(text);
-            let rv2 = RpcValue::from_json(&json).unwrap();
+            let rv2 = RpcValue::from_json(json).unwrap();
             assert_eq!(rv1, rv2);
             assert_eq!(rv1.to_json(), json);
         }
@@ -488,8 +487,8 @@ mod test
     }
     #[test]
     fn test_imap() {
-        assert!(RpcValue::from_json(&fix_tags(r#"["!shvT", "IMap"]"#)).is_err());
-        assert!(RpcValue::from_json(&fix_tags(r#"["!shvT", "IMap", {"foo": "bar"}]"#)).is_err());
+        assert!(RpcValue::from_json(fix_tags(r#"["!shvT", "IMap"]"#)).is_err());
+        assert!(RpcValue::from_json(fix_tags(r#"["!shvT", "IMap", {"foo": "bar"}]"#)).is_err());
         for (json, imap) in [
             (r#"["!shvT", "IMap", {}]"#, IMap::default()),
             (r#"["!shvT", "IMap", {"1": 2}]"#, IMap::from([(1, 2.into())])),
@@ -539,9 +538,9 @@ mod test
     }
     #[test]
     fn test_meta() {
-        assert!(RpcValue::from_json(&fix_tags(r#"["!shvM", {}]"#)).is_err());
-        assert!(RpcValue::from_json(&fix_tags(r#"["!shvM", {"1":2}, "!shvT", "IMap"]"#)).is_err());
-        assert!(RpcValue::from_json(&fix_tags(r#"["!shvT", "IMap", "!shvM", {"1":2}, {"42": 7}]"#)).is_err());
+        assert!(RpcValue::from_json(fix_tags(r#"["!shvM", {}]"#)).is_err());
+        assert!(RpcValue::from_json(fix_tags(r#"["!shvM", {"1":2}, "!shvT", "IMap"]"#)).is_err());
+        assert!(RpcValue::from_json(fix_tags(r#"["!shvT", "IMap", "!shvM", {"1":2}, {"42": 7}]"#)).is_err());
         for (json, cpon) in [
             (r#"["!shvM", {"1":2}, 42]"#, r#"<1:2>42"#),
             (r#"["!shvM", {"1":2}, "!shvT", "IMap", {"42": 7}]"#, r#"<1:2>i{42:7}"#),
