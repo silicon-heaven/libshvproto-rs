@@ -14,6 +14,7 @@ pub struct CponWriter<'a, W>
 {
     byte_writer: ByteWriter<'a, W>,
     indent: Vec<u8>,
+    no_oneliners: bool,
     nest_count: usize,
 }
 
@@ -24,15 +25,19 @@ impl<'a, W> CponWriter<'a, W>
         CponWriter {
             byte_writer: ByteWriter::new(write),
             indent: "".as_bytes().to_vec(),
+            no_oneliners: false,
             nest_count: 0,
         }
     }
     pub fn set_indent(&mut self, indent: &[u8]) {
         self.indent = indent.to_vec();
     }
+    pub fn set_no_oneliners(&mut self, b: bool) {
+        self.no_oneliners = b;
+    }
 
-    fn is_oneliner_list(lst: &[RpcValue]) -> bool {
-        if lst.len() > 10 {
+    fn is_oneliner_list(&self, lst: &[RpcValue]) -> bool {
+        if self.no_oneliners || lst.len() > 10 {
             return false;
         }
         for it in lst.iter() {
@@ -45,7 +50,10 @@ impl<'a, W> CponWriter<'a, W>
         }
         true
     }
-    fn is_oneliner_map<K>(iter: &mut dyn Iterator<Item = (K, &RpcValue)>) -> bool {
+    fn is_oneliner_map<K>(&self, iter: &mut dyn Iterator<Item = (K, &RpcValue)>) -> bool {
+        if self.no_oneliners {
+            return false;
+        }
         let mut n = 0;
         loop {
             if n == 5 {
@@ -67,8 +75,8 @@ impl<'a, W> CponWriter<'a, W>
         true
     }
 
-    fn is_oneliner_meta(map: &MetaMap) -> bool {
-        if map.0.len() > 5 {
+    fn is_oneliner_meta(&self, map: &MetaMap) -> bool {
+        if self.no_oneliners || map.0.len() > 5 {
             return false;
         }
         for k in map.0.iter() {
@@ -207,7 +215,7 @@ impl<'a, W> CponWriter<'a, W>
     }
     fn write_list(&mut self, lst: &[RpcValue]) -> WriteResult {
         let cnt = self.byte_writer.count();
-        let is_oneliner = Self::is_oneliner_list(lst);
+        let is_oneliner = self.is_oneliner_list(lst);
         self.write_byte(b'[')?;
         self.start_block();
         for (n, v) in lst.iter().enumerate() {
@@ -223,7 +231,7 @@ impl<'a, W> CponWriter<'a, W>
     }
     fn write_map(&mut self, map: &Map) -> WriteResult {
         let cnt = self.byte_writer.count();
-        let is_oneliner = Self::is_oneliner_map(&mut map.iter());
+        let is_oneliner = self.is_oneliner_map(&mut map.iter());
         self.write_byte(b'{')?;
         self.start_block();
         for (n, (k, v)) in map.iter().enumerate() {
@@ -241,7 +249,7 @@ impl<'a, W> CponWriter<'a, W>
     }
     fn write_imap(&mut self, map: &BTreeMap<i32, RpcValue>) -> WriteResult {
         let cnt = self.byte_writer.count();
-        let is_oneliner = Self::is_oneliner_map(&mut map.iter());
+        let is_oneliner = self.is_oneliner_map(&mut map.iter());
         self.write_byte(b'i')?;
         self.write_byte(b'{')?;
         self.start_block();
@@ -288,7 +296,7 @@ impl<W> Writer for CponWriter<'_, W>
     }
     fn write_meta(&mut self, map: &MetaMap) -> WriteResult {
         let cnt: usize = self.byte_writer.count();
-        let is_oneliner = Self::is_oneliner_meta(map);
+        let is_oneliner = self.is_oneliner_meta(map);
         self.write_byte(b'<')?;
         self.start_block();
         for (n, k) in map.0.iter().enumerate() {
