@@ -15,6 +15,8 @@ use std::{fs, io, process};
 struct Cli {
     #[arg(short, long, help = "Cpon indentation string")]
     indent: Option<String>,
+    #[arg(short, long, help = "Do not create oneliners in Cpon indented string output")]
+    no_oneliners: bool,
     #[arg(long = "ip", help = "Cpon input")]
     cpon_input: bool,
     #[arg(long = "oc", help = "ChainPack output")]
@@ -157,6 +159,7 @@ fn main() {
         wr.write(&rv)
     } else {
         let mut wr = CponWriter::new(&mut writer);
+        wr.set_no_oneliners(opts.no_oneliners);
         if let Some(s) = opts.indent {
             if s == "\\t" {
                 wr.set_indent("\t".as_bytes());
