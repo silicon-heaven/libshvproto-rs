@@ -111,3 +111,25 @@ jobs:
         uses: syyyr/rust-pycobertura-action@v1.1.1
         with:
           project_name: libshvproto
+
+  check-version-bump:
+    name: Check version bump
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Check version bump
+        run: |
+          TQ_DIR="$(mktemp --directory)"
+          curl --location https://github.com/cryptaliagy/tomlq/releases/download/0.2.2/tomlq.amd64.tgz | tar --directory="$TQ_DIR" --extract --gzip tq
+          PREVIOUS_COMMIT="${{github.event.pull_request.base.sha || github.event.before}}"
+          git fetch origin "$PREVIOUS_COMMIT"
+          echo Comparing version bump against "$PREVIOUS_COMMIT"
+          DEFAULT_BRANCH_VERSION="$("$TQ_DIR/tq" --raw package.version < <(git show "$PREVIOUS_COMMIT:Cargo.toml"))"
+          CURRENT_BRANCH_VERSION="$("$TQ_DIR/tq" --raw package.version < <(git show "HEAD:Cargo.toml"))"
+          if [[ "$DEFAULT_BRANCH_VERSION" = "$CURRENT_BRANCH_VERSION" ]]; then
+            echo Error: No version bump detected.
+            exit 1
+          else
+            echo Version bump detected: "$DEFAULT_BRANCH_VERSION -> $CURRENT_BRANCH_VERSION"
+          fi
