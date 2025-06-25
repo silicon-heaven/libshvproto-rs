@@ -111,3 +111,10 @@ jobs:
         uses: syyyr/rust-pycobertura-action@v1.1.1
         with:
           project_name: libshvproto
+
+  check-version-bump:
+    name: Check version bump
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check version bump
+        uses: syyyr/rust-check-version-bump@v1.0.0
