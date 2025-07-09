@@ -44,6 +44,8 @@ jobs:
     - name: Build and Install Binary
       run: |
         mkdir -p ${{github.workspace}}/install
+        # FIXME: Remove when this thing makes it into stable
+        export RUSTFLAGS="-A mismatched_lifetime_syntaxes"
         cargo install --path '${{github.workspace}}' --root '${{github.workspace}}/install' --target ${{ matrix.target }} --features cp2cp
       shell: bash
 
@@ -108,6 +110,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Generate coverage
-        uses: syyyr/rust-pycobertura-action@v1.1.1
+        uses: syyyr/rust-pycobertura-action@v3.0.0
         with:
           project_name: libshvproto
+          cargo_test_arguments: --features cp2cp
+
+  check-version-bump:
+    name: Check version bump
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check version bump
+        uses: syyyr/rust-check-version-bump@v1.0.0
