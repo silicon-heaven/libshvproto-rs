@@ -53,13 +53,14 @@ fn get_field_name(field: &syn::Field) -> String {
 }
 
 fn field_to_initializers(
-    field_name: &str,
-    identifier: &syn::Ident,
-    is_option: bool,
+    field: &syn::Field,
     from_value: Option<TokenStream2>,
     context: &str,
 ) -> (TokenStream2, TokenStream2)
 {
+    let field_name = get_field_name(field);
+    let identifier = field.ident.as_ref().expect("Missing field identifier");
+    let is_option = is_option(&field.ty);
     let struct_initializer;
     let rpcvalue_insert;
     let identifier_at_value = if let Some(value) = from_value {
@@ -153,13 +154,7 @@ pub fn derive_from_rpcvalue(item: TokenStream) -> TokenStream {
             let mut expected_keys = vec![];
             for field in fields {
                 let field_name = get_field_name(field);
-                let (struct_initializer, _) = field_to_initializers(
-                    &field_name,
-                    field.ident.as_ref().expect("Missing field identifier"),
-                    is_option(&field.ty),
-                    Some(quote! { value }),
-                    "",
-                );
+                let (struct_initializer, _) = field_to_initializers(field, Some(quote! { value }), "");
                 struct_initializers.extend(struct_initializer);
                 expected_keys.push(quote!{#field_name});
             }
@@ -318,13 +313,7 @@ pub fn derive_from_rpcvalue(item: TokenStream) -> TokenStream {
 
                         for field in &variant_fields.named {
                             let field_ident = field.ident.as_ref().expect("Missing field identifier");
-                            let (struct_initializer, _) = field_to_initializers(
-                                get_field_name(field).as_str(),
-                                field_ident,
-                                is_option(&field.ty),
-                                None,
-                                &format!("Cannot deserialize into `{}` enum variant: ", variant_ident_name.as_str()),
-                            );
+                            let (struct_initializer, _) = field_to_initializers(field, None, &format!("Cannot deserialize into `{}` enum variant: ", variant_ident_name.as_str()));
                             struct_initializers.extend(struct_initializer);
                             field_idents.push(field_ident);
                         }
@@ -419,14 +408,7 @@ pub fn derive_to_rpcvalue(item: TokenStream) -> TokenStream {
         syn::Data::Struct(syn::DataStruct { fields, .. }) => {
             let mut rpcvalue_inserts = quote! {};
             for field in fields {
-                let field_name = get_field_name(field);
-                let (_, rpcvalue_insert) = field_to_initializers(
-                    &field_name,
-                    field.ident.as_ref().expect("Missing field identifier"),
-                    is_option(&field.ty),
-                    Some(quote! { value }),
-                    "",
-                );
+                let (_, rpcvalue_insert) = field_to_initializers(field, Some(quote! { value }), "");
                 rpcvalue_inserts.extend(rpcvalue_insert);
             }
 
@@ -469,13 +451,7 @@ pub fn derive_to_rpcvalue(item: TokenStream) -> TokenStream {
 
                         for field in &variant_fields.named {
                             let field_ident = field.ident.as_ref().expect("Missing field identifier");
-                            let (_, rpcvalue_insert) = field_to_initializers(
-                                get_field_name(field).as_str(),
-                                field_ident,
-                                is_option(&field.ty),
-                                None,
-                                &format!("Cannot deserialize into `{}` enum variant: ", variant_ident_name.as_str()),
-                            );
+                            let (_, rpcvalue_insert) = field_to_initializers(field, None, &format!("Cannot deserialize into `{}` enum variant: ", variant_ident_name.as_str()));
                             rpcvalue_inserts.extend(rpcvalue_insert);
                             field_idents.push(field_ident);
                         }
