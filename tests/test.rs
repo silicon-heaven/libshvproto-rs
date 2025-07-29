@@ -2,24 +2,24 @@
 mod test {
     use std::collections::BTreeMap;
 
-    use shvproto::{RpcValue,TryFromRpcValue};
+    use shvproto::{RpcValue,FromRpcValue,ToRpcValue};
 
-    #[derive(Clone,Debug,PartialEq,TryFromRpcValue)]
+    #[derive(Clone,Debug,PartialEq,FromRpcValue,ToRpcValue)]
     pub struct EmptyStruct {
     }
 
-    #[derive(Clone,Debug,PartialEq,TryFromRpcValue)]
+    #[derive(Clone,Debug,PartialEq,FromRpcValue,ToRpcValue)]
     pub struct OneFieldStruct {
         x: i32
     }
 
-    #[derive(Clone,Debug,PartialEq,TryFromRpcValue)]
+    #[derive(Clone,Debug,PartialEq,FromRpcValue,ToRpcValue)]
     pub struct TwoFieldsStruct {
         x: i32,
         y: f64,
     }
 
-    #[derive(Debug,PartialEq,TryFromRpcValue)]
+    #[derive(Debug,PartialEq,FromRpcValue,ToRpcValue)]
     pub struct TestStruct {
         int_field: i32,
         #[field_name = "myCustomFieldName"] int_field_with_custom_field_name: i32,
@@ -34,12 +34,12 @@ mod test {
         rpc_value_field: RpcValue,
     }
 
-    #[derive(Debug,PartialEq,TryFromRpcValue)]
+    #[derive(Debug,PartialEq,FromRpcValue,ToRpcValue)]
     struct OptionalFieldStruct {
         optional_int_field: Option<i32>
     }
 
-    #[derive(Clone,Debug,PartialEq,TryFromRpcValue)]
+    #[derive(Clone,Debug,PartialEq,FromRpcValue,ToRpcValue)]
     pub enum AllVariants {
         Null(()),
         Int(i64),
@@ -55,13 +55,13 @@ mod test {
         IMap(shvproto::rpcvalue::IMap),
     }
 
-    #[derive(Clone,Debug,PartialEq,TryFromRpcValue)]
+    #[derive(Clone,Debug,PartialEq,FromRpcValue,ToRpcValue)]
     pub enum EnumWithUserStruct {
         OneFieldStructVariant(OneFieldStruct),
         IntVariant(i64)
     }
 
-    #[derive(Clone,Debug,PartialEq,TryFromRpcValue)]
+    #[derive(Clone,Debug,PartialEq,FromRpcValue,ToRpcValue)]
     pub enum EnumWithMoreUserStructs {
         Null(()),
         EmptyStructVariant(EmptyStruct),
@@ -189,7 +189,7 @@ mod test {
         let _output: EnumWithUserStruct = input.try_into().expect("Expected failure");
     }
 
-    #[derive(Clone,Debug,PartialEq,TryFromRpcValue)]
+    #[derive(Clone,Debug,PartialEq,FromRpcValue,ToRpcValue)]
     pub struct GenericStruct<Type1, Type2> {
         x: Type1,
         y: Vec<Type1>,
@@ -205,11 +205,11 @@ mod test {
 
     }
 
-    #[derive(Clone,Debug,PartialEq,TryFromRpcValue)]
+    #[derive(Clone,Debug,PartialEq,FromRpcValue,ToRpcValue)]
     enum UnitVariantsEnum {
         Variant1,
         Variant2,
-        Error,
+        ErrorVariant,
         NoValue(()),
         Str(String),
         Int(i64),
@@ -219,14 +219,14 @@ mod test {
     fn unit_variants_enum() {
         test_case(UnitVariantsEnum::Variant1);
         test_case(UnitVariantsEnum::Variant2);
-        test_case(UnitVariantsEnum::Error);
+        test_case(UnitVariantsEnum::ErrorVariant);
         test_case(UnitVariantsEnum::NoValue(()));
         test_case(UnitVariantsEnum::Str("foo".into()));
         test_case(UnitVariantsEnum::Int(32));
 
     }
 
-    #[derive(Clone,Debug,PartialEq,TryFromRpcValue)]
+    #[derive(Clone,Debug,PartialEq,FromRpcValue,ToRpcValue)]
     enum UnitVariantsOnlyEnum {
         Variant1,
         Variant2,
@@ -246,7 +246,7 @@ mod test {
         let _v: UnitVariantsOnlyEnum = rv.try_into().unwrap();
     }
 
-    #[derive(Clone,Debug,PartialEq,TryFromRpcValue)]
+    #[derive(Clone,Debug,PartialEq,FromRpcValue,ToRpcValue)]
     pub enum EnumWithNamedFields {
         Linux { shell: String, user: String, uptime_days: i32, },
         MacOsX { shell: String, user: String, uptime_days: i32, },
@@ -313,7 +313,7 @@ mod test {
         let _v: EnumWithNamedFields = rv.try_into().unwrap();
     }
 
-    #[derive(Clone,Debug,PartialEq,TryFromRpcValue)]
+    #[derive(Clone,Debug,PartialEq,FromRpcValue,ToRpcValue)]
     #[rpcvalue(tag = "os")]
     pub enum EnumWithNamedFieldsCustomTag {
         Linux { shell: String, user: String, uptime_days: i32, },

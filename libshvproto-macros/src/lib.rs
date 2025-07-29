@@ -53,13 +53,14 @@ fn get_field_name(field: &syn::Field) -> String {
 }
 
 fn field_to_initializers(
-    field_name: &str,
-    identifier: &syn::Ident,
-    is_option: bool,
+    field: &syn::Field,
     from_value: Option<TokenStream2>,
     context: &str,
 ) -> (TokenStream2, TokenStream2)
 {
+    let field_name = get_field_name(field);
+    let identifier = field.ident.as_ref().expect("Missing field identifier");
+    let is_option = is_option(&field.ty);
     let struct_initializer;
     let rpcvalue_insert;
     let identifier_at_value = if let Some(value) = from_value {
@@ -97,7 +98,7 @@ struct StructAttributes {
     tag: Option<String>,
 }
 
-fn parse_struct_attributes(attrs: &Vec<syn::Attribute>) -> syn::Result<StructAttributes> {
+fn parse_struct_attributes(attrs: &[syn::Attribute]) -> syn::Result<StructAttributes> {
     let mut res = StructAttributes::default();
     for attr in attrs {
         if attr.path().is_ident("rpcvalue") {
@@ -119,10 +120,13 @@ fn parse_struct_attributes(attrs: &Vec<syn::Attribute>) -> syn::Result<StructAtt
     Ok(res)
 }
 
-#[proc_macro_derive(TryFromRpcValue, attributes(field_name,rpcvalue))]
-pub fn derive_from_rpcvalue(item: TokenStream) -> TokenStream {
-    let input = syn::parse_macro_input!(item as syn::DeriveInput);
-    let struct_identifier = &input.ident;
+struct RpcValueInfo {
+    struct_identifier: syn::Ident,
+    struct_generics_with_bounds: TokenStream2,
+    struct_generics_without_bounds: TokenStream2,
+}
+
+fn analyze_rpc_value_derive(input: &syn::DeriveInput) -> RpcValueInfo {
     let struct_generics_without_bounds_vec = input.generics.params.clone().into_iter().map(|generic_param|
         if let syn::GenericParam::Type(mut type_param) = generic_param {
             type_param.bounds.clear();
@@ -133,22 +137,25 @@ pub fn derive_from_rpcvalue(item: TokenStream) -> TokenStream {
     let struct_generics_without_bounds = quote!(<#(#struct_generics_without_bounds_vec),*>);
     let struct_generics_with_bounds = quote!{<#(#struct_generics_without_bounds_vec: Into<shvproto::RpcValue> + for<'a> TryFrom<&'a shvproto::RpcValue, Error = String>),*>};
 
+    RpcValueInfo {
+        struct_identifier: input.ident.clone(),
+        struct_generics_with_bounds,
+        struct_generics_without_bounds,
+    }
+}
+
+#[proc_macro_derive(FromRpcValue, attributes(field_name, rpcvalue))]
+pub fn derive_from_rpcvalue(item: TokenStream) -> TokenStream {
+    let input = syn::parse_macro_input!(item as syn::DeriveInput);
+    let RpcValueInfo {struct_identifier, struct_generics_with_bounds, struct_generics_without_bounds} = analyze_rpc_value_derive(&input);
     match &input.data {
         syn::Data::Struct(syn::DataStruct { fields, .. }) => {
             let mut struct_initializers = quote!{};
             let mut expected_keys = vec![];
-            let mut rpcvalue_inserts = quote!{};
             for field in fields {
                 let field_name = get_field_name(field);
-                let (struct_initializer, rpcvalue_insert) = field_to_initializers(
-                    &field_name,
-                    field.ident.as_ref().expect("Missing field identifier"),
-                    is_option(&field.ty),
-                    Some(quote! { value }),
-                    "",
-                );
+                let (struct_initializer, _) = field_to_initializers(field, Some(quote! { value }), "");
                 struct_initializers.extend(struct_initializer);
-                rpcvalue_inserts.extend(rpcvalue_insert);
                 expected_keys.push(quote!{#field_name});
             }
 
@@ -207,19 +214,10 @@ pub fn derive_from_rpcvalue(item: TokenStream) -> TokenStream {
                         Self::try_from(&value)
                     }
                 }
-
-                impl #struct_generics_with_bounds From<#struct_identifier #struct_generics_without_bounds> for shvproto::RpcValue {
-                    fn from(value: #struct_identifier #struct_generics_without_bounds) -> Self {
-                        let mut map = shvproto::rpcvalue::Map::new();
-                        #rpcvalue_inserts
-                        map.into()
-                    }
-                }
             }
         },
         syn::Data::Enum(syn::DataEnum { variants, .. }) => {
             let mut match_arms_de = vec![];
-            let mut match_arms_ser  = quote!{};
             let mut allowed_types = vec![];
             let mut custom_type_matchers = vec![];
             let mut match_arms_tags = vec![];
@@ -238,12 +236,8 @@ pub fn derive_from_rpcvalue(item: TokenStream) -> TokenStream {
                 match &variant.fields {
                     syn::Fields::Unnamed(variant_types) => {
                         if variant_types.unnamed.len() != 1 {
-                            panic!("Only single element variant tuples are supported for TryFromRpcValue");
+                            panic!("Only single element variant tuples are supported for FromRpcValue");
                         }
-                        match_arms_ser.extend(quote!{
-                            #struct_identifier::#variant_ident(val) => shvproto::RpcValue::from(val),
-                        });
-
                         let source_variant_type = &variant_types.unnamed.first().expect("No tuple elements").ty;
                         let deref_code = quote!((*x));
                         let unbox_code = quote!((x.as_ref().clone()));
@@ -302,9 +296,6 @@ pub fn derive_from_rpcvalue(item: TokenStream) -> TokenStream {
                     },
                     syn::Fields::Unit => {
                         let variant_ident_name = variant_ident.to_string().to_case(Case::Camel);
-                        match_arms_ser.extend(quote!{
-                            #struct_identifier::#variant_ident => shvproto::RpcValue::from(#variant_ident_name),
-                        });
                         add_type_matcher(&mut match_arms_de, quote!{String(s) if s.as_str() == #variant_ident_name}, quote!{#variant_ident}, quote!());
                     },
                     syn::Fields::Named(variant_fields) => {
@@ -317,45 +308,15 @@ pub fn derive_from_rpcvalue(item: TokenStream) -> TokenStream {
                         }
 
                         let mut struct_initializers = quote! {};
-                        let mut rpcvalue_inserts = quote! {};
                         let mut field_idents = vec![];
                         let variant_ident_name = variant_ident.to_string().to_case(Case::Camel);
 
                         for field in &variant_fields.named {
                             let field_ident = field.ident.as_ref().expect("Missing field identifier");
-                            let (struct_initializer, rpcvalue_insert) = field_to_initializers(
-                                get_field_name(field).as_str(),
-                                field_ident,
-                                is_option(&field.ty),
-                                None,
-                                &format!("Cannot deserialize into `{}` enum variant: ", variant_ident_name.as_str()),
-                            );
+                            let (struct_initializer, _) = field_to_initializers(field, None, &format!("Cannot deserialize into `{}` enum variant: ", variant_ident_name.as_str()));
                             struct_initializers.extend(struct_initializer);
-                            rpcvalue_inserts.extend(rpcvalue_insert);
                             field_idents.push(field_ident);
                         }
-
-                        if let Some(tag_key) = &struct_attributes.tag {
-                            rpcvalue_inserts.extend(quote! {
-                                map.insert(#tag_key.into(), #variant_ident_name.into());
-                            });
-                        } else {
-                            rpcvalue_inserts = quote! {
-                                map.insert(#variant_ident_name.into(), {
-                                    let mut map = shvproto::rpcvalue::Map::new();
-                                    #rpcvalue_inserts
-                                    map.into()
-                                });
-                            };
-                        }
-
-                        match_arms_ser.extend(quote!{
-                            #struct_identifier::#variant_ident{ #(#field_idents),* } => {
-                                let mut map = shvproto::rpcvalue::Map::new();
-                                #rpcvalue_inserts
-                                map.into()
-                            }
-                        });
 
                         match_arms_tags.push(quote! {
                             #variant_ident_name => Ok(#struct_identifier::#variant_ident {
@@ -433,7 +394,94 @@ pub fn derive_from_rpcvalue(item: TokenStream) -> TokenStream {
                         value.clone().try_into()
                     }
                 }
+            }
+        },
+        _ => panic!("This macro can only be used on a struct or an enum."),
+    }.into()
+}
 
+#[proc_macro_derive(ToRpcValue, attributes(field_name, rpcvalue))]
+pub fn derive_to_rpcvalue(item: TokenStream) -> TokenStream {
+    let input = syn::parse_macro_input!(item as syn::DeriveInput);
+    let RpcValueInfo {struct_identifier, struct_generics_with_bounds, struct_generics_without_bounds} = analyze_rpc_value_derive(&input);
+    match &input.data {
+        syn::Data::Struct(syn::DataStruct { fields, .. }) => {
+            let mut rpcvalue_inserts = quote! {};
+            for field in fields {
+                let (_, rpcvalue_insert) = field_to_initializers(field, Some(quote! { value }), "");
+                rpcvalue_inserts.extend(rpcvalue_insert);
+            }
+
+            quote! {
+                impl #struct_generics_with_bounds From<#struct_identifier #struct_generics_without_bounds> for shvproto::RpcValue {
+                    fn from(value: #struct_identifier #struct_generics_without_bounds) -> Self {
+                        let mut map = shvproto::rpcvalue::Map::new();
+                        #rpcvalue_inserts
+                        map.into()
+                    }
+                }
+            }
+        },
+        syn::Data::Enum(syn::DataEnum { variants, .. }) => {
+            let attrs = &input.attrs;
+            let mut match_arms_ser = quote! {};
+            let struct_attributes = parse_struct_attributes(attrs).unwrap();
+
+            for variant in variants {
+                let variant_ident = &variant.ident;
+                match &variant.fields {
+                    syn::Fields::Unnamed(variant_types) => {
+                        if variant_types.unnamed.len() != 1 {
+                            panic!("Only single element variant tuples are supported for ToRpcValue");
+                        }
+                        match_arms_ser.extend(quote!{
+                            #struct_identifier::#variant_ident(val) => shvproto::RpcValue::from(val),
+                        });
+                    }
+                    syn::Fields::Unit => {
+                        let variant_ident_name = variant_ident.to_string().to_case(Case::Camel);
+                        match_arms_ser.extend(quote!{
+                            #struct_identifier::#variant_ident => shvproto::RpcValue::from(#variant_ident_name),
+                        });
+                    }
+                    syn::Fields::Named(variant_fields) => {
+                        let mut rpcvalue_inserts = quote! {};
+                        let mut field_idents = vec![];
+                        let variant_ident_name = variant_ident.to_string().to_case(Case::Camel);
+
+                        for field in &variant_fields.named {
+                            let field_ident = field.ident.as_ref().expect("Missing field identifier");
+                            let (_, rpcvalue_insert) = field_to_initializers(field, None, &format!("Cannot deserialize into `{}` enum variant: ", variant_ident_name.as_str()));
+                            rpcvalue_inserts.extend(rpcvalue_insert);
+                            field_idents.push(field_ident);
+                        }
+
+                        if let Some(tag_key) = &struct_attributes.tag {
+                            rpcvalue_inserts.extend(quote! {
+                                map.insert(#tag_key.into(), #variant_ident_name.into());
+                            });
+                        } else {
+                            rpcvalue_inserts = quote! {
+                                map.insert(#variant_ident_name.into(), {
+                                    let mut map = shvproto::rpcvalue::Map::new();
+                                    #rpcvalue_inserts
+                                    map.into()
+                                });
+                            };
+                        }
+
+                        match_arms_ser.extend(quote!{
+                            #struct_identifier::#variant_ident{ #(#field_idents),* } => {
+                                let mut map = shvproto::rpcvalue::Map::new();
+                                #rpcvalue_inserts
+                                map.into()
+                            }
+                        });
+                    }
+                }
+            }
+
+            quote! {
                 impl From<#struct_identifier> for shvproto::RpcValue {
                     fn from(value: #struct_identifier) -> Self {
                         match value {
