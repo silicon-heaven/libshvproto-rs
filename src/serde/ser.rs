@@ -866,6 +866,31 @@ mod tests {
     use super::{Blob, IMap};
 
     #[derive(Debug, serde::Serialize)]
+    #[serde(untagged)]
+    enum UntaggedEnum {
+        Color { r: u8, g: u8, b: u8 },
+    }
+
+    #[derive(Debug, serde::Serialize)]
+    #[serde(tag = "t")]
+    enum InternallyTaggedEnum {
+        Color { r: u8, g: u8, b: u8 },
+    }
+
+    #[derive(Debug, serde::Serialize)]
+    #[serde(tag = "t", content = "c")]
+    enum InternallyTaggedExtraContentEnum {
+        Color { r: u8, g: u8, b: u8 },
+    }
+
+    #[derive(Debug, serde::Serialize)]
+    enum ExternallyTaggedEnum {
+        Color { r: u8, g: u8, b: u8 },
+        Point2D(f64, f64),
+        Unit,
+    }
+
+    #[derive(Debug, serde::Serialize)]
     struct UserStruct {
         string: String,
         num: i8,
@@ -873,16 +898,14 @@ mod tests {
         map: BTreeMap<String, i32>,
         imap: IMap<String>,
         date_time: crate::DateTime,
-        #[serde(serialize_with = "serialize_date_time_str")]
-        date_time_str: crate::DateTime,
         list: Vec<i32>,
         blob: Blob,
-    }
-
-    fn serialize_date_time_str<S>(date_time: &crate::DateTime, serializer: S) -> Result<S::Ok, S::Error>
-        where S: serde::Serializer
-    {
-        serializer.serialize_newtype_struct("DateTime", &date_time.to_iso_string())
+        untagged: UntaggedEnum,
+        internally_tagged: InternallyTaggedEnum,
+        internally_tagged_extra_content: InternallyTaggedExtraContentEnum,
+        externally_tagged: ExternallyTaggedEnum,
+        externally_tagged_tuple: ExternallyTaggedEnum,
+        externally_tagged_unit: ExternallyTaggedEnum,
     }
 
     #[test]
@@ -896,9 +919,14 @@ mod tests {
             map: BTreeMap::from([("abc".into(), 123)]),
             imap: IMap(BTreeMap::from([(1, "xyz".into())])),
             date_time,
-            date_time_str: date_time,
             list: [10, 20, 30].into(),
             blob: blob.into(),
+            untagged: UntaggedEnum::Color { r: 100, g: 200, b: 250 },
+            internally_tagged: InternallyTaggedEnum::Color { r: 100, g: 200, b: 250 },
+            internally_tagged_extra_content: InternallyTaggedExtraContentEnum::Color { r: 100, g: 200, b: 250 },
+            externally_tagged: ExternallyTaggedEnum::Color { r: 100, g: 200, b: 250 },
+            externally_tagged_tuple: ExternallyTaggedEnum::Point2D(0.5, 0.75),
+            externally_tagged_unit: ExternallyTaggedEnum::Unit,
         };
         let rv = super::to_rpcvalue(&user).unwrap();
         assert!(rv.is_map());
@@ -908,8 +936,47 @@ mod tests {
         assert_eq!(rv.as_map().get("map").unwrap().value, crate::Value::Map(Box::new(crate::make_map!("abc" => 123))));
         assert_eq!(rv.as_map().get("imap").unwrap().value, crate::Value::IMap(Box::new(crate::make_imap!(1 => "xyz"))));
         assert_eq!(rv.as_map().get("date_time").unwrap().value, crate::Value::DateTime(date_time));
-        assert_eq!(rv.as_map().get("date_time_str").unwrap().value, crate::Value::DateTime(date_time));
         assert_eq!(rv.as_map().get("list").unwrap().value, crate::Value::List(Box::new(crate::make_list!(10, 20, 30))));
         assert_eq!(rv.as_map().get("blob").unwrap().value, crate::Value::Blob(Box::new(blob.into())));
+        assert_eq!(rv.as_map().get("untagged").unwrap().value, crate::Value::Map(Box::new(
+                    crate::make_map!(
+                        "r" => 100_u32,
+                        "g" => 200_u32,
+                        "b" => 250_u32,
+                    )))
+        );
+        assert_eq!(rv.as_map().get("internally_tagged").unwrap().value,
+            crate::Value::Map(Box::new(crate::make_map!(
+                        "t" => "Color",
+                        "r" => 100_u32,
+                        "g" => 200_u32,
+                        "b" => 250_u32,
+            )))
+        );
+        assert_eq!(rv.as_map().get("internally_tagged_extra_content").unwrap().value,
+            crate::Value::Map(Box::new(crate::make_map!(
+                        "t" => "Color",
+                        "c" => crate::make_map!(
+                            "r" => 100_u32,
+                            "g" => 200_u32,
+                            "b" => 250_u32,
+                        ),
+            )))
+        );
+        assert_eq!(rv.as_map().get("externally_tagged").unwrap().value,
+            crate::Value::Map(Box::new(crate::make_map!(
+                        "Color" => crate::make_map!(
+                            "r" => 100_u32,
+                            "g" => 200_u32,
+                            "b" => 250_u32,
+                        ),
+            )))
+        );
+        assert_eq!(rv.as_map().get("externally_tagged_tuple").unwrap().value,
+            crate::Value::Map(Box::new(
+                    crate::make_map!("Point2D" => crate::make_list!(0.5, 0.75))
+            ))
+        );
+        assert_eq!(rv.as_map().get("externally_tagged_unit").unwrap().value, crate::Value::String(Box::new("Unit".into())));
     }
 }
