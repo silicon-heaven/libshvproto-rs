@@ -135,6 +135,7 @@ impl serde::Serializer for ValueSerializer {
     {
         match name {
             "IMap" => value.serialize(ValueIMapSerializer),
+            "DateTime" => value.serialize(ValueDateTimeSerializer),
             _ => value.serialize(self),
         }
     }
@@ -214,6 +215,11 @@ impl serde::Serializer for ValueSerializer {
             name: variant.into(),
             map: BTreeMap::new(),
         })
+    }
+
+    #[inline]
+    fn is_human_readable(&self) -> bool {
+        false
     }
 }
 
@@ -395,6 +401,186 @@ impl serde::Serializer for ValueIMapSerializer {
         _len: usize,
     ) -> Result<Self::SerializeStructVariant, Self::Error> {
         Err(err_not_imap())
+    }
+}
+
+pub struct ValueDateTimeSerializer;
+
+fn err_not_datetime() -> Error {
+    Error::custom("type cannot be serialized into a DateTime")
+}
+
+impl serde::Serializer for ValueDateTimeSerializer {
+    type Ok = Value;
+    type Error = Error;
+
+    type SerializeSeq = Impossible<Value, Error>;
+    type SerializeTuple = Impossible<Value, Error>;
+    type SerializeTupleStruct = Impossible<Value, Error>;
+    type SerializeTupleVariant = Impossible<Value, Error>;
+    type SerializeMap = Impossible<Value, Error>;
+    type SerializeStruct = Impossible<Value, Error>;
+    type SerializeStructVariant = Impossible<Value, Error>;
+
+    fn serialize_bool(self, _v: bool) -> Result<Self::Ok, Self::Error> {
+        Err(err_not_datetime())
+    }
+
+    fn serialize_i8(self, _v: i8) -> Result<Self::Ok, Self::Error> {
+        Err(err_not_datetime())
+    }
+
+    fn serialize_i16(self, _v: i16) -> Result<Self::Ok, Self::Error> {
+        Err(err_not_datetime())
+    }
+
+    fn serialize_i32(self, _v: i32) -> Result<Self::Ok, Self::Error> {
+        Err(err_not_datetime())
+    }
+
+    fn serialize_i64(self, v: i64) -> Result<Self::Ok, Self::Error> {
+        Ok(Value::DateTime(crate::DateTime::from_inner(v)))
+    }
+
+    fn serialize_u8(self, _v: u8) -> Result<Self::Ok, Self::Error> {
+        Err(err_not_datetime())
+    }
+
+    fn serialize_u16(self, _v: u16) -> Result<Self::Ok, Self::Error> {
+        Err(err_not_datetime())
+    }
+
+    fn serialize_u32(self, _v: u32) -> Result<Self::Ok, Self::Error> {
+        Err(err_not_datetime())
+    }
+
+    fn serialize_u64(self, _v: u64) -> Result<Self::Ok, Self::Error> {
+        Err(err_not_datetime())
+    }
+
+    fn serialize_f32(self, _v: f32) -> Result<Self::Ok, Self::Error> {
+        Err(err_not_datetime())
+    }
+
+    fn serialize_f64(self, _v: f64) -> Result<Self::Ok, Self::Error> {
+        Err(err_not_datetime())
+    }
+
+    fn serialize_char(self, _v: char) -> Result<Self::Ok, Self::Error> {
+        Err(err_not_datetime())
+    }
+
+    fn serialize_str(self, v: &str) -> Result<Self::Ok, Self::Error> {
+        crate::DateTime::from_iso_str(v)
+            .map(Value::DateTime)
+            .map_err(Error::custom)
+    }
+
+    fn serialize_bytes(self, _v: &[u8]) -> Result<Self::Ok, Self::Error> {
+        Err(err_not_datetime())
+    }
+
+    fn serialize_none(self) -> Result<Self::Ok, Self::Error> {
+        Err(err_not_datetime())
+    }
+
+    fn serialize_some<T>(self, _value: &T) -> Result<Self::Ok, Self::Error>
+    where
+        T: ?Sized + serde::Serialize
+    {
+        Err(err_not_datetime())
+    }
+
+    fn serialize_unit(self) -> Result<Self::Ok, Self::Error> {
+        Err(err_not_datetime())
+    }
+
+    fn serialize_unit_struct(self, _name: &'static str) -> Result<Self::Ok, Self::Error> {
+        Err(err_not_datetime())
+    }
+
+    fn serialize_unit_variant(
+        self,
+        _name: &'static str,
+        _variant_index: u32,
+        _variant: &'static str,
+    ) -> Result<Self::Ok, Self::Error>
+    {
+        Err(err_not_datetime())
+    }
+
+    fn serialize_newtype_struct<T>(
+        self,
+        _name: &'static str,
+        _value: &T,
+    ) -> Result<Self::Ok, Self::Error>
+    where
+        T: ?Sized + serde::Serialize
+    {
+        Err(err_not_datetime())
+    }
+
+    fn serialize_newtype_variant<T>(
+        self,
+        _name: &'static str,
+        _variant_index: u32,
+        _variant: &'static str,
+        _value: &T,
+    ) -> Result<Self::Ok, Self::Error>
+    where
+        T: ?Sized + serde::Serialize
+    {
+        Err(err_not_datetime())
+    }
+
+    fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq, Self::Error> {
+        Err(err_not_datetime())
+    }
+
+    fn serialize_tuple(self, _len: usize) -> Result<Self::SerializeTuple, Self::Error> {
+        Err(err_not_datetime())
+    }
+
+    fn serialize_tuple_struct(
+        self,
+        _name: &'static str,
+        _len: usize,
+    ) -> Result<Self::SerializeTupleStruct, Self::Error>
+    {
+        Err(err_not_datetime())
+    }
+
+    fn serialize_tuple_variant(
+        self,
+        _name: &'static str,
+        _variant_index: u32,
+        _variant: &'static str,
+        _len: usize,
+    ) -> Result<Self::SerializeTupleVariant, Self::Error>
+    {
+        Err(err_not_datetime())
+    }
+
+    fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
+        Err(err_not_datetime())
+    }
+
+    fn serialize_struct(
+        self,
+        _name: &'static str,
+        _len: usize,
+    ) -> Result<Self::SerializeStruct, Self::Error> {
+        Err(err_not_datetime())
+    }
+
+    fn serialize_struct_variant(
+        self,
+        _name: &'static str,
+        _variant_index: u32,
+        _variant: &'static str,
+        _len: usize,
+    ) -> Result<Self::SerializeStructVariant, Self::Error> {
+        Err(err_not_datetime())
     }
 }
 
@@ -584,7 +770,6 @@ pub fn to_rpcvalue<T: serde::Serialize>(v: &T) -> Result<RpcValue, Error> {
 #[derive(Clone,Debug,serde::Serialize)]
 pub struct IMap<T: Into<Value>>(BTreeMap<i32, T>);
 
-
 impl<T: Into<Value>> Deref for IMap<T> {
     type Target = BTreeMap<i32, T>;
 
@@ -599,12 +784,24 @@ impl<T: Into<Value>> DerefMut for IMap<T> {
     }
 }
 
+impl serde::Serialize for crate::DateTime {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer
+    {
+        if serializer.is_human_readable() {
+            self.to_iso_string().serialize(serializer)
+        } else {
+            serializer.serialize_newtype_struct("DateTime", &self.to_inner())
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
 
     use super::IMap;
-
 
     #[derive(Debug, serde::Serialize)]
     struct UserStruct {
@@ -613,17 +810,28 @@ mod tests {
         flag: bool,
         map: BTreeMap<String, i32>,
         imap: IMap<String>,
-        // date_time: crate::DateTime,
+        date_time: crate::DateTime,
+        #[serde(serialize_with = "serialize_date_time_str")]
+        date_time_str: crate::DateTime,
+    }
+
+    fn serialize_date_time_str<S>(date_time: &crate::DateTime, serializer: S) -> Result<S::Ok, S::Error>
+        where S: serde::Serializer
+    {
+        serializer.serialize_newtype_struct("DateTime", &date_time.to_iso_string())
     }
 
     #[test]
     fn serialize_value() {
+        let date_time = crate::DateTime::from_iso_str("2025-07-31T18:51:00.220+02").unwrap();
         let user = UserStruct {
             string: "test".into(),
             num: 42,
             flag: true,
             map: BTreeMap::from([("abc".into(), 123)]),
             imap: IMap(BTreeMap::from([(1, "xyz".into())])),
+            date_time,
+            date_time_str: date_time,
         };
         let rv = super::to_rpcvalue(&user).unwrap();
         assert!(rv.is_map());
@@ -632,5 +840,7 @@ mod tests {
         assert_eq!(rv.as_map().get("flag").unwrap(), &true.into());
         assert_eq!(rv.as_map().get("map").unwrap().value, crate::Value::Map(Box::new(crate::make_map!("abc" => 123))));
         assert_eq!(rv.as_map().get("imap").unwrap().value, crate::Value::IMap(Box::new(crate::make_imap!(1 => "xyz"))));
+        assert_eq!(rv.as_map().get("date_time").unwrap().value, crate::Value::DateTime(date_time));
+        assert_eq!(rv.as_map().get("date_time_str").unwrap().value, crate::Value::DateTime(date_time));
     }
 }
