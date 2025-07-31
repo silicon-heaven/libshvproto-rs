@@ -784,6 +784,68 @@ impl<T: Into<Value>> DerefMut for IMap<T> {
     }
 }
 
+impl<T: Into<Value>> From<BTreeMap<i32, T>> for IMap<T> {
+    fn from(value: BTreeMap<i32, T>) -> Self {
+        Self(value)
+    }
+}
+
+impl<T: Into<Value>> From<IMap<T>> for BTreeMap<i32, T> {
+    fn from(value: IMap<T>) -> Self {
+        value.0
+    }
+}
+
+#[derive(Clone,Debug)]
+pub struct Blob(Vec<u8>);
+
+impl Deref for Blob {
+    type Target = Vec<u8>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for Blob {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl From<Vec<u8>> for Blob {
+    fn from(value: Vec<u8>) -> Self {
+        Self(value)
+    }
+}
+
+impl<const N: usize> From<[u8; N]> for Blob {
+    fn from(value: [u8; N]) -> Self {
+        Self(value.into())
+    }
+}
+
+impl From<&[u8]> for Blob {
+    fn from(value: &[u8]) -> Self {
+        Self(value.into())
+    }
+}
+
+impl From<Blob> for Vec<u8> {
+    fn from(value: Blob) -> Self {
+        value.0
+    }
+}
+
+impl serde::Serialize for Blob {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer
+    {
+        serializer.serialize_bytes(&self.0)
+    }
+}
+
 impl serde::Serialize for crate::DateTime {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -801,7 +863,7 @@ impl serde::Serialize for crate::DateTime {
 mod tests {
     use std::collections::BTreeMap;
 
-    use super::IMap;
+    use super::{Blob, IMap};
 
     #[derive(Debug, serde::Serialize)]
     struct UserStruct {
@@ -813,6 +875,8 @@ mod tests {
         date_time: crate::DateTime,
         #[serde(serialize_with = "serialize_date_time_str")]
         date_time_str: crate::DateTime,
+        list: Vec<i32>,
+        blob: Blob,
     }
 
     fn serialize_date_time_str<S>(date_time: &crate::DateTime, serializer: S) -> Result<S::Ok, S::Error>
@@ -824,6 +888,7 @@ mod tests {
     #[test]
     fn serialize_value() {
         let date_time = crate::DateTime::from_iso_str("2025-07-31T18:51:00.220+02").unwrap();
+        let blob = [1_u8, 2_u8, 3_u8];
         let user = UserStruct {
             string: "test".into(),
             num: 42,
@@ -832,6 +897,8 @@ mod tests {
             imap: IMap(BTreeMap::from([(1, "xyz".into())])),
             date_time,
             date_time_str: date_time,
+            list: [10, 20, 30].into(),
+            blob: blob.into(),
         };
         let rv = super::to_rpcvalue(&user).unwrap();
         assert!(rv.is_map());
@@ -842,5 +909,7 @@ mod tests {
         assert_eq!(rv.as_map().get("imap").unwrap().value, crate::Value::IMap(Box::new(crate::make_imap!(1 => "xyz"))));
         assert_eq!(rv.as_map().get("date_time").unwrap().value, crate::Value::DateTime(date_time));
         assert_eq!(rv.as_map().get("date_time_str").unwrap().value, crate::Value::DateTime(date_time));
+        assert_eq!(rv.as_map().get("list").unwrap().value, crate::Value::List(Box::new(crate::make_list!(10, 20, 30))));
+        assert_eq!(rv.as_map().get("blob").unwrap().value, crate::Value::Blob(Box::new(blob.into())));
     }
 }
