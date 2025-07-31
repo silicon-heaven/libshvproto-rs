@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
+use std::ops::{Deref, DerefMut};
 
-use serde::ser::Error as SerdeError;
+use serde::ser::{Error as SerdeError, Impossible};
 
 use crate::{RpcValue, Value};
 
@@ -29,21 +30,14 @@ pub struct ValueSerializer;
 
 impl serde::Serializer for ValueSerializer {
     type Ok = Value;
-
     type Error = Error;
 
     type SerializeSeq = ValueSerializeSeq;
-
     type SerializeTuple = ValueSerializeSeq;
-
     type SerializeTupleStruct = ValueSerializeSeq;
-
     type SerializeTupleVariant = ValueSerializeTupleVariant;
-
     type SerializeMap = ValueSerializeMap;
-
     type SerializeStruct = ValueSerializeMap;
-
     type SerializeStructVariant = ValueSerializeStructVariant;
 
     fn serialize_bool(self, v: bool) -> Result<Self::Ok, Self::Error> {
@@ -126,19 +120,23 @@ impl serde::Serializer for ValueSerializer {
         _name: &'static str,
         _variant_index: u32,
         variant: &'static str,
-    ) -> Result<Self::Ok, Self::Error> {
+    ) -> Result<Self::Ok, Self::Error>
+    {
         self.serialize_str(variant)
     }
 
     fn serialize_newtype_struct<T>(
         self,
-        _name: &'static str,
+        name: &'static str,
         value: &T,
     ) -> Result<Self::Ok, Self::Error>
     where
         T: ?Sized + serde::Serialize
     {
-        value.serialize(self)
+        match name {
+            "IMap" => value.serialize(ValueIMapSerializer),
+            _ => value.serialize(self),
+        }
     }
 
     fn serialize_newtype_variant<T>(
@@ -169,7 +167,8 @@ impl serde::Serializer for ValueSerializer {
         self,
         _name: &'static str,
         len: usize,
-    ) -> Result<Self::SerializeTupleStruct, Self::Error> {
+    ) -> Result<Self::SerializeTupleStruct, Self::Error>
+    {
         self.serialize_seq(Some(len))
     }
 
@@ -179,7 +178,8 @@ impl serde::Serializer for ValueSerializer {
         _variant_index: u32,
         variant: &'static str,
         len: usize,
-    ) -> Result<Self::SerializeTupleVariant, Self::Error> {
+    ) -> Result<Self::SerializeTupleVariant, Self::Error>
+    {
         Ok(ValueSerializeTupleVariant {
             name: variant.into(),
             elements: Vec::with_capacity(len),
@@ -197,7 +197,8 @@ impl serde::Serializer for ValueSerializer {
         self,
         _name: &'static str,
         len: usize,
-    ) -> Result<Self::SerializeStruct, Self::Error> {
+    ) -> Result<Self::SerializeStruct, Self::Error>
+    {
         self.serialize_map(Some(len))
     }
 
@@ -207,11 +208,193 @@ impl serde::Serializer for ValueSerializer {
         _variant_index: u32,
         variant: &'static str,
         _len: usize,
-    ) -> Result<Self::SerializeStructVariant, Self::Error> {
+    ) -> Result<Self::SerializeStructVariant, Self::Error>
+    {
         Ok(ValueSerializeStructVariant {
             name: variant.into(),
             map: BTreeMap::new(),
         })
+    }
+}
+
+pub struct ValueIMapSerializer;
+
+fn err_not_imap() -> Error {
+    Error::custom("type cannot be serialized into an IMap")
+}
+
+impl serde::Serializer for ValueIMapSerializer {
+    type Ok = Value;
+    type Error = Error;
+
+    type SerializeSeq = Impossible<Value, Error>;
+    type SerializeTuple = Impossible<Value, Error>;
+    type SerializeTupleStruct = Impossible<Value, Error>;
+    type SerializeTupleVariant = Impossible<Value, Error>;
+    type SerializeMap = ValueSerializeIMap;
+    type SerializeStruct = Impossible<Value, Error>;
+    type SerializeStructVariant = Impossible<Value, Error>;
+
+    fn serialize_bool(self, _v: bool) -> Result<Self::Ok, Self::Error> {
+        Err(err_not_imap())
+    }
+
+    fn serialize_i8(self, _v: i8) -> Result<Self::Ok, Self::Error> {
+        Err(err_not_imap())
+    }
+
+    fn serialize_i16(self, _v: i16) -> Result<Self::Ok, Self::Error> {
+        Err(err_not_imap())
+    }
+
+    fn serialize_i32(self, _v: i32) -> Result<Self::Ok, Self::Error> {
+        Err(err_not_imap())
+    }
+
+    fn serialize_i64(self, _v: i64) -> Result<Self::Ok, Self::Error> {
+        Err(err_not_imap())
+    }
+
+    fn serialize_u8(self, _v: u8) -> Result<Self::Ok, Self::Error> {
+        Err(err_not_imap())
+    }
+
+    fn serialize_u16(self, _v: u16) -> Result<Self::Ok, Self::Error> {
+        Err(err_not_imap())
+    }
+
+    fn serialize_u32(self, _v: u32) -> Result<Self::Ok, Self::Error> {
+        Err(err_not_imap())
+    }
+
+    fn serialize_u64(self, _v: u64) -> Result<Self::Ok, Self::Error> {
+        Err(err_not_imap())
+    }
+
+    fn serialize_f32(self, _v: f32) -> Result<Self::Ok, Self::Error> {
+        Err(err_not_imap())
+    }
+
+    fn serialize_f64(self, _v: f64) -> Result<Self::Ok, Self::Error> {
+        Err(err_not_imap())
+    }
+
+    fn serialize_char(self, _v: char) -> Result<Self::Ok, Self::Error> {
+        Err(err_not_imap())
+    }
+
+    fn serialize_str(self, _v: &str) -> Result<Self::Ok, Self::Error> {
+        Err(err_not_imap())
+    }
+
+    fn serialize_bytes(self, _v: &[u8]) -> Result<Self::Ok, Self::Error> {
+        Err(err_not_imap())
+    }
+
+    fn serialize_none(self) -> Result<Self::Ok, Self::Error> {
+        Err(err_not_imap())
+    }
+
+    fn serialize_some<T>(self, _value: &T) -> Result<Self::Ok, Self::Error>
+    where
+        T: ?Sized + serde::Serialize
+    {
+        Err(err_not_imap())
+    }
+
+    fn serialize_unit(self) -> Result<Self::Ok, Self::Error> {
+        Err(err_not_imap())
+    }
+
+    fn serialize_unit_struct(self, _name: &'static str) -> Result<Self::Ok, Self::Error> {
+        Err(err_not_imap())
+    }
+
+    fn serialize_unit_variant(
+        self,
+        _name: &'static str,
+        _variant_index: u32,
+        _variant: &'static str,
+    ) -> Result<Self::Ok, Self::Error>
+    {
+        Err(err_not_imap())
+    }
+
+    fn serialize_newtype_struct<T>(
+        self,
+        _name: &'static str,
+        _value: &T,
+    ) -> Result<Self::Ok, Self::Error>
+    where
+        T: ?Sized + serde::Serialize
+    {
+        Err(err_not_imap())
+    }
+
+    fn serialize_newtype_variant<T>(
+        self,
+        _name: &'static str,
+        _variant_index: u32,
+        _variant: &'static str,
+        _value: &T,
+    ) -> Result<Self::Ok, Self::Error>
+    where
+        T: ?Sized + serde::Serialize
+    {
+        Err(err_not_imap())
+    }
+
+    fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq, Self::Error> {
+        Err(err_not_imap())
+    }
+
+    fn serialize_tuple(self, _len: usize) -> Result<Self::SerializeTuple, Self::Error> {
+        Err(err_not_imap())
+    }
+
+    fn serialize_tuple_struct(
+        self,
+        _name: &'static str,
+        _len: usize,
+    ) -> Result<Self::SerializeTupleStruct, Self::Error>
+    {
+        Err(err_not_imap())
+    }
+
+    fn serialize_tuple_variant(
+        self,
+        _name: &'static str,
+        _variant_index: u32,
+        _variant: &'static str,
+        _len: usize,
+    ) -> Result<Self::SerializeTupleVariant, Self::Error>
+    {
+        Err(err_not_imap())
+    }
+
+    fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
+        Ok(ValueSerializeIMap {
+            imap: BTreeMap::new(),
+            next_key: None,
+        })
+    }
+
+    fn serialize_struct(
+        self,
+        _name: &'static str,
+        _len: usize,
+    ) -> Result<Self::SerializeStruct, Self::Error> {
+        Err(err_not_imap())
+    }
+
+    fn serialize_struct_variant(
+        self,
+        _name: &'static str,
+        _variant_index: u32,
+        _variant: &'static str,
+        _len: usize,
+    ) -> Result<Self::SerializeStructVariant, Self::Error> {
+        Err(err_not_imap())
     }
 }
 
@@ -290,6 +473,39 @@ impl serde::ser::SerializeTupleVariant for ValueSerializeTupleVariant {
     }
 }
 
+pub struct ValueSerializeIMap {
+    imap: BTreeMap<i32, RpcValue>,
+    next_key: Option<i32>,
+}
+
+impl serde::ser::SerializeMap for ValueSerializeIMap {
+    type Ok = Value;
+    type Error = Error;
+
+    fn serialize_key<T: ?Sized + serde::Serialize>(&mut self, key: &T) -> Result<(), Self::Error> {
+        if let Value::Int(i) = key.serialize(ValueSerializer)? {
+            if i <= i32::MAX as _ {
+                self.next_key = Some(i as _);
+                Ok(())
+            } else {
+                Err(Error::custom("IMap keys must be i32-compatible"))
+            }
+        } else {
+            Err(Error::custom("IMap key must be an integer"))
+        }
+    }
+
+    fn serialize_value<T: ?Sized + serde::Serialize>(&mut self, value: &T) -> Result<(), Self::Error> {
+        let key = self.next_key.take().ok_or_else(|| Error::custom("Value without key"))?;
+        self.imap.insert(key, RpcValue::new(value.serialize(ValueSerializer)?, None));
+        Ok(())
+    }
+
+    fn end(self) -> Result<Self::Ok, Self::Error> {
+        Ok(Value::IMap(Box::new(self.imap)))
+    }
+}
+
 pub struct ValueSerializeMap {
     map: BTreeMap<String, RpcValue>,
     next_key: Option<String>,
@@ -365,10 +581,29 @@ pub fn to_rpcvalue<T: serde::Serialize>(v: &T) -> Result<RpcValue, Error> {
     Ok(RpcValue::new(v.serialize(ValueSerializer)?, None))
 }
 
+#[derive(Clone,Debug,serde::Serialize)]
+pub struct IMap<T: Into<Value>>(BTreeMap<i32, T>);
+
+
+impl<T: Into<Value>> Deref for IMap<T> {
+    type Target = BTreeMap<i32, T>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T: Into<Value>> DerefMut for IMap<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
 
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
+
+    use super::IMap;
 
 
     #[derive(Debug, serde::Serialize)]
@@ -377,7 +612,8 @@ mod tests {
         num: i8,
         flag: bool,
         map: BTreeMap<String, i32>,
-        // imap: BTreeMap<i64, String>,
+        imap: IMap<String>,
+        // date_time: crate::DateTime,
     }
 
     #[test]
@@ -387,7 +623,7 @@ mod tests {
             num: 42,
             flag: true,
             map: BTreeMap::from([("abc".into(), 123)]),
-            // imap: BTreeMap::from([(1, "xyz".into())]),
+            imap: IMap(BTreeMap::from([(1, "xyz".into())])),
         };
         let rv = super::to_rpcvalue(&user).unwrap();
         assert!(rv.is_map());
@@ -395,6 +631,6 @@ mod tests {
         assert_eq!(rv.as_map().get("num").unwrap(), &42.into());
         assert_eq!(rv.as_map().get("flag").unwrap(), &true.into());
         assert_eq!(rv.as_map().get("map").unwrap().value, crate::Value::Map(Box::new(crate::make_map!("abc" => 123))));
-        // assert_eq!(rv.as_map().get("imap").unwrap().value, crate::Value::IMap(Box::new(crate::make_imap!(1 => "xyz"))));
+        assert_eq!(rv.as_map().get("imap").unwrap().value, crate::Value::IMap(Box::new(crate::make_imap!(1 => "xyz"))));
     }
 }

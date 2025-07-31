@@ -12,13 +12,12 @@ chrono = "0.4"
 hex = "0.4"
 clap = { version = "4.5", features = ["derive"] }
 simple_logger = { version = "5.0", features = ["stderr"], optional = true }
-serde = "1.0.219"
+serde = { version = "1.0.219", features = ["derive"] }
 
 [dev-dependencies]
 assert_cmd = "2.0"
 # https://github.com/rust-lang/cargo/issues/2911#issuecomment-749580481
 shvproto = { path = ".", features = ["cp2cp"] }
-serde = { version = "1.0.219", features = ["derive"] }
 
 [features]
 cp2cp = ["dep:simple_logger"]
