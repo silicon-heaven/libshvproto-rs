@@ -11,6 +11,7 @@ pub mod rpcvalue;
 pub mod util;
 pub mod writer;
 mod textrdwr;
+#[cfg(feature = "serde")]
 mod serde;
 
 pub use datetime::DateTime;
@@ -26,6 +27,8 @@ pub use cpon::{CponReader, CponWriter};
 pub use json::{JsonReader, JsonWriter};
 
 pub use libshvproto_macros::{FromRpcValue, ToRpcValue};
+
+#[cfg(feature = "serde")]
 pub use crate::serde::{ValueSerializer, to_rpcvalue, ValueDeserializer, from_rpcvalue};
 
 fn u8_to_hex(num: u8) -> (u8, u8) {

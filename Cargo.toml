@@ -12,7 +12,7 @@ chrono = "0.4"
 hex = "0.4"
 clap = { version = "4.5", features = ["derive"] }
 simple_logger = { version = "5.0", features = ["stderr"], optional = true }
-serde = { version = "1.0.219", features = ["derive"] }
+serde = { version = "1.0.219", features = ["derive"], optional = true }
 
 [dev-dependencies]
 assert_cmd = "2.0"
@@ -21,6 +21,7 @@ shvproto = { path = ".", features = ["cp2cp"] }
 
 [features]
 cp2cp = ["dep:simple_logger"]
+serde = ["dep:serde"]
 
 # Enables feature `min_specialization` of nightly compiler and provides
 # special `impl From<Collection<RpcValue>> for RpcValue` to just move

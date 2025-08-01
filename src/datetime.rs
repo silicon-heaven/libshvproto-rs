@@ -34,10 +34,12 @@ impl DateTime {
     //}
     //pub fn is_valid(&self) -> bool { }
 
+#[cfg(feature = "serde")]
     pub(crate) fn from_inner(inner: i64) -> Self {
         Self(inner)
     }
 
+#[cfg(feature = "serde")]
     pub(crate) fn to_inner(&self) -> i64 {
         self.0
     }
