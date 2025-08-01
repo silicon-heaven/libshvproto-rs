@@ -979,4 +979,10 @@ mod tests {
         );
         assert_eq!(rv.as_map().get("externally_tagged_unit").unwrap().value, crate::Value::String(Box::new("Unit".into())));
     }
+
+    #[test]
+    fn serialize_map_key_must_be_string() {
+        let unsupported_map: BTreeMap<i64, i32> = BTreeMap::from([(1, 2), (3, 4)]);
+        assert!(super::to_rpcvalue(&unsupported_map).is_err_and(|e| e.msg == "Map key must be a string"));
+    }
 }
