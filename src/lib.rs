@@ -26,7 +26,7 @@ pub use cpon::{CponReader, CponWriter};
 pub use json::{JsonReader, JsonWriter};
 
 pub use libshvproto_macros::{FromRpcValue, ToRpcValue};
-pub use crate::serde::{ValueSerializer, to_rpcvalue};
+pub use crate::serde::{ValueSerializer, to_rpcvalue, ValueDeserializer, from_rpcvalue};
 
 fn u8_to_hex(num: u8) -> (u8, u8) {
     let nibble_to_hex = |b| if b < 10 {
