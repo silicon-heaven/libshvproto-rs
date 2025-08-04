@@ -5,7 +5,7 @@ use std::fmt;
 
 use crate::{RpcValue, Value};
 
-use super::IMap;
+use super::{Blob, IMap};
 
 pub struct ValueDeserializer<'a> {
     pub value: &'a Value,
@@ -36,24 +36,23 @@ impl<'de, 'a> serde::Deserializer<'de> for ValueDeserializer<'a> {
             Value::DateTime(dt) => visitor.visit_str(&dt.to_iso_string()),
             Value::Blob(bytes) => visitor.visit_byte_buf(*bytes.clone()),
             Value::List(list) => {
-                let iter = list.iter().map(|v| ValueDeserializer { value: &v.value });
-                let mut seq = de::value::SeqDeserializer::new(iter);
-                visitor.visit_seq(&mut seq)
+                let iter = list
+                    .iter()
+                    .map(|v| ValueDeserializer { value: &v.value });
+                visitor.visit_seq(de::value::SeqDeserializer::new(iter))
             }
             Value::Map(map) => {
                 let iter = map
                     .iter()
                     .map(|(k, v)| (k.as_str(), ValueDeserializer { value: &v.value }));
-                let mut map = de::value::MapDeserializer::new(iter);
-                visitor.visit_map(&mut map)
+                visitor.visit_map(de::value::MapDeserializer::new(iter))
             }
-            Value::Decimal(_decimal) => todo!(),
+            Value::Decimal(_decimal) => Err(de::Error::custom("Decimal is not supported")),
             Value::IMap(imap) => {
                 let iter = imap
                     .iter()
                     .map(|(k, v)| (*k, ValueDeserializer { value: &v.value }));
-                let mut map = de::value::MapDeserializer::new(iter);
-                visitor.visit_map(&mut map)
+                visitor.visit_map(de::value::MapDeserializer::new(iter))
             },
         }
     }
@@ -212,7 +211,11 @@ impl<'de, 'a> serde::Deserializer<'de> for ValueDeserializer<'a> {
     where
         V: Visitor<'de>,
     {
-        self.deserialize_any(visitor)
+        match self.value {
+            Value::Blob(bytes) =>
+                visitor.visit_seq(de::value::SeqDeserializer::new(bytes.iter().copied())),
+            _ => self.deserialize_any(visitor),
+        }
     }
 
     fn deserialize_map<V>(self, visitor: V) -> Result<V::Value, Self::Error>
@@ -469,6 +472,33 @@ where
     }
 }
 
+impl<'de> serde::Deserialize<'de> for Blob
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct BlobVisitor;
+
+        impl<'de> Visitor<'de> for BlobVisitor {
+            type Value = Blob;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("bytes (u8 array)")
+            }
+
+            fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
+                where
+                    E: de::Error,
+            {
+                Ok(Blob(v.into()))
+            }
+        }
+
+        deserializer.deserialize_bytes(BlobVisitor)
+    }
+}
+
 pub fn from_value<'a, T: Deserialize<'a>>(value: &Value) -> Result<T, serde::de::value::Error> {
     T::deserialize(ValueDeserializer { value })
 }
@@ -481,7 +511,7 @@ pub fn from_rpcvalue<'a, T: Deserialize<'a>>(rpc_value: &RpcValue) -> Result<T, 
 mod tests {
     use std::collections::BTreeMap;
 
-    use crate::serde::IMap;
+    use crate::serde::{Blob, IMap};
     use crate::Value;
 
     use super::from_value;
@@ -517,6 +547,8 @@ mod tests {
         imap: IMap<String>,
         imap2: BTreeMap<i32, String>,
         list: Vec<u32>,
+        blob: Blob,
+        blob2: Vec<u8>,
         command: Command,
         command2: Command,
         command3: Command,
@@ -547,6 +579,8 @@ mod tests {
                             2 => "b",
                         ),
                         "list" => crate::make_list!(10_u32, 20_u32, 30_u32),
+                        "blob" => crate::RpcValue::new(Value::Blob(Box::new([1_u8, 2_u8, 3_u8].into())), None),
+                        "blob2" => crate::RpcValue::new(Value::Blob(Box::new([1_u8, 2_u8, 3_u8].into())), None),
                         "command" => crate::make_map!(
                             "type" => "Move",
                             "c" => crate::make_map!(
@@ -587,6 +621,8 @@ mod tests {
                 (2, "b".into()),
         ]));
         assert_eq!(person.list, Vec::from([10, 20, 30]));
+        assert_eq!(person.blob, Blob(Vec::from([1, 2, 3])));
+        assert_eq!(person.blob2, Vec::from([1, 2, 3]));
         assert_eq!(person.command, Command::Move { x: 5, y: 7});
         assert_eq!(person.command2, Command::Quit);
         assert_eq!(person.command3, Command::Shoot(10.5, 9.75));

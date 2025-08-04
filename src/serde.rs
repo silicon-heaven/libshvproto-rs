@@ -41,7 +41,7 @@ impl<T: Into<Value>> From<IMap<T>> for BTreeMap<i32, T> {
     }
 }
 
-#[derive(Clone,Debug)]
+#[derive(Clone,Debug,PartialEq)]
 pub struct Blob(Vec<u8>);
 
 impl Deref for Blob {
