@@ -267,18 +267,19 @@ impl<'de, 'a> serde::Deserializer<'de> for ValueDeserializer<'a> {
             // Externally tagged (e.g. { "Variant": {...} })
             Value::Map(map) if map.len() == 1 => {
                 let (variant, value) = map.iter().next().unwrap();
-                let enum_access = SimpleEnumAccess { variant: variant.clone(), value: Some(value.value.clone()) };
+                let enum_access = SimpleEnumAccess {
+                    variant,
+                    value: Some(&value.value)
+                };
                 visitor.visit_enum(enum_access)
             }
 
             // Internally tagged (e.g. { "type": "Variant", ... })
             Value::Map(map) => {
                 if let Some(Value::String(variant)) = map.get("type").map(|rv| &rv.value) {
-                    let variant = *variant.clone();
-                    let content = Value::Map(map.clone()); // reuse the whole map
                     let enum_access = SimpleEnumAccess {
                         variant,
-                        value: Some(content),
+                        value: Some(self.value),
                     };
                     return visitor.visit_enum(enum_access);
                 }
@@ -287,10 +288,9 @@ impl<'de, 'a> serde::Deserializer<'de> for ValueDeserializer<'a> {
                 if let (Some(Value::String(tag)), Some(content)) =
                     (map.get("tag").map(|rv| &rv.value), map.get("content").map(|rv| &rv.value))
                 {
-                    let variant = *tag.clone();
                     let enum_access = SimpleEnumAccess {
-                        variant,
-                        value: Some(content.clone()),
+                        variant: tag,
+                        value: Some(content),
                     };
                     return visitor.visit_enum(enum_access);
                 }
@@ -301,7 +301,10 @@ impl<'de, 'a> serde::Deserializer<'de> for ValueDeserializer<'a> {
 
             // Unit variant as a string
             Value::String(s) => {
-                let enum_access = SimpleEnumAccess { variant: *s.clone(), value: None };
+                let enum_access = SimpleEnumAccess {
+                    variant: s,
+                    value: None
+                };
                 visitor.visit_enum(enum_access)
             }
 
@@ -311,33 +314,32 @@ impl<'de, 'a> serde::Deserializer<'de> for ValueDeserializer<'a> {
     }
 
     forward_to_deserialize_any! {
-        // i8 i16 i32 u8 u16 u32 f32
         char unit_struct tuple tuple_struct identifier ignored_any
     }
 }
 
-struct SimpleEnumAccess {
-    variant: String,
-    value: Option<Value>,
+struct SimpleEnumAccess<'a> {
+    variant: &'a str,
+    value: Option<&'a Value>,
 }
 
-impl<'de> EnumAccess<'de> for SimpleEnumAccess {
+impl<'a, 'de> EnumAccess<'de> for SimpleEnumAccess<'a> {
     type Error = serde::de::value::Error;
     type Variant = Self;
 
     fn variant_seed<V>(self, seed: V) -> Result<(V::Value, Self), Self::Error>
     where V: DeserializeSeed<'de> {
-        let de = self.variant.as_str().into_deserializer();
+        let de = self.variant.into_deserializer();
         seed.deserialize(de).map(|v| (v, self))
     }
 }
 
-impl<'de> VariantAccess<'de> for SimpleEnumAccess {
+impl<'a, 'de> VariantAccess<'de> for SimpleEnumAccess<'a> {
     type Error = serde::de::value::Error;
 
     fn unit_variant(self) -> Result<(), Self::Error> {
         match self.value {
-            Some(v) => serde::Deserialize::deserialize(ValueDeserializer { value: &v }),
+            Some(v) => serde::Deserialize::deserialize(ValueDeserializer { value: v }),
             None => Ok(()),
         }
     }
@@ -345,19 +347,19 @@ impl<'de> VariantAccess<'de> for SimpleEnumAccess {
     fn newtype_variant_seed<T>(self, seed: T) -> Result<T::Value, Self::Error>
     where T: DeserializeSeed<'de> {
         match self.value {
-            Some(v) => seed.deserialize(ValueDeserializer { value: &v }),
+            Some(v) => seed.deserialize(ValueDeserializer { value: v }),
             None => Err(de::Error::custom("Expected value for newtype variant")),
         }
     }
 
     fn tuple_variant<V>(self, _len: usize, visitor: V) -> Result<V::Value, Self::Error>
     where V: Visitor<'de> {
-        serde::Deserializer::deserialize_any(ValueDeserializer { value: &self.value.unwrap_or(Value::Null) }, visitor)
+        serde::Deserializer::deserialize_any(ValueDeserializer { value: self.value.unwrap_or(&Value::Null) }, visitor)
     }
 
     fn struct_variant<V>(self, _fields: &'static [&'static str], visitor: V) -> Result<V::Value, Self::Error>
     where V: Visitor<'de> {
-        serde::Deserializer::deserialize_any(ValueDeserializer { value: &self.value.unwrap_or(Value::Null) }, visitor)
+        serde::Deserializer::deserialize_any(ValueDeserializer { value: self.value.unwrap_or(&Value::Null) }, visitor)
     }
 }
 
