@@ -1,8 +1,11 @@
-use serde::de::{self, Deserialize, DeserializeSeed, Deserializer, EnumAccess, IntoDeserializer, VariantAccess, Visitor};
+use serde::de::{self, Deserialize, DeserializeSeed, Deserializer, EnumAccess, IntoDeserializer, MapAccess, VariantAccess, Visitor};
 use serde::forward_to_deserialize_any;
+use std::collections::BTreeMap;
 use std::fmt;
 
 use crate::{RpcValue, Value};
+
+use super::IMap;
 
 pub struct ValueDeserializer<'a> {
     pub value: &'a Value,
@@ -33,19 +36,25 @@ impl<'de, 'a> serde::Deserializer<'de> for ValueDeserializer<'a> {
             Value::DateTime(dt) => visitor.visit_str(&dt.to_iso_string()),
             Value::Blob(bytes) => visitor.visit_byte_buf(*bytes.clone()),
             Value::List(list) => {
-                        let iter = list.iter().map(|v| ValueDeserializer { value: &v.value });
-                        let mut seq = de::value::SeqDeserializer::new(iter);
-                        visitor.visit_seq(&mut seq)
-                    }
+                let iter = list.iter().map(|v| ValueDeserializer { value: &v.value });
+                let mut seq = de::value::SeqDeserializer::new(iter);
+                visitor.visit_seq(&mut seq)
+            }
             Value::Map(map) => {
-                        let iter = map
-                            .iter()
-                            .map(|(k, v)| (k.as_str(), ValueDeserializer { value: &v.value }));
-                        let mut map = de::value::MapDeserializer::new(iter);
-                        visitor.visit_map(&mut map)
-                    }
+                let iter = map
+                    .iter()
+                    .map(|(k, v)| (k.as_str(), ValueDeserializer { value: &v.value }));
+                let mut map = de::value::MapDeserializer::new(iter);
+                visitor.visit_map(&mut map)
+            }
             Value::Decimal(_decimal) => todo!(),
-            Value::IMap(_btree_map) => todo!(),
+            Value::IMap(imap) => {
+                let iter = imap
+                    .iter()
+                    .map(|(k, v)| (*k, ValueDeserializer { value: &v.value }));
+                let mut map = de::value::MapDeserializer::new(iter);
+                visitor.visit_map(&mut map)
+            },
         }
     }
 
@@ -236,7 +245,7 @@ impl<'de, 'a> serde::Deserializer<'de> for ValueDeserializer<'a> {
         match name {
             "DateTime" => match self.value {
                 Value::DateTime(date_time) => visitor.visit_i64(date_time.to_inner()),
-                _ => self.deserialize_any(visitor),
+                _ => Err(de::Error::custom("expected DateTime")),
             }
             _ => self.deserialize_any(visitor),
         }
@@ -422,6 +431,44 @@ impl<'de> serde::Deserialize<'de> for crate::DateTime {
     }
 }
 
+impl<'de, T> serde::Deserialize<'de> for IMap<T>
+where
+    T: serde::Deserialize<'de> + Into<Value>,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct IMapVisitor<T>(std::marker::PhantomData<T>);
+
+        impl<'de, T> Visitor<'de> for IMapVisitor<T>
+        where
+            T: serde::Deserialize<'de> + Into<Value>,
+        {
+            type Value = IMap<T>;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a map with i32 keys")
+            }
+
+            fn visit_map<A>(self, mut access: A) -> Result<IMap<T>, A::Error>
+            where
+                A: MapAccess<'de>,
+            {
+                let mut map = BTreeMap::new();
+
+                while let Some((key, value)) = access.next_entry::<i32, T>()? {
+                    map.insert(key, value);
+                }
+
+                Ok(IMap(map))
+            }
+        }
+
+        deserializer.deserialize_map(IMapVisitor(std::marker::PhantomData))
+    }
+}
+
 pub fn from_value<'a, T: Deserialize<'a>>(value: &Value) -> Result<T, serde::de::value::Error> {
     T::deserialize(ValueDeserializer { value })
 }
@@ -467,6 +514,8 @@ mod tests {
         date_time: crate::DateTime,
         date_time_str: String,
         map: BTreeMap<String, i32>,
+        imap: IMap<String>,
+        imap2: BTreeMap<i32, String>,
         list: Vec<u32>,
         command: Command,
         command2: Command,
@@ -488,6 +537,14 @@ mod tests {
                         "map" => crate::make_map!(
                             "a" => 1,
                             "b" => 2,
+                        ),
+                        "imap" => crate::make_imap!(
+                            1 => "a",
+                            2 => "b",
+                        ),
+                        "imap2" => crate::make_imap!(
+                            1 => "a",
+                            2 => "b",
                         ),
                         "list" => crate::make_list!(10_u32, 20_u32, 30_u32),
                         "command" => crate::make_map!(
@@ -520,6 +577,14 @@ mod tests {
         assert_eq!(person.map, BTreeMap::from([
                 ("a".into(), 1),
                 ("b".into(), 2)
+        ]));
+        assert_eq!(person.imap, IMap(BTreeMap::from([
+                (1, "a".into()),
+                (2, "b".into()),
+        ])));
+        assert_eq!(person.imap2, BTreeMap::from([
+                (1, "a".into()),
+                (2, "b".into()),
         ]));
         assert_eq!(person.list, Vec::from([10, 20, 30]));
         assert_eq!(person.command, Command::Move { x: 5, y: 7});
