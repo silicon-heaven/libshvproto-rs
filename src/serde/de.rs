@@ -383,17 +383,17 @@ impl<'a, 'de> VariantAccess<'de> for UntaggedEnumAccess<'a> {
 
     fn newtype_variant_seed<T>(self, seed: T) -> Result<T::Value, Self::Error>
     where T: serde::de::DeserializeSeed<'de> {
-        seed.deserialize(ValueDeserializer { value: &self.0 })
+        seed.deserialize(ValueDeserializer { value: self.0 })
     }
 
     fn tuple_variant<V>(self, _len: usize, visitor: V) -> Result<V::Value, Self::Error>
     where V: Visitor<'de> {
-        serde::Deserializer::deserialize_any(ValueDeserializer { value: &self.0 }, visitor)
+        serde::Deserializer::deserialize_any(ValueDeserializer { value: self.0 }, visitor)
     }
 
     fn struct_variant<V>(self, _fields: &'static [&'static str], visitor: V) -> Result<V::Value, Self::Error>
     where V: Visitor<'de> {
-        serde::Deserializer::deserialize_any(ValueDeserializer { value: &self.0 }, visitor)
+        serde::Deserializer::deserialize_any(ValueDeserializer { value: self.0 }, visitor)
     }
 }
 
