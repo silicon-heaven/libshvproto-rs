@@ -434,16 +434,30 @@ pub fn from_rpcvalue<'a, T: Deserialize<'a>>(rpc_value: &RpcValue) -> Result<T, 
 mod tests {
     use std::collections::BTreeMap;
 
+    use crate::serde::IMap;
     use crate::Value;
 
     use super::from_value;
 
     #[derive(Debug, serde::Deserialize,PartialEq)]
-    #[serde(tag = "type", content = "c")] // adjacently tagged
+    #[serde(tag = "type", content = "c")]
     enum Command {
         Quit,
         Move { x: i32, y: i32 },
         Shoot(f64, f64),
+    }
+
+    #[derive(Debug, serde::Deserialize,PartialEq)]
+    #[serde(tag = "type")]
+    enum CustomTagEnum {
+        Unnamed,
+        StructVariant { x: i32, y: i32 },
+    }
+
+    #[derive(Debug, serde::Deserialize,PartialEq)]
+    enum ExternallyTaggedEnum {
+        Variant(i32, i32),
+        Unnamed,
     }
 
     #[derive(Debug,serde::Deserialize)]
@@ -457,6 +471,10 @@ mod tests {
         command: Command,
         command2: Command,
         command3: Command,
+        custom_tag_enum_1: CustomTagEnum,
+        custom_tag_enum_2: CustomTagEnum,
+        ext_tag_enum: ExternallyTaggedEnum,
+        ext_tag_enum_unnamed: ExternallyTaggedEnum,
     }
 
     #[test]
@@ -484,6 +502,16 @@ mod tests {
                             "type" => "Shoot",
                             "c" => crate::make_list!(10.5, 9.75),
                         ),
+                        "custom_tag_enum_1" => crate::make_map!("type" => "Unnamed"),
+                        "custom_tag_enum_2" => crate::make_map!(
+                            "type" => "StructVariant",
+                            "x" => 1,
+                            "y" => 2,
+                        ),
+                        "ext_tag_enum" => crate::make_map!(
+                            "Variant" => crate::make_list!(10, 20),
+                        ),
+                        "ext_tag_enum_unnamed" => "Unnamed",
         )))).unwrap();
         assert_eq!(&person.name, "john");
         assert_eq!(person.age, 42);
@@ -497,5 +525,9 @@ mod tests {
         assert_eq!(person.command, Command::Move { x: 5, y: 7});
         assert_eq!(person.command2, Command::Quit);
         assert_eq!(person.command3, Command::Shoot(10.5, 9.75));
+        assert_eq!(person.custom_tag_enum_1, CustomTagEnum::Unnamed);
+        assert_eq!(person.custom_tag_enum_2, CustomTagEnum::StructVariant { x: 1, y: 2 });
+        assert_eq!(person.ext_tag_enum, ExternallyTaggedEnum::Variant(10, 20));
+        assert_eq!(person.ext_tag_enum_unnamed, ExternallyTaggedEnum::Unnamed);
     }
 }
