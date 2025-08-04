@@ -46,7 +46,7 @@ jobs:
         mkdir -p ${{github.workspace}}/install
         # FIXME: Remove when this thing makes it into stable
         export RUSTFLAGS="-A mismatched_lifetime_syntaxes"
-        cargo install --path '${{github.workspace}}' --root '${{github.workspace}}/install' --target ${{ matrix.target }} --features cp2cp,serde
+        cargo install --path '${{github.workspace}}' --root '${{github.workspace}}/install' --target ${{ matrix.target }} --features cp2cp
       shell: bash
 
     - name: Upload Artifact
@@ -115,7 +115,7 @@ jobs:
         uses: syyyr/rust-pycobertura-action@v3.0.0
         with:
           project_name: libshvproto
-          cargo_test_arguments: --features cp2cp,serde
+          cargo_test_arguments: --features cp2cp
 
   check-version-bump:
     name: Check version bump
