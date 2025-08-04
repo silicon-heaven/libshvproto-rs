@@ -47,7 +47,7 @@ impl<'de, 'a> serde::Deserializer<'de> for ValueDeserializer<'a> {
                     .map(|(k, v)| (k.as_str(), ValueDeserializer { value: &v.value }));
                 visitor.visit_map(de::value::MapDeserializer::new(iter))
             }
-            Value::Decimal(_decimal) => Err(de::Error::custom("Decimal is not supported")),
+            Value::Decimal(decimal) => visitor.visit_f64(decimal.to_f64()),
             Value::IMap(imap) => {
                 let iter = imap
                     .iter()
@@ -136,6 +136,7 @@ impl<'de, 'a> serde::Deserializer<'de> for ValueDeserializer<'a> {
     {
         match self.value {
             Value::Double(f) => visitor.visit_f64(*f),
+            Value::Decimal(decimal) => visitor.visit_f64(decimal.to_f64()),
             // Value::Int(i) => visitor.visit_f64(*i as f64),
             // Value::UInt(u) => visitor.visit_f64(*u as f64),
             _ => Err(de::Error::custom("expected float-compatible value")),
@@ -543,6 +544,7 @@ mod tests {
     struct Person {
         name: String,
         age: i8,
+        decimal: f64,
         date_time: crate::DateTime,
         date_time_str: String,
         map: BTreeMap<String, i32>,
@@ -566,6 +568,7 @@ mod tests {
         let person: Person = from_value(&Value::Map(Box::new(crate::make_map!(
                         "name" => "john",
                         "age" => 42,
+                        "decimal" => crate::RpcValue::new(Value::Decimal(crate::Decimal::new(2, 3)), None),
                         "date_time" => date_time,
                         "date_time_str" => date_time,
                         "map" => crate::make_map!(
@@ -608,6 +611,7 @@ mod tests {
         )))).unwrap();
         assert_eq!(&person.name, "john");
         assert_eq!(person.age, 42);
+        assert_eq!(person.decimal, 2. * 10. * 10. * 10.);
         assert_eq!(person.date_time, date_time);
         assert_eq!(person.date_time_str, date_time.to_iso_string());
         assert_eq!(person.map, BTreeMap::from([
