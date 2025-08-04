@@ -81,3 +81,79 @@ impl From<Blob> for Vec<u8> {
         value.0
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+
+    use super::{Blob, IMap};
+
+
+    #[derive(Debug, serde::Serialize, serde::Deserialize, PartialEq)]
+    #[serde(untagged)]
+    enum UntaggedEnum {
+        Color { r: u8, g: u8, b: u8 },
+    }
+
+    #[derive(Debug, serde::Serialize, serde::Deserialize, PartialEq)]
+    #[serde(tag = "t")]
+    enum InternallyTaggedEnum {
+        Color { r: u8, g: u8, b: u8 },
+    }
+
+    #[derive(Debug, serde::Serialize, serde::Deserialize, PartialEq)]
+    #[serde(tag = "t", content = "c")]
+    enum InternallyTaggedExtraContentEnum {
+        Color { r: u8, g: u8, b: u8 },
+    }
+
+    #[derive(Debug, serde::Serialize, serde::Deserialize, PartialEq)]
+    enum ExternallyTaggedEnum {
+        Color { r: u8, g: u8, b: u8 },
+        Point2D(f64, f64),
+        Unit,
+    }
+
+    #[derive(Debug, serde::Serialize, serde::Deserialize, PartialEq)]
+    struct UserStruct {
+        string: String,
+        num: i8,
+        flag: bool,
+        map: BTreeMap<String, i32>,
+        imap: IMap<String>,
+        date_time: crate::DateTime,
+        list: Vec<i32>,
+        blob: Blob,
+        untagged: UntaggedEnum,
+        internally_tagged: InternallyTaggedEnum,
+        internally_tagged_extra_content: InternallyTaggedExtraContentEnum,
+        externally_tagged: ExternallyTaggedEnum,
+        externally_tagged_tuple: ExternallyTaggedEnum,
+        externally_tagged_unit: ExternallyTaggedEnum,
+    }
+
+    #[test]
+    fn serialize_and_deserialize() {
+        let date_time = crate::DateTime::from_iso_str("2025-07-31T18:51:00.220+02").unwrap();
+        let blob = [1_u8, 2_u8, 3_u8];
+        let user_from = UserStruct {
+            string: "test".into(),
+            num: 42,
+            flag: true,
+            map: BTreeMap::from([("abc".into(), 123)]),
+            imap: IMap(BTreeMap::from([(1, "xyz".into())])),
+            date_time,
+            list: [10, 20, 30].into(),
+            blob: blob.into(),
+            untagged: UntaggedEnum::Color { r: 100, g: 200, b: 250 },
+            internally_tagged: InternallyTaggedEnum::Color { r: 100, g: 200, b: 250 },
+            internally_tagged_extra_content: InternallyTaggedExtraContentEnum::Color { r: 100, g: 200, b: 250 },
+            externally_tagged: ExternallyTaggedEnum::Color { r: 100, g: 200, b: 250 },
+            externally_tagged_tuple: ExternallyTaggedEnum::Point2D(0.5, 0.75),
+            externally_tagged_unit: ExternallyTaggedEnum::Unit,
+        };
+        let user_to: UserStruct = super::from_rpcvalue(&super::to_rpcvalue(&user_from).unwrap()).unwrap();
+        assert_eq!(user_from, user_to);
+
+    }
+}
