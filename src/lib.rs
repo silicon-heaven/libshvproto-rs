@@ -12,7 +12,7 @@ pub mod util;
 pub mod writer;
 mod textrdwr;
 #[cfg(feature = "serde")]
-mod serde;
+pub mod serde;
 
 pub use datetime::DateTime;
 pub use decimal::Decimal;
