@@ -27,12 +27,23 @@ impl Default for ToISOStringOptions {
     }
 }
 #[derive(Debug, Clone, PartialEq, Copy)]
-pub struct DateTime (i64);
+pub struct DateTime(i64);
 impl DateTime {
     //pub fn invalid() -> DateTime {
     //    DateTime::from_epoch_msec(0)
     //}
     //pub fn is_valid(&self) -> bool { }
+
+#[cfg(feature = "serde")]
+    pub(crate) fn from_inner(inner: i64) -> Self {
+        Self(inner)
+    }
+
+#[cfg(feature = "serde")]
+    pub(crate) fn to_inner(&self) -> i64 {
+        self.0
+    }
+
     pub fn now() -> DateTime {
         let dt = chrono::offset::Local::now();
         let msec = dt.naive_utc().and_utc().timestamp_millis();
