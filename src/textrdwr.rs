@@ -171,14 +171,12 @@ pub trait TextReader : Reader {
                 }
                 _ => break,
             };
-            if let Some(digit) = digit {
-                if !is_overflow {
-                    if let Some(val) = add_digit(value, base, digit) {
-                        value = val;
-                        digit_cnt += 1;
-                    } else {
-                        is_overflow = true;
-                    }
+            if let Some(digit) = digit && !is_overflow {
+                if let Some(val) = add_digit(value, base, digit) {
+                    value = val;
+                    digit_cnt += 1;
+                } else {
+                    is_overflow = true;
                 }
             }
             n += 1;
