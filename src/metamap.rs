@@ -28,25 +28,25 @@ pub enum GetKey<'a> {
     Str(&'a str),
 }
 pub trait GetIndex {
-    fn make_key(&self) -> GetKey;
+    fn make_key(&self) -> GetKey<'_>;
 }
 impl GetIndex for &str {
-    fn make_key(&self) -> GetKey {
+    fn make_key(&self) -> GetKey<'_> {
         GetKey::Str(self)
     }
 }
 impl GetIndex for i32 {
-    fn make_key(&self) -> GetKey {
+    fn make_key(&self) -> GetKey<'_> {
         GetKey::Int(*self)
     }
 }
 impl GetIndex for u32 {
-    fn make_key(&self) -> GetKey {
+    fn make_key(&self) -> GetKey<'_> {
         GetKey::Int(*self as i32)
     }
 }
 impl GetIndex for usize {
-    fn make_key(&self) -> GetKey {
+    fn make_key(&self) -> GetKey<'_> {
         GetKey::Int(*self as i32)
     }
 }
