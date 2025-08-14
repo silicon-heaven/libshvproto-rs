@@ -123,12 +123,10 @@ impl<'a, W> JsonWriter<'a, W>
         self.wrappers_stack.push(false);
     }
     fn add_wrap_tag(&mut self, tag: &str, val: Option<&str>) -> WriteResult {
-        if let Some(b) = self.wrappers_stack.last_mut() {
-            if !*b {
-                *b = true;
-                self.write_byte(b'[')?;
-            }
-        };
+        if let Some(b) = self.wrappers_stack.last_mut() && !*b {
+            *b = true;
+            self.write_byte(b'[')?;
+        }
         self.write_string(tag)?;
         self.write_byte(b',')?;
         if let Some(val) = val {
@@ -140,12 +138,10 @@ impl<'a, W> JsonWriter<'a, W>
     fn add_wrap_meta_tag(&mut self) -> WriteResult { self.add_wrap_tag(TAG_META, None) }
     fn add_wrap_type_tag(&mut self, type_str: &str) -> WriteResult { self.add_wrap_tag(TAG_TYPE, Some(type_str)) }
     fn pop_wrap_state(&mut self) -> WriteResult {
-        if let Some(b) = self.wrappers_stack.pop() {
-            if b {
-                return self.write_byte(b']')
-            }
+        match self.wrappers_stack.pop() {
+            Some(true) => self.write_byte(b']'),
+            _ => Ok(0),
         }
-        Ok(0)
     }
 }
 
@@ -239,18 +235,16 @@ impl<'a, R> JsonReader<'a, R>
     }
     fn retype_value(&self, m: Option<&RpcValue>, t: Option<&str>, v: &Value) -> Result<RpcValue, ReadError> {
         let meta = 'a: {
-            if let Some(rv) = m {
-                if let Value::Map(m) = &rv.value {
-                    let mut mm = MetaMap::default();
-                    for (k, v) in m.iter() {
-                        if let Ok(i) = k.parse::<i32>() {
-                            mm.insert(i, v.clone());
-                        } else {
-                            mm.insert(k.as_str(), v.clone());
-                        }
+            if let Some(rv) = m && let Value::Map(m) = &rv.value {
+                let mut mm = MetaMap::default();
+                for (k, v) in m.iter() {
+                    if let Ok(i) = k.parse::<i32>() {
+                        mm.insert(i, v.clone());
+                    } else {
+                        mm.insert(k.as_str(), v.clone());
                     }
-                    break 'a Some(mm)
                 }
+                break 'a Some(mm)
             }
             None
         };
