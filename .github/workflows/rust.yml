@@ -63,14 +63,8 @@ jobs:
     env:
       HASH_FOR_FILENAMES: ${{github.event.pull_request.head.sha || github.sha}}
     steps:
-      # Needed for action-create-tag
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - uses: rickstaa/action-create-tag@v1
-        with:
-          tag: "nightly"
-          force_push_tag: true
 
       - name: Consolidate artifacts
         uses: actions/download-artifact@v4
@@ -84,28 +78,12 @@ jobs:
           mv cp2cp "${CP2CP_FILE_NAME}"
           mv cp2cp.exe "${CP2CP_FILE_NAME}.exe"
 
-      - name: Remove previous Nightly assets
-        run: |
-          REPO='${{github.repository}}'
-          readarray -t PREVIOUS_ASSETS < <(gh release --repo "$REPO" view nightly --json assets --jq .assets[].name)
-          for PREVIOUS_ASSET in "${PREVIOUS_ASSETS[@]}"; do
-            gh release --repo "$REPO" delete-asset nightly "${PREVIOUS_ASSET}" --yes
-          done
+      - name: Create release
         env:
           GH_TOKEN: ${{secrets.GITHUB_TOKEN}}
-
-      - name: Release
-        uses: softprops/action-gh-release@v2
+        uses: silicon-heaven/rust-nightly-release-action@v1.0.0
         with:
-          name: Nightly
-          tag_name: nightly
-          fail_on_unmatched_files: true
-          body: |
-            The latest and greatest.
-
-            This is a nightly release. If you find any bugs, please report them to the repository's issue tracker.
-          files: |
-             cp2cp*
+          path_glob: cp2cp*
 
   coverage:
     name: Code coverage
