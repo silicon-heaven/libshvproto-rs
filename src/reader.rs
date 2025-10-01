@@ -26,7 +26,7 @@ impl std::error::Error for ReadError {}
 
 pub(crate) struct ByteReader<'a, R>
 {
-    pub read: &'a mut R,
+    read: &'a mut R,
     peeked: Option<u8> ,
     new_line_read: bool,
     pub pos: usize,
