@@ -520,8 +520,8 @@ where
     }
     fn read_double_data(&mut self) -> Result<Value, ReadError> {
         let mut buff: [u8; 8] = [0; 8];
-        if let Err(e) = self.byte_reader.read.read(&mut buff) {
-            return Err(self.make_error(&format!("{}", e), ReadErrorReason::InvalidCharacter));
+        for i in &mut buff {
+            *i = self.get_byte()?;
         }
         let d = f64::from_le_bytes(buff);
         Ok(Value::from(d))
