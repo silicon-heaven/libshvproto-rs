@@ -103,7 +103,7 @@ impl<'de, 'a> serde::Deserializer<'de> for ValueDeserializer<'a> {
     {
         match self.value {
             Value::UInt(u) => visitor.visit_u64(*u),
-            // Value::Int(i) if *i >= 0 => visitor.visit_u64(*i as u64),
+            Value::Int(i) if *i >= 0 => visitor.visit_u64(*i as u64),
             // Value::Double(f) if *f >= 0.0 => visitor.visit_u64(*f as u64),
             _ => Err(de::Error::custom("expected unsigned integer-compatible value")),
         }
@@ -137,8 +137,8 @@ impl<'de, 'a> serde::Deserializer<'de> for ValueDeserializer<'a> {
         match self.value {
             Value::Double(f) => visitor.visit_f64(*f),
             Value::Decimal(decimal) => visitor.visit_f64(decimal.to_f64()),
-            // Value::Int(i) => visitor.visit_f64(*i as f64),
-            // Value::UInt(u) => visitor.visit_f64(*u as f64),
+            Value::Int(i) => visitor.visit_f64(*i as f64),
+            Value::UInt(u) => visitor.visit_f64(*u as f64),
             _ => Err(de::Error::custom("expected float-compatible value")),
         }
     }
