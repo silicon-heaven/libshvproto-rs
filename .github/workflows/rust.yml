@@ -118,8 +118,8 @@ jobs:
       - name: Get version from Cargo.toml
         id: get-version
         run: |
-          version=$(grep '^version' Cargo.toml | head -n1 | sed 's/version\s*=\s*"\(.*\)"/\1/')
-          echo "version=$version" >> $GITHUB_OUTPUT
+          version="$(grep '^version' Cargo.toml | head -n1 | sed 's/version\s*=\s*"\(.*\)"/\1/')"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Create and push tag
         uses: rickstaa/action-create-tag@v1
