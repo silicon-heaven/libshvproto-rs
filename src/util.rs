@@ -16,6 +16,7 @@ pub fn parse_log_verbosity<'a>(verbosity: &'a str, module_path: &'a str) -> Vec<
                 Some(name)
             };
             let level = match level {
+                "O" => LevelFilter::Off,
                 "E" => LevelFilter::Error,
                 "W" => LevelFilter::Warn,
                 "I" => LevelFilter::Info,
@@ -95,6 +96,7 @@ mod tests {
             ("foo::bar=I", vec![(Some("foo::bar"), LevelFilter::Info)]),
             ("=W,foo", vec![(None, LevelFilter::Warn), (Some("foo"), LevelFilter::Debug)]),
             ("foo=I,bar=E", vec![(Some("foo"), LevelFilter::Info), (Some("bar"), LevelFilter::Error)]),
+            ("foo=O", vec![(Some("foo"), LevelFilter::Off)]),
         ];
         for (verbosity, expected_result) in data {
             let result = parse_log_verbosity(verbosity, current_module);
