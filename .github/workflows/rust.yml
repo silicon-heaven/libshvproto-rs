@@ -105,9 +105,11 @@ jobs:
         uses: silicon-heaven/rust-check-version-bump@v1.0.1
 
       - name: Checkout code
+        if: steps.version-check.outcome == 'failure'
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
+          ref: ${{github.head_ref}}
 
       - name: Bump version
         if: steps.version-check.outcome == 'failure'
