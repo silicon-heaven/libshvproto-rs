@@ -9,7 +9,7 @@ use std::io::{Read, Write};
 #[allow(clippy::upper_case_acronyms)]
 #[warn(non_camel_case_types)]
 #[allow(dead_code)]
-pub(crate) enum PackingSchema {
+pub enum PackingSchema {
     Null = 128,
     UInt,
     Int,
