@@ -40,7 +40,7 @@ impl DateTime {
     }
 
 #[cfg(feature = "serde")]
-    pub(crate) fn to_inner(&self) -> i64 {
+    pub(crate) fn to_inner(self) -> i64 {
         self.0
     }
 
