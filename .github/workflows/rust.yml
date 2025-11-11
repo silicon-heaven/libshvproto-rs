@@ -101,7 +101,7 @@ jobs:
     steps:
       - name: Check version bump
         id: version-check
-        continue-on-error: ${{startsWith(github.head_ref, 'dependabot/github_actions')}}
+        continue-on-error: ${{startsWith(github.head_ref, 'dependabot/')}}
         uses: silicon-heaven/rust-check-version-bump@v1.0.1
 
       - name: Checkout code
