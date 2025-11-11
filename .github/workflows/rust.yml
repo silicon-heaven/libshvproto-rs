@@ -120,6 +120,8 @@ jobs:
               cargo update
           fi
           git diff
+          git config --global user.name "Login will be determined by the Github API based on the creator of the token"
+          git config --global user.email ""
           git commit -am '[dependabot-skip] Bump version'
 
       - name: Push changes
