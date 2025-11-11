@@ -130,7 +130,7 @@ jobs:
         if: steps.version-check.outcome == 'failure'
         uses: Asana/push-signed-commits@v1
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.DEPENDABOT_GITHUB_TOKEN }}
           local_branch_name: ${{github.head_ref}}
           remote_branch_name: ${{github.head_ref}}
 
