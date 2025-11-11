@@ -120,14 +120,15 @@ jobs:
               cargo update
           fi
           git diff
+          git commit -am '[dependabot-skip] Bump version'
 
-      - name: Commit & Push changes
+      - name: Push changes
         if: steps.version-check.outcome == 'failure'
-        uses: actions-js/push@v1.5
+        uses: Asana/push-signed-commits@v1
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          message: '[dependabot-skip] Bump version'
-          branch: ${{github.head_ref}}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          local_branch_name: ${{github.head_ref}}
+          remote_branch_name: ${{github.head_ref}}
 
   tag-release:
     name: Tag Release
