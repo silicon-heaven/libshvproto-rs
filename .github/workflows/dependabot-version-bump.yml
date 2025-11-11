@@ -1,0 +1,39 @@
+name: Dependabot
+on:
+  push:
+    branches:
+      - dependabot/github_actions/**
+jobs:
+  dependabot-version-bump:
+    name: Bump version
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Check version bump
+        id: version-check
+        continue-on-error: true
+        uses: silicon-heaven/rust-check-version-bump@v1.0.1
+
+      - name: Bump version
+        if: steps.version-check.outcome == 'failure'
+        run: |
+          [[ "$(grep '^version' Cargo.toml | head -n1)" =~ ([0-9]+\.[0-9]+\.)([0-9]+) ]]
+          NEW_VERSION="${BASH_REMATCH[1]}$((BASH_REMATCH[2] + 1))"
+          echo Bumping "${BASH_REMATCH[0]} -> $NEW_VERSION"
+          sed -i "s/${BASH_REMATCH[0]}/$NEW_VERSION/" Cargo.toml
+          if [[ -f Cargo.lock ]]; then
+              cargo update
+          fi
+          git diff
+
+      - name: Commit & Push changes
+        if: steps.version-check.outcome == 'failure'
+        uses: actions-js/push@master
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          message: '[dependabot-skip] Bump version'
+
