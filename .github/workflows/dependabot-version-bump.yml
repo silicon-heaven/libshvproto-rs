@@ -32,8 +32,9 @@ jobs:
 
       - name: Commit & Push changes
         if: steps.version-check.outcome == 'failure'
-        uses: actions-js/push@master
+        uses: actions-js/push@v1.5
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           message: '[dependabot-skip] Bump version'
+          branch: ${{github.ref_name}}
 
