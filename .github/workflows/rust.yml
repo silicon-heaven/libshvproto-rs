@@ -100,7 +100,34 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check version bump
+        id: version-check
+        continue-on-error: ${{startsWith(github.head_ref, 'dependabot/github_actions')}}
         uses: silicon-heaven/rust-check-version-bump@v1.0.1
+
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Bump version
+        if: steps.version-check.outcome == 'failure'
+        run: |
+          [[ "$(grep '^version' Cargo.toml | head -n1)" =~ ([0-9]+\.[0-9]+\.)([0-9]+) ]]
+          NEW_VERSION="${BASH_REMATCH[1]}$((BASH_REMATCH[2] + 1))"
+          echo Bumping "${BASH_REMATCH[0]} -> $NEW_VERSION"
+          sed -i "s/${BASH_REMATCH[0]}/$NEW_VERSION/" Cargo.toml
+          if [[ -f Cargo.lock ]]; then
+              cargo update
+          fi
+          git diff
+
+      - name: Commit & Push changes
+        if: steps.version-check.outcome == 'failure'
+        uses: actions-js/push@v1.5
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          message: '[dependabot-skip] Bump version'
+          branch: ${{github.head_ref}}
 
   tag-release:
     name: Tag Release
