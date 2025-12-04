@@ -11,22 +11,38 @@ use std::path::PathBuf;
 use std::{fs, io, process};
 
 #[derive(Parser, Debug)]
-#[structopt(name = "cp2cp", version = env!("CARGO_PKG_VERSION"), author = env!("CARGO_PKG_AUTHORS"), about = "ChainPack to Cpon and back utility")]
+#[structopt(name = "cp2cp"
+    , version = env!("CARGO_PKG_VERSION")
+    , author = env!("CARGO_PKG_AUTHORS")
+    , about = "ChainPack to Cpon converter")
+]
 struct Cli {
-    #[arg(short, long, help = "Cpon indentation string")]
+    #[arg(short = 't', long, help = "Cpon indentation string")]
     indent: Option<String>,
+
     #[arg(short, long, help = "Do not create oneliners in Cpon indented string output")]
     no_oneliners: bool,
-    #[arg(long = "ip", help = "Cpon input")]
-    cpon_input: bool,
-    #[arg(long = "oc", help = "ChainPack output")]
-    chainpack_output: bool,
+
+    /// Input format, supported values: 'n', 'cpon' for Cpon or 'k', 'chainpack' for ChainPack, default is 'chainpack'
+    #[arg(short, long)]
+    input: Option<String>,
+
+    /// Input format, supported values: 'n', 'cpon' for Cpon or 'k', 'chainpack' for ChainPack, default is 'cpon'
+    #[arg(short, long)]
+    output: Option<String>,
+
+    /// Convert from Cpon to ChainPack, overrides 'input' and 'output' option
+    #[arg(long = "oc")]
+    cpon_to_chainpack: bool,
+
     /// Expect input data in RPC block transport format, https://silicon-heaven.github.io/shv-doc/rpctransportlayer/stream.html
     #[arg(long)]
     chainpack_rpc_block: bool,
+
     /// Verbose mode (module, .)
     #[arg(short = 'v', long = "verbose")]
     verbose: Option<String>,
+
     /// File to process
     #[arg(value_name = "FILE")]
     file: Option<PathBuf>,
@@ -126,10 +142,13 @@ fn main() {
     }
     logger.init().unwrap();
 
+    const CHAINPACK: &str = "chainpack";
+    const CPON: &str = "cpon";
+
     if opts.chainpack_rpc_block {
         opts.indent = None;
-        opts.chainpack_output = false;
-        opts.cpon_input = false;
+        opts.input = Some(CHAINPACK.into());
+        opts.output = Some(CPON.into());
     }
 
     let mut reader: Box<dyn BufRead> = match opts.file {
@@ -137,7 +156,30 @@ fn main() {
         Some(filename) => Box::new(BufReader::new(fs::File::open(filename).unwrap())),
     };
 
-    let res = if opts.cpon_input {
+    let (cpon_input, chainpack_output) = if opts.cpon_to_chainpack {
+        (true, true)
+    } else {
+        let input = opts.input.unwrap_or(CHAINPACK.into());
+        let cpon_input = match input.as_str() {
+            CPON => true,
+            "p" => true,
+            "n" => true,
+            "cpn" => true,
+            _ => false,
+        };
+
+        let output = opts.output.unwrap_or(CPON.into());
+        let chainpack_output = match output.as_str() {
+            CHAINPACK => true,
+            "c" => true,
+            "k" => true,
+            "cpk" => true,
+            _ => false,
+        };
+        (cpon_input, chainpack_output)
+    };
+
+    let res = if cpon_input {
         let mut rd = CponReader::new(&mut reader);
         rd.read()
     } else if opts.chainpack_rpc_block {
@@ -154,7 +196,7 @@ fn main() {
         Ok(rv) => rv,
     };
     let mut writer = BufWriter::new(stdout());
-    let res = if opts.chainpack_output {
+    let res = if chainpack_output {
         let mut wr = ChainPackWriter::new(&mut writer);
         wr.write(&rv)
     } else {
