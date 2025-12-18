@@ -2,11 +2,14 @@ workspace = { members = ["libshvproto-macros"] }
 
 [package]
 name = "shvproto"
-version = "3.6.27"
+description = "Rust implementation of the SHV protocol"
+license = "MIT"
+repository = "https://github.com/silicon-heaven/libshvproto-rs"
+version = "3.6.28"
 edition = "2024"
 
 [dependencies]
-libshvproto-macros = { path = "./libshvproto-macros" }
+libshvproto-macros = { path = "./libshvproto-macros", version = "0.2.1" }
 log = "0.4"
 chrono = "0.4"
 hex = "0.4"
