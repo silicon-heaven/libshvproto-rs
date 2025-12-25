@@ -6,6 +6,7 @@ use crate::rpcvalue::Value;
 pub enum ReadErrorReason {
     UnexpectedEndOfStream,
     InvalidCharacter,
+    NotEnoughPrecision,
 }
 #[derive(Debug)]
 pub struct ReadError {
