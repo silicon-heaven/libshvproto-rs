@@ -169,4 +169,8 @@ jobs:
 
       - run: |
           cargo login <<< "${{secrets.CRATES_IO_TOKEN}}"
-          cargo publish --workspace
+          if ! PUBLISH_OUTPUT="$(cargo publish --workspace 2>&1)"; then
+            if ! [[ "$PUBLISH_OUTPUT" =~ already\ exists\ on\ crates.io\ index ]]; then
+              exit 1
+            fi
+          fi
