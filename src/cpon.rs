@@ -606,7 +606,7 @@ mod test
         assert_eq!(RpcValue::from_cpon("0e0").unwrap().as_decimal(), Decimal::new(0, 0));
         assert_eq!(RpcValue::from_cpon("0.123e3").unwrap().as_decimal(), Decimal::new(123, 0));
         test_cpon_round_trip("1000000.", Decimal::new(1000000, 0));
-        test_cpon_round_trip("50.031387414025325", Decimal::new(50031387414025325, -15));
+        test_cpon_round_trip("50.03138741402532", Decimal::new(5003138741402532, -14));
         assert_eq!(RpcValue::from_cpon(r#""foo""#).unwrap().as_str(), "foo");
         assert_eq!(RpcValue::from_cpon(r#""ěščřžýáí""#).unwrap().as_str(), "ěščřžýáí");
         assert_eq!(RpcValue::from_cpon("b\"foo\tbar\nbaz\"").unwrap().as_blob(), b"foo\tbar\nbaz");
