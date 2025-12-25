@@ -3,25 +3,29 @@
 /// mantisa: 56, exponent: 8;
 /// I'm storing whole Decimal in one i64 to keep size_of RpcValue == 24
 #[derive(Debug, Copy, Clone, PartialEq)]
-pub struct Decimal {
-    mantissa: i64,
-    exponent: i8,
-}
+pub struct Decimal(i64);
 
 impl Decimal {
 
     pub fn new(mantissa: i64, exponent: i8) -> Decimal {
-        Decimal{ mantissa, exponent }
+        let mut n = mantissa << 8;
+        n |= (exponent as i64) & 0xff;
+        Decimal(n)
+    }
+    pub fn decode(&self) -> (i64, i8) {
+        let m = self.0 >> 8;
+        let e = self.0 as i8;
+        (m, e)
     }
     pub fn mantissa(&self) -> i64 {
-        self.mantissa
+        self.decode().0
     }
     pub fn exponent(&self) -> i8 {
-        self.exponent
+        self.decode().1
     }
     pub fn to_cpon_string(&self) -> String {
         let mut neg = false;
-        let (mut mantissa, exponent) = (self.mantissa, self.exponent);
+        let (mut mantissa, exponent) = self.decode();
         if mantissa < 0 {
             mantissa = -mantissa;
             neg = true;
@@ -63,16 +67,18 @@ impl Decimal {
         s
     }
     pub fn to_f64(&self) -> f64 {
-        let mut d = self.mantissa as f64;
+        let decoded = self.decode();
+        let mut d = decoded.0 as f64;
+        let exp = decoded.1;
         // We probably don't want to call .cmp() because of performance loss
         #[allow(clippy::comparison_chain)]
-        if self.exponent < 0 {
-            for _ in self.exponent .. 0 {
+        if exp < 0 {
+            for _ in exp .. 0 {
                 d /= 10.;
             }
         }
-        else if self.exponent > 0 {
-            for _ in 0 .. self.exponent {
+        else if exp > 0 {
+            for _ in 0 .. exp {
                 d *= 10.;
             }
         }
