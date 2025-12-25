@@ -94,7 +94,7 @@ pub trait TextReader : Reader {
         for c in token.as_bytes() {
             let b = self.get_byte()?;
             if b != *c {
-                return Err(self.make_error(&format!("Incomplete '{}' literal.", token), ReadErrorReason::InvalidCharacter))
+                return Err(self.make_error(&format!("Expected '{}'.", token), ReadErrorReason::InvalidCharacter))
             }
         }
         Ok(())
