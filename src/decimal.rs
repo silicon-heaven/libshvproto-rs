@@ -188,10 +188,13 @@ mod tests {
 
     #[test]
     fn decimal_normalization_preserves_value() {
-        let d = Decimal::new(1200, -3);
-        let n = Decimal::normalize(&d);
-        let diff = (d.to_f64() - n.to_f64()).abs();
-        assert!(diff < 1e-12);
+        // This also tests conversion to f64 with a positive/negative/zero exponent.
+        for exp in [-3, 0, 3] {
+            let d = Decimal::new(1200, exp);
+            let n = Decimal::normalize(&d);
+            let diff = (d.to_f64() - n.to_f64()).abs();
+            assert!(diff < 1e-12);
+        }
     }
 
     #[test]
@@ -237,8 +240,8 @@ mod tests {
         let zero2 = Decimal::new(0, 5);
 
         assert_eq!(zero1, zero2);
-        assert!(!(zero1 < zero2));
-        assert!(!(zero1 > zero2));
+        assert!((zero1 >= zero2));
+        assert!((zero1 <= zero2));
         assert!(zero1 <= zero2);
         assert!(zero1 >= zero2);
     }
@@ -252,5 +255,45 @@ mod tests {
         assert_eq!(big1, big2);
         assert!(big1 < big3);
         assert!(big3 > big2);
+    }
+
+    #[test]
+    fn decimal_comparison_fallback_to_double_due_to_pow10_overflow() {
+        // exponent difference so large that pow10(diff) must fail
+        let a = Decimal::new(1, 0);
+        let b = Decimal::new(1, 127);
+
+        // numeric values: a = 1, b = 1e400
+        assert!(a < b);
+        assert!(b > a);
+    }
+
+    #[test]
+    fn decimal_comparison_fallback_to_double_due_to_mantissa_overflow() {
+        // pow10(diff) fits, but mantissa * pow10(diff) overflows i64
+        let a = Decimal::new(i64::MAX / 18, 6);
+        let b = Decimal::new(1, 1);
+
+        // scaling `a` by 10 would overflow, forcing double fallback
+        assert!(a > b);
+        assert!(b < a);
+    }
+
+    #[test]
+    fn decimal_comparison_fallback_negative_values() {
+        let a = Decimal::new(-1, 127);
+        let b = Decimal::new(-1, 126);
+
+        assert!(a < b);
+        assert!(b > a);
+    }
+
+    #[test]
+    fn decimal_comparison_fallback_zero_vs_huge() {
+        let zero = Decimal::new(0, 0);
+        let huge = Decimal::new(1, 127);
+
+        assert!(zero < huge);
+        assert!(huge > zero);
     }
 }

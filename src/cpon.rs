@@ -592,6 +592,7 @@ mod test
         }
         test_cpon_round_trip("null", RpcValue::null());
         test_cpon_round_trip("false", false);
+        assert!(RpcValue::from_cpon("faldwa").is_err());
         test_cpon_round_trip("true", true);
         assert_eq!(RpcValue::from_cpon("0").unwrap().as_i32(), 0);
         assert_eq!(RpcValue::from_cpon("123").unwrap().as_i32(), 123);
@@ -602,7 +603,9 @@ mod test
         assert_eq!(RpcValue::from_cpon("-0x1000").unwrap().as_i32(), -4096);
         test_cpon_round_trip("123.4", Decimal::new(1234, -1));
         test_cpon_round_trip("0.123", Decimal::new(123, -3));
-        assert_eq!(RpcValue::from_cpon("-0.123").unwrap().as_decimal(), Decimal::new(-123, -3));
+        test_cpon_round_trip("-0.123", Decimal::new(-123, -3));
+        test_cpon_round_trip("123000000e2", Decimal::new(123000000, 2));
+        assert_eq!(Decimal::new(10000, 3).to_cpon_string(), "10000000.");
         assert_eq!(RpcValue::from_cpon("0e0").unwrap().as_decimal(), Decimal::new(0, 0));
         assert_eq!(RpcValue::from_cpon("0.123e3").unwrap().as_decimal(), Decimal::new(123, 0));
         test_cpon_round_trip("1000000.", Decimal::new(1000000, 0));
