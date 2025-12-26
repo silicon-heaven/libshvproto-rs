@@ -1,4 +1,11 @@
 use clap::Parser;
+use jaq_all::data::{Runner};
+use jaq_all::jaq_core::data::HasLut;
+use jaq_all::jaq_core::{self, DataT, Lut, Vars};
+use jaq_all::jaq_std::input::{self, Inputs, RcIter};
+use jaq_all::jaq_std;
+use shvproto::RpcValue;
+use std::io;
 use log::LevelFilter;
 use shvproto::reader::ReadErrorReason;
 use shvproto::Reader;
@@ -8,7 +15,7 @@ use simple_logger::SimpleLogger;
 use std::fmt::Display;
 use std::io::{stdout, BufRead, BufReader, BufWriter};
 use std::path::PathBuf;
-use std::{fs, io, process};
+use std::{fs, process};
 
 #[derive(Parser, Debug)]
 #[structopt(name = "cp2cp", version = env!("CARGO_PKG_VERSION"), author = env!("CARGO_PKG_AUTHORS"), about = "ChainPack to Cpon and back utility")]
@@ -30,13 +37,77 @@ struct Cli {
     /// File to process
     #[arg(value_name = "FILE")]
     file: Option<PathBuf>,
+    /// Run cq with this filter.
+    #[arg(long = "cq")]
+    cq_filter: Option<String>,
+}
+
+
+
+/// Filter for given kind of data.
+pub type Filter = jaq_core::Filter<RpcValueDataKind>;
+
+/// Execution context for given kind of data.
+pub type MyCtx<'a> = jaq_core::Ctx<'a, RpcValueDataKind>;
+
+/// Kind of data.
+pub struct RpcValueDataKind;
+
+impl DataT for RpcValueDataKind {
+    type V<'a> = RpcValue;
+    type Data<'a> = &'a RpcValueData<'a>;
+}
+
+/// The actual data.
+pub struct RpcValueData<'a> {
+    /// run options
+    pub runner: &'a Runner,
+    /// look-up table
+    pub lut: &'a Lut<RpcValueDataKind>,
+    /// input values
+    pub inputs: Inputs<'a, RpcValue>,
+}
+
+impl<'a> HasLut<'a, RpcValueDataKind> for &'a RpcValueData<'a> {
+    fn lut(&self) -> &'a Lut<RpcValueDataKind> {
+        self.lut
+    }
+}
+
+impl<'a> input::HasInputs<'a, RpcValue> for &'a RpcValueData<'a> {
+    fn inputs(&self) -> Inputs<'a, RpcValue> {
+        self.inputs
+    }
+}
+
+/// Run options.
+#[derive(Default)]
+pub struct RpcValueRunner {
+    /// pass `null` as input
+    pub null_input: bool,
+    /// use colors in error messages
+    pub color_err: bool,
+}
+
+impl RpcValueRunner {
+    /// Use colors on standard output?
+    pub fn color_stdout(&self) -> bool {
+        false
+    }
+}
+
+type Fun<D> = jaq_std::Filter<jaq_core::Native<D>>;
+pub fn base_funs() -> impl Iterator<Item = Fun<RpcValueDataKind>> {
+    let run = jaq_std::run::<RpcValueDataKind>;
+    let std = jaq_std::funs::<RpcValueDataKind>();
+    let input = input::funs::<RpcValueDataKind>().into_vec().into_iter().map(run);
+    std.chain(input)
 }
 
 const CODE_SUCCESS: i32 = 0;
 const CODE_READ_ERROR: i32 = 1;
 const CODE_NOT_ENOUGH_DATA: i32 = 2;
 const CODE_WRITE_ERROR: i32 = 4;
-
 struct ChainPackRpcBlockResult {
     block_length: Option<usize>,
     frame_length: Option<u64>,
@@ -54,6 +125,7 @@ fn exit_with_result_and_code(result: &ChainPackRpcBlockResult, error: Option<Rea
     let exit_code = if let Some(error) = &error {
         match error {
             ReadErrorReason::UnexpectedEndOfStream => CODE_NOT_ENOUGH_DATA,
+            ReadErrorReason::NotEnoughPrecision => CODE_READ_ERROR,
             ReadErrorReason::InvalidCharacter => {
                 eprintln!("Parse input error: {:?}", error);
                 CODE_READ_ERROR
@@ -153,6 +225,35 @@ fn main() {
         }
         Ok(rv) => rv,
     };
+    if let Some(filter) = opts.cq_filter {
+        let vars: Vars<RpcValue> = Default::default();
+        let filter = match jaq_all::compile_with(&filter, jaq_std::defs(), base_funs(), &[]) {
+            Ok(filter) => filter,
+            Err(error) => {
+                eprintln!("Failed to parse cq filter: {error:?}");
+                process::exit(CODE_READ_ERROR);
+            },
+        };
+
+        let runner = Default::default();
+        let inputs = [Ok(rv.clone())].into_iter();
+        let inputs = Box::new(inputs);
+
+        let data = RpcValueData {
+            runner: &runner,
+            lut: &filter.lut,
+            inputs: &RcIter::new(inputs),
+        };
+        let ctx = MyCtx::new(&data, vars);
+        let outputs = filter.id.run((ctx, rv));
+        for output in outputs {
+            match output {
+                Ok(rv) => println!("{}", rv.to_cpon_indented("  ")),
+                Err(_) => todo!(),
+            }
+        }
+        process::exit(CODE_SUCCESS);
+    }
     let mut writer = BufWriter::new(stdout());
     let res = if opts.chainpack_output {
         let mut wr = ChainPackWriter::new(&mut writer);

@@ -567,8 +567,8 @@ mod test
         assert_eq!(RpcValue::from_json("-0x8000000000000000").unwrap().as_int(), i64::MIN);
         assert_eq!(RpcValue::from_json("-0x8000000000000001").unwrap().as_int(), i64::MIN);
 
-        assert_eq!(RpcValue::from_json("1.23456789012345678901234567890123456789012345678901234567890").unwrap().as_decimal(), Decimal::new(1234567890123456789, -18));
-        assert_eq!(RpcValue::from_json("12345678901234567890123456789012345678901234567890123456.7890").unwrap().as_decimal(), Decimal::new(i64::MAX, 0));
-        assert_eq!(RpcValue::from_json("123456789012345678901234567890123456789012345678901234567890.").unwrap().as_decimal(), Decimal::new(i64::MAX, 0));
+        assert!(RpcValue::from_json("1.23456789012345678901234567890123456789012345678901234567890").is_err());
+        assert!(RpcValue::from_json("12345678901234567890123456789012345678901234567890123456.7890").is_err());
+        assert!(RpcValue::from_json("123456789012345678901234567890123456789012345678901234567890.").is_err());
     }
 }

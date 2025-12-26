@@ -2,6 +2,7 @@
 
 pub mod chainpack;
 pub mod cpon;
+pub mod jaq;
 pub mod json;
 pub mod datetime;
 pub mod decimal;
