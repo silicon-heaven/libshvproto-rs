@@ -3,7 +3,6 @@
 #[derive(Debug, Copy, Clone)]
 pub struct Decimal(i64);
 
-
 impl Decimal {
 
     pub fn new(mantissa: i64, exponent: i8) -> Decimal {
@@ -43,7 +42,6 @@ impl Decimal {
             mantissa = -mantissa;
             neg = true;
         }
-        //let buff: Vec<u8> = Vec::new();
         let mut s = mantissa.to_string();
 
         let n = s.len() as i8;
@@ -256,4 +254,3 @@ mod tests {
         assert!(big3 > big2);
     }
 }
-
