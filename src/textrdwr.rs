@@ -94,7 +94,7 @@ pub trait TextReader : Reader {
         for c in token.as_bytes() {
             let b = self.get_byte()?;
             if b != *c {
-                return Err(self.make_error(&format!("Incomplete '{}' literal.", token), ReadErrorReason::InvalidCharacter))
+                return Err(self.make_error(&format!("Expected '{}'.", token), ReadErrorReason::InvalidCharacter))
             }
         }
         Ok(())
@@ -234,6 +234,9 @@ pub trait TextReader : Reader {
                     let ReadInt { value, digit_cnt, is_overflow, .. } = self.read_int(mantissa, true)?;
                     decimal_overflow = decimal_overflow || is_overflow;
                     mantissa = value;
+                    if mantissa >= 36028797018963968 {
+                        decimal_overflow = true;
+                    }
                     dec_cnt = digit_cnt as i64;
                 }
                 b'e' | b'E' => {
@@ -257,8 +260,8 @@ pub trait TextReader : Reader {
         }
         let mantissa = if is_negative { -mantissa } else { mantissa };
         if is_decimal {
-            if decimal_overflow && dec_cnt == 0 {
-                return Ok(Value::from(Decimal::new(if is_negative {i64::MIN} else {i64::MAX}, 0)))
+            if decimal_overflow {
+                return Err(self.make_error("Not enough precision to read the Decimal", ReadErrorReason::InvalidCharacter))
             }
             return Ok(Value::from(Decimal::new(mantissa, (exponent - dec_cnt) as i8)))
         }
