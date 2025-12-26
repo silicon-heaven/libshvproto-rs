@@ -40,12 +40,14 @@ jobs:
         target: ${{ matrix.target }}
         toolchain: ${{ matrix.toolchain }}
         override: true
+        components: clippy
 
     - name: Build and Install Binary
       run: |
         mkdir -p ${{github.workspace}}/install
         # FIXME: Remove when this thing makes it into stable
         export RUSTFLAGS="-A mismatched_lifetime_syntaxes"
+        cargo clippy --all-targets --all-features
         cargo install --path '${{github.workspace}}' --root '${{github.workspace}}/install' --target ${{ matrix.target }} --features cp2cp --locked
       shell: bash
 
