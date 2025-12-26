@@ -45,7 +45,6 @@ jobs:
     - name: Build and Install Binary
       run: |
         mkdir -p ${{github.workspace}}/install
-        # FIXME: Remove when this thing makes it into stable
         export RUSTFLAGS="-A mismatched_lifetime_syntaxes"
         FEATURES="cp2cp,serde"
         if rustup default | grep nightly; then
