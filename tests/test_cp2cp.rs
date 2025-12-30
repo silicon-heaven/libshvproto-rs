@@ -80,4 +80,35 @@ mod test {
         assert_eq!(exit_code, 1);
         Ok(())
     }
+
+    mod cq {
+        use super::*;
+
+        fn run_cq(data: &RpcValue, filter: &str) -> Result<RpcValue, String> {
+            let block = data.to_chainpack();
+            let mut cmd = Command::new(cargo_bin!("cp2cp"));
+            cmd.stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .arg("--oc")
+                .arg("--cq").arg(filter);
+            let mut child = cmd.spawn().map_err(|e| e.to_string())?;
+            let mut stdin = child.stdin.take().expect("cp2cp should be running");
+            thread::spawn(move || {
+                stdin.write_all(&block).expect("Failed to write to stdin");
+            });
+            child.wait_with_output().map_err(|err| err.to_string()).and_then(|output| {
+                RpcValue::from_chainpack(output.stdout).map_err(|err| err.to_string())
+            })
+        }
+
+        #[test]
+        fn dot_filter() -> Result<(), String> {
+            // <T:RpcMessage,id:4,method:"ls">i{}
+            let input = RpcValue::from_cpon(r#"{"foo": true}"#).unwrap();
+            let output = run_cq(&input, ".")?;
+            assert_eq!(input, output);
+            Ok(())
+        }
+    }
 }
