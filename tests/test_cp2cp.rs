@@ -80,4 +80,55 @@ mod test {
         assert_eq!(exit_code, 1);
         Ok(())
     }
+
+    #[cfg(feature = "cq")]
+    mod cq {
+        use super::*;
+
+        fn run_cq(data: &RpcValue, filter: &str) -> Result<RpcValue, String> {
+            let block = data.to_chainpack();
+            let mut cmd = Command::new(cargo_bin!("cp2cp"));
+            cmd.stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .arg("--oc")
+                .arg("--cq").arg(filter);
+            let mut child = cmd.spawn().map_err(|e| e.to_string())?;
+            let mut stdin = child.stdin.take().expect("cp2cp should be running");
+            thread::spawn(move || {
+                stdin.write_all(&block).expect("Failed to write to stdin");
+            });
+            child.wait_with_output().map_err(|err| err.to_string()).and_then(|output| {
+                RpcValue::from_chainpack(output.stdout).map_err(|err| err.to_string())
+            })
+        }
+
+        #[test]
+        fn dot_filter() -> Result<(), String> {
+            let input = RpcValue::from_cpon(r#"{"foo": true}"#).unwrap();
+            let output = run_cq(&input, ".")?;
+            assert_eq!(input, output);
+            Ok(())
+        }
+
+        #[test]
+        fn key_lookup() -> Result<(), String> {
+            for (input, filter, expected_output) in [
+                (r#"null"#, ".[0]", r#"null"#),
+                (r#"null"#, ".foo", r#"null"#),
+                (r#"{"foo": true}"#, ".foo", "true"),
+                (r#""some_string""#, ".[0]", r#""s""#),
+                (r#""some_string""#, ".[1]", r#""o""#),
+                (r#"["first_elem", "second_elem"]"#, ".[0]", r#""first_elem""#),
+                (r#"["first_elem", "second_elem"]"#, ".[1]", r#""second_elem""#),
+                // (r#"i{1: "one", 2: "two"}"#, ".asd", "\"two\"")
+            ] {
+                let input = RpcValue::from_cpon(input).expect("valid cpon expected");
+                let expected_output = RpcValue::from_cpon(expected_output).expect("valid cpon expected");
+                let output = run_cq(&input, filter)?;
+                assert_eq!(output, expected_output);
+            }
+            Ok(())
+        }
+    }
 }
