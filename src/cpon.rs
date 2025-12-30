@@ -592,6 +592,7 @@ mod test
         }
         test_cpon_round_trip("null", RpcValue::null());
         test_cpon_round_trip("false", false);
+        assert!(RpcValue::from_cpon("faldwa").is_err());
         test_cpon_round_trip("true", true);
         assert_eq!(RpcValue::from_cpon("0").unwrap().as_i32(), 0);
         assert_eq!(RpcValue::from_cpon("123").unwrap().as_i32(), 123);
@@ -602,11 +603,15 @@ mod test
         assert_eq!(RpcValue::from_cpon("-0x1000").unwrap().as_i32(), -4096);
         test_cpon_round_trip("123.4", Decimal::new(1234, -1));
         test_cpon_round_trip("0.123", Decimal::new(123, -3));
-        assert_eq!(RpcValue::from_cpon("-0.123").unwrap().as_decimal(), Decimal::new(-123, -3));
+        test_cpon_round_trip("-0.123", Decimal::new(-123, -3));
+        test_cpon_round_trip("123000000e2", Decimal::new(123000000, 2));
+        assert_eq!(Decimal::new(10000, 3).to_cpon_string(), "10000000.");
         assert_eq!(RpcValue::from_cpon("0e0").unwrap().as_decimal(), Decimal::new(0, 0));
         assert_eq!(RpcValue::from_cpon("0.123e3").unwrap().as_decimal(), Decimal::new(123, 0));
         test_cpon_round_trip("1000000.", Decimal::new(1000000, 0));
         test_cpon_round_trip("50.03138741402532", Decimal::new(5003138741402532, -14));
+        // We do not support such high precision.
+        assert!(RpcValue::from_cpon("36.028797018963968").is_err());
         assert_eq!(RpcValue::from_cpon(r#""foo""#).unwrap().as_str(), "foo");
         assert_eq!(RpcValue::from_cpon(r#""ěščřžýáí""#).unwrap().as_str(), "ěščřžýáí");
         assert_eq!(RpcValue::from_cpon("b\"foo\tbar\nbaz\"").unwrap().as_blob(), b"foo\tbar\nbaz");
@@ -709,8 +714,8 @@ mod test
         assert_eq!(RpcValue::from_cpon("-0x8000000000000000").unwrap().as_int(), i64::MIN);
         assert_eq!(RpcValue::from_cpon("-0x8000000000000001").unwrap().as_int(), i64::MIN);
 
-        assert_eq!(RpcValue::from_cpon("1.23456789012345678901234567890123456789012345678901234567890").unwrap().as_decimal(), Decimal::new(1234567890123456789, -18));
-        assert_eq!(RpcValue::from_cpon("12345678901234567890123456789012345678901234567890123456.7890").unwrap().as_decimal(), Decimal::new(i64::MAX, 0));
-        assert_eq!(RpcValue::from_cpon("123456789012345678901234567890123456789012345678901234567890.").unwrap().as_decimal(), Decimal::new(i64::MAX, 0));
+        assert!(RpcValue::from_cpon("1.23456789012345678901234567890123456789012345678901234567890").is_err());
+        assert!(RpcValue::from_cpon("12345678901234567890123456789012345678901234567890123456.7890").is_err());
+        assert!(RpcValue::from_cpon("123456789012345678901234567890123456789012345678901234567890.").is_err());
     }
 }

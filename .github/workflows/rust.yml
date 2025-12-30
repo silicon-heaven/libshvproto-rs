@@ -20,6 +20,7 @@ permissions:
 jobs:
   build:
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
         toolchain: [stable, nightly]
@@ -40,13 +41,18 @@ jobs:
         target: ${{ matrix.target }}
         toolchain: ${{ matrix.toolchain }}
         override: true
+        components: clippy
 
     - name: Build and Install Binary
       run: |
         mkdir -p ${{github.workspace}}/install
-        # FIXME: Remove when this thing makes it into stable
         export RUSTFLAGS="-A mismatched_lifetime_syntaxes"
-        cargo install --path '${{github.workspace}}' --root '${{github.workspace}}/install' --target ${{ matrix.target }} --features cp2cp --locked
+        FEATURES="cp2cp,serde"
+        if rustup default | grep nightly; then
+          FEATURES+=",specialization"
+        fi
+        cargo clippy --all-targets --features "${FEATURES}"
+        cargo install --path '${{github.workspace}}' --root '${{github.workspace}}/install' --target ${{ matrix.target }} --features "${FEATURES}" --locked
       shell: bash
 
     - name: Upload Artifact
@@ -93,7 +99,7 @@ jobs:
         uses: silicon-heaven/rust-pycobertura-action@v4.0.1
         with:
           project_name: libshvproto
-          cargo_test_arguments: --features cp2cp
+          cargo_test_arguments: --features cp2cp,serde
 
   check-version-bump:
     name: Check version bump
@@ -170,7 +176,11 @@ jobs:
       - run: |
           cargo login <<< "${{secrets.CRATES_IO_TOKEN}}"
           if ! PUBLISH_OUTPUT="$(cargo publish --workspace 2>&1)"; then
+            echo "$PUBLISH_OUTPUT"
             if ! [[ "$PUBLISH_OUTPUT" =~ already\ exists\ on\ crates.io\ index ]]; then
               exit 1
             fi
+            echo Some crates were already published.
+          else
+            echo "$PUBLISH_OUTPUT"
           fi
