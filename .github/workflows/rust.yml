@@ -47,7 +47,7 @@ jobs:
       run: |
         mkdir -p ${{github.workspace}}/install
         export RUSTFLAGS="-A mismatched_lifetime_syntaxes"
-        FEATURES="cp2cp,serde"
+        FEATURES="cq,cp2cp,serde"
         if rustup default | grep nightly; then
           FEATURES+=",specialization"
         fi
@@ -99,7 +99,7 @@ jobs:
         uses: silicon-heaven/rust-pycobertura-action@v4.0.1
         with:
           project_name: libshvproto
-          cargo_test_arguments: --features cp2cp,serde
+          cargo_test_arguments: --features cq,cp2cp,serde
 
   check-version-bump:
     name: Check version bump

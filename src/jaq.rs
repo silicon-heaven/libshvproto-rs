@@ -1,0 +1,278 @@
+use std::{cmp::Ordering, collections::BTreeMap, ops::{Add, Div, Mul, Neg, Rem, Sub}};
+
+use jaq_all::jaq_core::{Error, ops};
+
+use crate::{RpcValue, Value};
+
+pub type ValR = jaq_all::jaq_core::ValR<RpcValue>;
+pub type ValX = jaq_all::jaq_core::ValX<RpcValue>;
+impl Neg for RpcValue {
+    type Output = ValR;
+    fn neg(self) -> Self::Output {
+        match &self.value {
+            Value::Int(num) => Ok((-num).into()),
+            _ => Err(jaq_all::jaq_core::Error::typ(self, "")),
+        }
+    }
+}
+
+impl Add for RpcValue {
+    type Output = ValR;
+    fn add(self, rhs: Self) -> Self::Output {
+        match (&self.value, &rhs.value) {
+            (Value::Int(x), Value::Int(y)) => Ok((x + y).into()),
+            (Value::UInt(x), Value::UInt(y)) => Ok((x + y).into()),
+            _=> Err(Error::math(self, ops::Math::Add, rhs))
+        }
+    }
+}
+
+impl Sub for RpcValue {
+    type Output = ValR;
+    fn sub(self, rhs: Self) -> Self::Output {
+        match (&self.value, &rhs.value) {
+            (Value::Int(x), Value::Int(y)) => Ok((x - y).into()),
+            (Value::UInt(x), Value::UInt(y)) => Ok((x - y).into()),
+            _=> Err(Error::math(self, ops::Math::Sub, rhs))
+        }
+    }
+}
+
+impl Mul for RpcValue {
+    type Output = ValR;
+    fn mul(self, rhs: Self) -> Self::Output {
+        match (&self.value, &rhs.value) {
+            (Value::Int(x), Value::Int(y)) => Ok((x * y).into()),
+            _=> Err(Error::math(self, ops::Math::Mul, rhs))
+        }
+    }
+}
+
+impl Div for RpcValue {
+    type Output = ValR;
+    fn div(self, rhs: Self) -> Self::Output {
+        match (&self.value, &rhs.value) {
+            (Value::Int(x), Value::Int(y)) => Ok((x / y).into()),
+            _=> Err(Error::math(self, ops::Math::Div, rhs))
+        }
+    }
+}
+
+impl Rem for RpcValue {
+    type Output = ValR;
+    fn rem(self, rhs: Self) -> Self::Output {
+        match (&self.value, &rhs.value) {
+            (Value::Int(x), Value::Int(y)) => Ok((x % y).into()),
+            _=> Err(Error::math(self, ops::Math::Rem, rhs))
+        }
+    }
+}
+
+impl PartialOrd for RpcValue {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+impl Eq for RpcValue {}
+
+impl Ord for RpcValue {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        use Ordering::{Equal, Greater, Less};
+        match (&self.value, &other.value) {
+            (Value::Bool(x), Value::Bool(y)) => x.cmp(y),
+            (Value::Int(x), Value::Int(y)) => x.cmp(y),
+            (Value::UInt(x), Value::UInt(y)) => x.cmp(y),
+            (Value::DateTime(x), Value::DateTime(y)) => x.cmp(y),
+            (Value::Decimal(x), Value::Decimal(y)) => x.cmp(y),
+            (Value::String(x), Value::String(y)) => x.cmp(y),
+            (Value::Blob(x), Value::Blob(y)) => x.cmp(y),
+            (Value::List(x), Value::List(y)) => x.cmp(y),
+            (Value::Map(x), Value::Map(y)) => x.cmp(y),
+            (Value::IMap(x), Value::IMap(y)) => x.cmp(y),
+            (Value::Null, Value::Null) => Equal,
+            (Value::Null, _) => Less,
+            (_, Value::Null) => Greater,
+            (Value::Bool(_), _) => Less,
+            (_, Value::Bool(_)) => Greater,
+            (Value::Int(_), _) => Less,
+            (_, Value::Int(_)) => Greater,
+            (Value::UInt(_), _) => Less,
+            (_, Value::UInt(_)) => Greater,
+            (Value::Double(_), _) => Less,
+            (_, Value::Double(_)) => Greater,
+            (Value::Decimal(_), _) => Less,
+            (_, Value::Decimal(_)) => Greater,
+            (Value::DateTime(_), _) => Less,
+            (_, Value::DateTime(_)) => Greater,
+            (Value::String(_), _) => Less,
+            (_, Value::String(_)) => Greater,
+            (Value::Blob(_), _) => Less,
+            (_, Value::Blob(_)) => Greater,
+            (Value::List(_), _) => Less,
+            (_, Value::List(_)) => Greater,
+            (Value::IMap(_), _) => Less,
+            (_, Value::IMap(_)) => Greater,
+        }
+    }
+}
+
+impl FromIterator<RpcValue> for RpcValue {
+    fn from_iter<T: IntoIterator<Item = RpcValue>>(iter: T) -> Self {
+        iter.into_iter().collect::<Vec<_>>().into()
+    }
+}
+
+impl From<core::ops::Range<Option<RpcValue>>> for RpcValue {
+    fn from(value: core::ops::Range<Option<RpcValue>>) -> Self {
+        let kv = |(k, v): (&str, Option<_>)| v.map(|v| (k.to_owned(), v));
+        let kvs = [("start", value.start), ("end", value.end)];
+        kvs.into_iter().flat_map(kv).collect::<BTreeMap<String,_>>().into()
+    }
+}
+
+impl From<usize> for RpcValue {
+    fn from(value: usize) -> Self {
+        (value as u64).into()
+    }
+}
+
+impl jaq_all::jaq_std::ValT for RpcValue {
+    fn into_seq<S: FromIterator<Self>>(self) -> Result<S, Self> {
+        match self.value {
+            Value::List(list) => Ok(list.into_iter().collect()),
+            _ => Err(self)
+        }
+    }
+
+    fn is_int(&self) -> bool {
+        self.is_int()
+    }
+
+    fn as_isize(&self) -> Option<isize> {
+        match self.value {
+            Value::Int(num) => Some(num as isize),
+            _ => None,
+        }
+    }
+
+    fn as_f64(&self) -> Option<f64> {
+        todo!("{}", fn_name::uninstantiated!());
+    }
+
+    fn is_utf8_str(&self) -> bool {
+        todo!("{}", fn_name::uninstantiated!());
+    }
+
+    fn as_bytes(&self) -> Option<&[u8]> {
+        todo!("{}", fn_name::uninstantiated!());
+    }
+
+    fn as_sub_str(&self, _sub: &[u8]) -> Self {
+        todo!("{}", fn_name::uninstantiated!());
+    }
+
+    fn from_utf8_bytes(_b: impl AsRef<[u8]> + Send + 'static) -> Self {
+        todo!("{}", fn_name::uninstantiated!());
+    }
+}
+
+impl jaq_all::jaq_core::ValT for RpcValue {
+    fn from_num(n: &str) -> ValR {
+        Ok(n.parse::<i64>().map(RpcValue::from).unwrap_or(0_i64.into()))
+    }
+
+    fn from_map<I: IntoIterator<Item = (Self, Self)>>(iter: I) -> ValR {
+        Ok(iter.into_iter().map(|(k, v)| (k.as_str().to_owned(), v)).collect::<BTreeMap<String, _>>().into())
+    }
+
+    fn key_values(self) -> jaq_all::jaq_core::box_iter::BoxIter<'static, jaq_all::jaq_core::ValR<(Self, Self), Self>> {
+        match self.value {
+            Value::List(list) => {
+                Box::new(list
+                    .into_iter()
+                    .enumerate()
+                    .map(|(idx, val)| Ok((RpcValue::from(idx as isize), val))))
+            }
+            Value::Map(map) => {
+                Box::new(map
+                    .into_iter()
+                    .map(|(key, val)| Ok((RpcValue::from(key), val))))
+            }
+            Value::IMap(map) => {
+                Box::new(map
+                    .into_iter()
+                    .map(|(key, val)| Ok((RpcValue::from(key), val))))
+            }
+            _ => Box::new(Err(Error::typ(self, "iterable (List or Map or IMap)")).into_iter())
+        }
+    }
+
+    fn values(self) -> Box<dyn Iterator<Item = ValR>> {
+        match self.value {
+            Value::List(list) => {
+                Box::new(list
+                    .into_iter()
+                    .map(Ok))
+            }
+            Value::Map(map) => {
+                Box::new(map
+                    .into_values()
+                    .map(Ok))
+            }
+            Value::IMap(map) => {
+                Box::new(map
+                    .into_values()
+                    .map(Ok))
+            }
+            _ => Box::new(Err(Error::typ(self, "iterable (List or Map or IMap)")).into_iter())
+        }
+    }
+
+    fn index(self, index: &Self) -> ValR {
+        match (&self.value, &index.value) {
+            (Value::Null, _) => Ok(RpcValue::null()),
+            (Value::String(rv), Value::Int(i)) => Ok(rv.chars().nth(*i as usize).map(|cha| cha.to_string()).into()),
+            (Value::List(list), Value::Int(i)) => Ok((*list).get(*i as usize).cloned().unwrap_or(RpcValue::null())),
+            (Value::Map(o), Value::String(key)) => Ok(o.get(key.as_str()).cloned().unwrap_or(RpcValue::null())),
+            (_s, _) => Err(Error::typ(self, "")),
+        }
+    }
+
+    fn range(self, _range: jaq_all::jaq_core::val::Range<&Self>) -> ValR {
+        todo!("{}", fn_name::uninstantiated!());
+    }
+
+    fn map_values<I: Iterator<Item = ValX>>(
+        self,
+        _opt: jaq_all::jaq_core::path::Opt,
+        _f: impl Fn(Self) -> I,
+    ) -> ValX {
+        todo!("{}", fn_name::uninstantiated!());
+    }
+
+    fn map_index<I: Iterator<Item = ValX>>(
+        self,
+        _index: &Self,
+        _opt: jaq_all::jaq_core::path::Opt,
+        _f: impl Fn(Self) -> I,
+    ) -> ValX {
+        todo!("{}", fn_name::uninstantiated!());
+    }
+
+    fn map_range<I: Iterator<Item = ValX>>(
+        self,
+        _range: jaq_all::jaq_core::val::Range<&Self>,
+        _opt: jaq_all::jaq_core::path::Opt,
+        _f: impl Fn(Self) -> I,
+    ) -> ValX {
+        todo!("{}", fn_name::uninstantiated!());
+    }
+
+    fn as_bool(&self) -> bool {
+        self.as_bool()
+    }
+
+    fn into_string(self) -> Self {
+        self.to_cpon().into()
+    }
+}
