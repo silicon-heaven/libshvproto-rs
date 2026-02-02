@@ -235,9 +235,7 @@ pub fn derive_from_rpcvalue(item: TokenStream) -> TokenStream {
                 };
                 match &variant.fields {
                     syn::Fields::Unnamed(variant_types) => {
-                        if variant_types.unnamed.len() != 1 {
-                            panic!("Only single element variant tuples are supported for FromRpcValue");
-                        }
+                        assert!(variant_types.unnamed.len() == 1, "Only single element variant tuples are supported for FromRpcValue");
                         let source_variant_type = &variant_types.unnamed.first().expect("No tuple elements").ty;
                         let deref_code = quote!((*x));
                         let unbox_code = quote!((x.as_ref().clone()));
@@ -431,9 +429,7 @@ pub fn derive_to_rpcvalue(item: TokenStream) -> TokenStream {
                 let variant_ident = &variant.ident;
                 match &variant.fields {
                     syn::Fields::Unnamed(variant_types) => {
-                        if variant_types.unnamed.len() != 1 {
-                            panic!("Only single element variant tuples are supported for ToRpcValue");
-                        }
+                        assert!(variant_types.unnamed.len() == 1, "Only single element variant tuples are supported for ToRpcValue");
                         match_arms_ser.extend(quote!{
                             #struct_identifier::#variant_ident(val) => shvproto::RpcValue::from(val),
                         });
