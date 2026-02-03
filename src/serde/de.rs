@@ -269,7 +269,7 @@ impl<'de, 'a> serde::Deserializer<'de> for ValueDeserializer<'a> {
         match self.value {
             // Externally tagged (e.g. { "Variant": {...} })
             Value::Map(map) if map.len() == 1 => {
-                let (variant, value) = map.iter().next().unwrap();
+                let (variant, value) = map.iter().next().expect("len() is 1");
                 let enum_access = SimpleEnumAccess {
                     variant,
                     value: Some(&value.value)
