@@ -3,7 +3,7 @@ name = "libshvproto-macros"
 description = "Derive macros for libshvproto"
 license = "MIT"
 repository = "https://github.com/silicon-heaven/libshvproto-rs"
-version = "0.2.1"
+version = "0.2.2"
 edition = "2021"
 
 [lib]
