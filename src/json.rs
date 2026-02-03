@@ -386,7 +386,7 @@ impl<R> Reader for JsonReader<'_, R>
                         break 'a RpcValue::new(val, None);
                     }
                 }
-            };
+            }
             break 'a RpcValue::new(val, None);
         };
         Ok(rv)

@@ -157,7 +157,7 @@ where
         } else {
             num = number.cast_unsigned();
             neg = false;
-        };
+        }
 
         let bitlen = Self::significant_bits_part_length(num) + 1; // add sign bit
         if neg {

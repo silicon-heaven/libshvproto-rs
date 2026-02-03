@@ -107,7 +107,7 @@ fn process_chainpack_rpc_block(mut reader: Box<dyn BufRead>) -> ! {
         Err(e) => {
             exit_with_result_and_code(&result, Some(e.reason));
         }
-    };
+    }
     match rd.read() {
         Ok(rv) => {
             result.cpon = rv.to_cpon().to_string();
@@ -213,6 +213,6 @@ fn main() {
         if let Err(e) = res {
             eprintln!("Write output error: {e:?}");
             process::exit(CODE_WRITE_ERROR);
-        };
+        }
     }
 }

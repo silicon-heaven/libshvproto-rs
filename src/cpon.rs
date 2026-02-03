@@ -69,7 +69,7 @@ impl<'a, W> CponWriter<'a, W>
                     }
                 },
                 None => break,
-            };
+            }
             n += 1;
         };
         true
