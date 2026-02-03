@@ -1086,6 +1086,7 @@ impl RpcValue {
             _ => EMPTY_IMAP.get_or_init(IMap::new),
         }
     }
+    #[expect(clippy::needless_pass_by_value, reason = "GetIndex is implemented for a lot of types, and some might not be owned")]
     pub fn get<I>(&self, key: I) -> Option<&RpcValue>
     where
         I: GetIndex,

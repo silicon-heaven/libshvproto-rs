@@ -72,6 +72,7 @@ impl MetaMap {
     pub fn len(&self) -> usize {
         self.0.len()
     }
+    #[expect(clippy::needless_pass_by_value, reason = "GetIndex is implemented for a lot of types, and some might not be owned")]
     pub fn insert<I>(&mut self, key: I, value: RpcValue) -> &mut Self
         where I: GetIndex
     {
@@ -85,6 +86,7 @@ impl MetaMap {
         }
         self
     }
+    #[expect(clippy::needless_pass_by_value, reason = "GetIndex is implemented for a lot of types, and some might not be owned")]
     pub fn remove<I>(&mut self, key: I) -> Option<RpcValue>
         where I: GetIndex
     {
@@ -93,6 +95,7 @@ impl MetaMap {
             Some(ix) => Some(self.0.remove(ix).value),
         }
     }
+    #[expect(clippy::needless_pass_by_value, reason = "GetIndex is implemented for a lot of types, and some might not be owned")]
     pub fn get<I>(&self, key: I) -> Option<&RpcValue>
         where I: GetIndex
     {
