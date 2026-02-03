@@ -385,7 +385,7 @@ impl<'a, R> CponReader<'a, R>
                             let hi = b;
                             let lo = self.get_byte()?;
                             let b = self.decode_hex_byte(hi)? * 16 + self.decode_hex_byte(lo)?;
-                            buff.push(b)
+                            buff.push(b);
                         },
                     }
                 }

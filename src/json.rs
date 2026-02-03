@@ -326,11 +326,11 @@ where R: Read
                             let mut utf8 = [0; 4];
                             let s = ch.encode_utf8(&mut utf8);
                             for b in s.as_bytes() {
-                                buff.push(*b)
+                                buff.push(*b);
                             }
                         }
                         _ => {
-                            buff.push(b)
+                            buff.push(b);
                         },
                     }
                 }

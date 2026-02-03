@@ -79,7 +79,7 @@ impl MetaMap {
             None => {
                 let key = key.make_key();
                 let key = MetaKey::from(&key);
-                self.0.push(MetaKeyVal{key, value })
+                self.0.push(MetaKeyVal{key, value });
             },
             Some(ix) => self.0.get_mut(ix).expect("The value has been found with .find()").value = value,
         }
