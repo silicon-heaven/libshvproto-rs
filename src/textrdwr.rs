@@ -16,7 +16,7 @@ pub trait TextWriter : Writer {
         let cnt = self.write_bytes(s.as_bytes())?;
         Ok(self.write_count() - cnt)
     }
-    fn write_decimal(&mut self, decimal: &Decimal) -> WriteResult {
+    fn write_decimal(&mut self, decimal: Decimal) -> WriteResult {
         let s = decimal.to_cpon_string();
         let cnt = self.write_bytes(s.as_bytes())?;
         Ok(self.write_count() - cnt)

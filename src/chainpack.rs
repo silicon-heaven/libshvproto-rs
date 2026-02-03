@@ -196,13 +196,13 @@ where
         self.write_bytes(&bytes)?;
         Ok(self.byte_writer.count() - cnt)
     }
-    fn write_decimal(&mut self, decimal: &Decimal) -> WriteResult {
+    fn write_decimal(&mut self, decimal: Decimal) -> WriteResult {
         let cnt = self.write_byte(PackingSchema::Decimal as u8)?;
         self.write_int_data(decimal.mantissa())?;
         self.write_int_data(i64::from(decimal.exponent()))?;
         Ok(self.byte_writer.count() - cnt)
     }
-    fn write_datetime(&mut self, dt: &DateTime) -> WriteResult {
+    fn write_datetime(&mut self, dt: DateTime) -> WriteResult {
         let cnt = self.write_byte(PackingSchema::DateTime as u8)?;
         let mut msecs = dt.epoch_msec() - SHV_EPOCH_MSEC;
         let offset = (dt.utc_offset() / 60 / 15) & 0x7F;
@@ -307,8 +307,8 @@ where
             Value::String(s) => self.write_string(s)?,
             Value::Blob(b) => self.write_blob(b)?,
             Value::Double(n) => self.write_double(*n)?,
-            Value::Decimal(d) => self.write_decimal(d)?,
-            Value::DateTime(d) => self.write_datetime(d)?,
+            Value::Decimal(d) => self.write_decimal(*d)?,
+            Value::DateTime(d) => self.write_datetime(*d)?,
             Value::List(lst) => self.write_list(lst)?,
             Value::Map(map) => self.write_map(map)?,
             Value::IMap(map) => self.write_imap(map)?,

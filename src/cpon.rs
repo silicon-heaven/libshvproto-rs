@@ -197,7 +197,7 @@ impl<'a, W> CponWriter<'a, W>
         self.write_byte(b'"')?;
         Ok(self.byte_writer.count() - cnt)
     }
-    fn write_datetime(&mut self, dt: &DateTime) -> WriteResult {
+    fn write_datetime(&mut self, dt: DateTime) -> WriteResult {
         let cnt = self.write_bytes("d\"".as_bytes())?;
         let s = dt.to_iso_string_opt(&ToISOStringOptions {
             include_millis: IncludeMilliseconds::WhenNonZero,
@@ -330,8 +330,8 @@ impl<W> Writer for CponWriter<'_, W>
             Value::String(s) => self.write_string(s),
             Value::Blob(b) => self.write_blob(b),
             Value::Double(n) => self.write_double(*n),
-            Value::Decimal(d) => self.write_decimal(d),
-            Value::DateTime(d) => self.write_datetime(d),
+            Value::Decimal(d) => self.write_decimal(*d),
+            Value::DateTime(d) => self.write_datetime(*d),
             Value::List(lst) => self.write_list(lst),
             Value::Map(map) => self.write_map(map),
             Value::IMap(map) => self.write_imap(map),
