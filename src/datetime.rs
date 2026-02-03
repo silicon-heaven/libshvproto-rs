@@ -9,7 +9,6 @@ use chrono::{FixedOffset, NaiveDateTime, Offset};
 /// I'm storing whole DateTime in one i64 to keep size_of RpcValue == 24
 const TZ_MASK: i64 = 127;
 pub enum IncludeMilliseconds {
-    #[allow(dead_code)]
     Never,
     Always,
     WhenNonZero,

@@ -82,7 +82,6 @@ impl Decimal {
         let mut d = decoded.0 as f64;
         let exp = decoded.1;
         // We probably don't want to call .cmp() because of performance loss
-        #[allow(clippy::comparison_chain)]
         if exp < 0 {
             for _ in exp .. 0 {
                 d /= 10.;
