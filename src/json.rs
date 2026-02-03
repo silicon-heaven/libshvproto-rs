@@ -202,11 +202,11 @@ where W: Write
     fn write_value(&mut self, val: &Value) -> WriteResult {
         let cnt: usize = self.byte_writer.count();
         match val {
-            Value::Null => self.write_bytes("null".as_bytes()),
+            Value::Null => self.write_bytes(b"null"),
             Value::Bool(b) => if *b {
-                self.write_bytes("true".as_bytes())
+                self.write_bytes(b"true")
             } else {
-                self.write_bytes("false".as_bytes())
+                self.write_bytes(b"false")
             },
             Value::Int(n) => self.write_int(*n),
             Value::UInt(n) => self.write_int(n.cast_signed()),

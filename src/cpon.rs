@@ -24,7 +24,7 @@ impl<'a, W> CponWriter<'a, W>
     pub fn new(write: &'a mut W) -> Self {
         CponWriter {
             byte_writer: ByteWriter::new(write),
-            indent: "".as_bytes().to_vec(),
+            indent: b"".to_vec(),
             no_oneliners: false,
             nest_count: 0,
         }
@@ -196,7 +196,7 @@ impl<'a, W> CponWriter<'a, W>
         Ok(self.byte_writer.count() - cnt)
     }
     fn write_datetime(&mut self, dt: DateTime) -> WriteResult {
-        let cnt = self.write_bytes("d\"".as_bytes())?;
+        let cnt = self.write_bytes(b"d\"")?;
         let s = dt.to_iso_string_opt(&ToISOStringOptions {
             include_millis: IncludeMilliseconds::WhenNonZero,
             include_timezone: true
@@ -314,11 +314,11 @@ impl<W> Writer for CponWriter<'_, W>
     fn write_value(&mut self, val: &Value) -> WriteResult {
         let cnt: usize = self.byte_writer.count();
         match val {
-            Value::Null => self.write_bytes("null".as_bytes()),
+            Value::Null => self.write_bytes(b"null"),
             Value::Bool(b) => if *b {
-                self.write_bytes("true".as_bytes())
+                self.write_bytes(b"true")
             } else {
-                self.write_bytes("false".as_bytes())
+                self.write_bytes(b"false")
             },
             Value::Int(n) => self.write_int(*n),
             Value::UInt(n) => {

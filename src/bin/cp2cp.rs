@@ -200,7 +200,7 @@ fn main() {
             wr.set_no_oneliners(opts.no_oneliners);
             if let Some(s) = &opts.indent {
                 if s == "\\t" {
-                    wr.set_indent("\t".as_bytes());
+                    wr.set_indent(b"\t");
                 } else {
                     wr.set_indent(s.as_bytes());
                 }
