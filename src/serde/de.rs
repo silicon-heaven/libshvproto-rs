@@ -341,18 +341,14 @@ impl<'de> VariantAccess<'de> for SimpleEnumAccess<'_> {
     type Error = serde::de::value::Error;
 
     fn unit_variant(self) -> Result<(), Self::Error> {
-        match self.value {
-            Some(v) => serde::Deserialize::deserialize(ValueDeserializer { value: v }),
-            None => Ok(()),
-        }
+        self.value
+            .map_or(Ok(()), |v| serde::Deserialize::deserialize(ValueDeserializer { value: v }))
     }
 
     fn newtype_variant_seed<T>(self, seed: T) -> Result<T::Value, Self::Error>
     where T: DeserializeSeed<'de> {
-        match self.value {
-            Some(v) => seed.deserialize(ValueDeserializer { value: v }),
-            None => Err(de::Error::custom("Expected value for newtype variant")),
-        }
+        self.value
+            .map_or_else(|| Err(de::Error::custom("Expected value for newtype variant")), |v| seed.deserialize(ValueDeserializer { value: v }))
     }
 
     fn tuple_variant<V>(self, _len: usize, visitor: V) -> Result<V::Value, Self::Error>

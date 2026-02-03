@@ -322,7 +322,7 @@ where R: Read
                             hex.push(self.get_byte()? as char);
                             hex.push(self.get_byte()? as char);
                             let code_point = u32::from_str_radix(&hex, 16).map_err(|e| self.make_error(&format!("Invalid unicode escape sequence: {hex:?} - {e}"), ReadErrorReason::InvalidCharacter))?;
-                            let ch = char::from_u32(code_point).ok_or(self.make_error(&format!("Invalid code point: {code_point}"), ReadErrorReason::InvalidCharacter))?;
+                            let ch = char::from_u32(code_point).ok_or_else(|| self.make_error(&format!("Invalid code point: {code_point}"), ReadErrorReason::InvalidCharacter))?;
                             let mut utf8 = [0; 4];
                             let s = ch.encode_utf8(&mut utf8);
                             for b in s.as_bytes() {

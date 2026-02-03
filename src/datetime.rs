@@ -137,10 +137,8 @@ impl DateTime {
         chrono::DateTime::from_timestamp_millis(msec).unwrap_or_default().naive_utc()
     }
     pub fn to_chrono_datetime(&self) -> chrono::DateTime<chrono::offset::FixedOffset> {
-        let offset = match FixedOffset::east_opt(self.utc_offset()) {
-            None => {FixedOffset::east_opt(0).expect("Zero is within the range")}
-            Some(o) => {o}
-        };
+        let offset = FixedOffset::east_opt(self.utc_offset())
+            .unwrap_or_else(|| FixedOffset::east_opt(0).expect("Zero is within the range"));
         chrono::DateTime::from_naive_utc_and_offset(self.to_chrono_naivedatetime(), offset)
     }
     pub fn to_iso_string(&self) -> String {

@@ -59,18 +59,12 @@ pub fn hex_dump(data: &[u8]) -> String {
             hex_line.clear();
             char_line.clear();
         }
-        let hex_str = match byte {
-            None => { "   ".to_string() }
-            Some(b) => { format!("{b:02x} ") }
-        };
-        let c_str = match byte {
-            None => { " ".to_string() }
-            Some(b) => {
-                let c = b as char;
-                let c = if c >= ' ' && c < (127 as char) { c } else { '.' };
-                c.to_string()
-            }
-        };
+        let hex_str = byte.map_or_else(|| "   ".to_string(), |b| format!("{b:02x} "));
+        let c_str = byte.map_or_else(|| " ".to_string(), |b| {
+            let c = b as char;
+            let c = if c >= ' ' && c < (127 as char) { c } else { '.' };
+            c.to_string()
+        });
         hex_line += &hex_str;
         char_line += &c_str;
     }

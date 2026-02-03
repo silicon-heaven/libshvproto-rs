@@ -98,9 +98,8 @@ mod test {
             thread::spawn(move || {
                 stdin.write_all(&block).expect("Failed to write to stdin");
             });
-            child.wait_with_output().map_err(|err| err.to_string()).and_then(|output| {
-                RpcValue::from_chainpack(output.stdout).map_err(|err| err.to_string())
-            })
+            let output = child.wait_with_output().map_err(|err| err.to_string())?;
+            RpcValue::from_chainpack(output.stdout).map_err(|err| err.to_string())
         }
 
         #[test]

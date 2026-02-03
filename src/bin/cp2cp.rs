@@ -61,18 +61,14 @@ fn print_option<T: Display>(n: Option<T>) {
     }
 }
 fn exit_with_result_and_code(result: &ChainPackRpcBlockResult, error: Option<ReadErrorReason>) -> ! {
-    let exit_code = if let Some(error) = error {
-        match error {
-            ReadErrorReason::UnexpectedEndOfStream => CODE_NOT_ENOUGH_DATA,
-            ReadErrorReason::NotEnoughPrecision => CODE_READ_ERROR,
-            ReadErrorReason::InvalidCharacter => {
-                eprintln!("Parse input error: {error:?}");
-                CODE_READ_ERROR
-            }
+    let exit_code = error.map_or(CODE_SUCCESS, |error| match error {
+        ReadErrorReason::UnexpectedEndOfStream => CODE_NOT_ENOUGH_DATA,
+        ReadErrorReason::NotEnoughPrecision => CODE_READ_ERROR,
+        ReadErrorReason::InvalidCharacter => {
+            eprintln!("Parse input error: {error:?}");
+            CODE_READ_ERROR
         }
-    } else {
-        CODE_SUCCESS
-    };
+    });
     print_option(result.block_length);
     print_option(result.frame_length);
     print_option(result.proto);

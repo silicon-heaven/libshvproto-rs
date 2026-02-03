@@ -99,10 +99,7 @@ impl MetaMap {
     pub fn get<I>(&self, key: I) -> Option<&RpcValue>
         where I: GetIndex
     {
-        match self.find(&key) {
-            Some(ix) => Some(&self.0.get(ix).expect("The value has been found with .find()").value),
-            None => None,
-        }
+        self.find(&key).map(|ix| &self.0.get(ix).expect("The value has been found with .find()").value)
     }
     fn find<I>(&self, key: &I) -> Option<usize>
         where I: GetIndex
