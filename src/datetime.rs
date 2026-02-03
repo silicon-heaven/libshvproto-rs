@@ -182,22 +182,27 @@ impl DateTime {
         s
     }
 
+    #[must_use]
     pub fn add_days(&self, days: i64) -> Self {
         let (msec, offset) = self.epoc_msec_utc_offset();
         Self::from_epoch_msec_tz(msec + (days * 24 * 60 * 60 * 1000), offset)
     }
+    #[must_use]
     pub fn add_hours(&self, hours: i64) -> Self {
         let (msec, offset) = self.epoc_msec_utc_offset();
         Self::from_epoch_msec_tz(msec + (hours * 60 * 60 * 1000), offset)
     }
+    #[must_use]
     pub fn add_minutes(&self, minutes: i64) -> Self {
         let (msec, offset) = self.epoc_msec_utc_offset();
         Self::from_epoch_msec_tz(msec + (minutes * 60 * 1000), offset)
     }
+    #[must_use]
     pub fn add_seconds(&self, seconds: i64) -> Self {
         let (msec, offset) = self.epoc_msec_utc_offset();
         Self::from_epoch_msec_tz(msec + (seconds * 1000), offset)
     }
+    #[must_use]
     pub fn add_millis(&self, millis: i64) -> Self {
         let (msec, offset) = self.epoc_msec_utc_offset();
         Self::from_epoch_msec_tz(msec + millis, offset)

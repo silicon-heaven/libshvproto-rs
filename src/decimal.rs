@@ -11,6 +11,7 @@ impl Decimal {
         n |= i64::from(exponent) & 0xff;
         Decimal(n)
     }
+    #[must_use]
     pub fn normalize(&self) -> Decimal {
         let (mut mantissa, mut exponent) = self.decode();
         if mantissa == 0 {
