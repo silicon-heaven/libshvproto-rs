@@ -1,3 +1,4 @@
+#![allow(clippy::print_stderr, clippy::print_stdout, clippy::exit, reason = "Fine for a binary")]
 use clap::Parser;
 use log::LevelFilter;
 use shvproto::reader::ReadErrorReason;
