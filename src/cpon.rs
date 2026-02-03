@@ -628,8 +628,7 @@ mod test
         assert_eq!(RpcValue::from_cpon(r#"d"2022-01-02T12:59:06Z""#).unwrap().as_datetime(), DateTime::from_datetime(&dt));
 
 
-        // Allow in tests
-        #[allow(clippy::too_many_arguments)]
+        #[expect(clippy::too_many_arguments, reason = "Allow in tests")]
         fn dt_from_ymd_hms_milli_tz_offset(year: i32, month: u32, day: u32, hour: u32, min: u32, sec: u32, milli: i64, tz_offset: i32) -> chrono::DateTime<FixedOffset> {
             if let LocalResult::Single(dt) = FixedOffset::east_opt(tz_offset).unwrap()
                 .with_ymd_and_hms(year, month, day, hour, min, sec) {

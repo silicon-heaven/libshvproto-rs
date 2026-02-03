@@ -8,9 +8,8 @@ use std::collections::BTreeMap;
 use std::io;
 use std::io::{Read, Write};
 
-#[allow(clippy::upper_case_acronyms)]
+#[expect(clippy::upper_case_acronyms, reason = "We just want these")]
 #[warn(non_camel_case_types)]
-#[allow(dead_code)]
 pub enum PackingSchema {
     Null = 128,
     UInt,
