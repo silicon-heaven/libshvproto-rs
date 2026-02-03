@@ -41,9 +41,9 @@ pub fn hex_array(data: &[u8]) -> String {
     ret
 }
 pub fn hex_dump(data: &[u8]) -> String {
-    let mut ret: String = Default::default();
-    let mut hex_line: String = Default::default();
-    let mut char_line: String = Default::default();
+    let mut ret = String::default();
+    let mut hex_line = String::default();
+    let mut char_line = String::default();
     let box_size = (data.len() / 16 + 1) * 16 + 1;
     for i in 0..box_size {
         let byte = if i < data.len() { Some(data[i]) } else { None };
