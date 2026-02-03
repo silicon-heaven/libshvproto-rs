@@ -858,7 +858,7 @@ where
 
     fn try_from(value: RpcValue) -> Result<Self, Self::Error> {
         let mut res = Self::new();
-        for (key, val) in Map::try_from(value)?.into_iter() {
+        for (key, val) in Map::try_from(value)? {
             let val = val.try_into().map_err(|e| format!("Wrong item at key `{key}`: {e}"))?;
             res.insert(key,val);
         }
@@ -893,7 +893,7 @@ where
 
     fn try_from(value: RpcValue) -> Result<Self, Self::Error> {
         let mut res = Self::new();
-        for (key, val) in IMap::try_from(value)?.into_iter() {
+        for (key, val) in IMap::try_from(value)? {
             res.insert(
                 key,
                 val.try_into()
