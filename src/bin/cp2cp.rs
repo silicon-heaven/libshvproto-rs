@@ -110,7 +110,7 @@ fn process_chainpack_rpc_block(mut reader: Box<dyn BufRead>) -> ! {
     }
     match rd.read() {
         Ok(rv) => {
-            result.cpon = rv.to_cpon().to_string();
+            result.cpon = rv.to_cpon();
             exit_with_result_and_code(&result, None);
         }
         Err(e) => {
