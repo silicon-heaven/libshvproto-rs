@@ -429,7 +429,7 @@ mod test
         let rv2 = RpcValue::from(val);
         assert_eq!(rv1, rv2);
         let json2 = rv1.to_json();
-        assert_eq!(&json.replace(" ", ""), &json2);
+        assert_eq!(&json.replace(' ', ""), &json2);
     }
     fn test_cpon_cross_check(json: &str, cpon: &str) {
         let json1 = fix_tags(json);
@@ -438,7 +438,7 @@ mod test
         assert_eq!(rv1, rv2);
         let json2 = rv1.to_json();
         // println!("{json2} <=> {json2}");
-        assert_eq!(&json1.replace(" ", ""), &json2);
+        assert_eq!(&json1.replace(' ', ""), &json2);
     }
     #[test]
     fn test_string() {

@@ -27,7 +27,7 @@ mod test {
         let output = run_cp2cp(data)?;
         let exit_code = output.status.code().unwrap();
         let output = String::from_utf8(output.stdout).map_err(|e| e.to_string())?;
-        let mut lines = output.split("\n");
+        let mut lines = output.split('\n');
         let block_length = lines.next().unwrap().parse::<usize>().unwrap();
         let frame_length = lines.next().unwrap().parse::<usize>().unwrap();
         let proto = lines.next().unwrap().parse::<i32>().unwrap();
