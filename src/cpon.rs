@@ -42,9 +42,7 @@ impl<'a, W> CponWriter<'a, W>
         }
         for it in lst.iter() {
             match &it.value {
-                Value::List(_) => return false,
-                Value::Map(_) => return false,
-                Value::IMap(_) => return false,
+                Value::List(_) | Value::Map(_) | Value::IMap(_) => return false,
                 _ => continue,
             }
         }
@@ -62,9 +60,7 @@ impl<'a, W> CponWriter<'a, W>
             match iter.next() {
                 Some(val) => {
                     match &val.1.value {
-                        Value::List(_) => return false,
-                        Value::Map(_) => return false,
-                        Value::IMap(_) => return false,
+                        Value::List(_) | Value::Map(_) | Value::IMap(_) => return false,
                         _ => (),
                     }
                 },
@@ -81,9 +77,7 @@ impl<'a, W> CponWriter<'a, W>
         }
         for k in map.0.iter() {
             match &k.value.value {
-                Value::List(_) => return false,
-                Value::Map(_) => return false,
-                Value::IMap(_) => return false,
+                Value::List(_) | Value::Map(_) | Value::IMap(_) => return false,
                 _ => continue,
             }
         }

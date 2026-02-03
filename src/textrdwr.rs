@@ -126,7 +126,6 @@ pub trait TextReader : Reader {
         loop {
             let b = self.peek_byte();
             let digit = match b {
-                0 => break,
                 b'+' | b'-' => {
                     if n != 0 {
                         break;
