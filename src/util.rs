@@ -1,3 +1,4 @@
+#![allow(clippy::indexing_slicing, reason = "Lots of indexing here")]
 use log::LevelFilter;
 
 pub fn parse_log_verbosity<'a>(verbosity: &'a str, module_path: &'a str) -> Vec<(Option<&'a str>, LevelFilter)> {

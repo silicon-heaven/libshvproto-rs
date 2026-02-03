@@ -81,7 +81,7 @@ impl MetaMap {
                 let key = MetaKey::from(&key);
                 self.0.push(MetaKeyVal{key, value })
             },
-            Some(ix) => self.0[ix].value = value,
+            Some(ix) => self.0.get_mut(ix).expect("The value has been found with .find()").value = value,
         }
         self
     }
@@ -97,7 +97,7 @@ impl MetaMap {
         where I: GetIndex
     {
         match self.find(&key) {
-            Some(ix) => Some(&self.0[ix].value),
+            Some(ix) => Some(&self.0.get(ix).expect("The value has been found with .find()").value),
             None => None,
         }
     }

@@ -15,7 +15,7 @@ fn is_option(ty: &syn::Type) -> bool {
     if !(typepath.qself.is_none() && typepath.path.segments.len() == 1) {
         return false
     }
-    let segment = &typepath.path.segments[0];
+    let segment = typepath.path.segments.first().expect("len() is 1");
 
     if segment.ident != "Option" {
         return false;
@@ -27,7 +27,7 @@ fn is_option(ty: &syn::Type) -> bool {
         return false;
     }
 
-    matches!(data.args[0], syn::GenericArgument::Type(_))
+    matches!(data.args.first().expect("len() is 1"), syn::GenericArgument::Type(_))
 }
 
 fn get_type(ty: &syn::Type) -> Option<String> {

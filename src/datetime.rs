@@ -1,4 +1,4 @@
-//use crate::rpcvalue::RpcValue;
+#![allow(clippy::string_slice, reason = "strings are not utf8")]
 
 use std::cmp::Ordering;
 use std::fmt;
@@ -79,7 +79,7 @@ impl DateTime {
                     let mut msec = 0;
                     let mut offset = 0;
                     let mut rest = &s[PATTERN.len()..];
-                    if !rest.is_empty() && rest.as_bytes()[0] == b'.' {
+                    if let Some(b'.') = rest.as_bytes().first() {
                         rest = &rest[1..];
                         if rest.len() >= 3 {
                             match rest[..3].parse::<i32>() {
@@ -94,7 +94,7 @@ impl DateTime {
                         }
                     }
                     if !rest.is_empty() {
-                        if rest.len() == 1 && rest.as_bytes()[0] == b'Z' {
+                        if rest.len() == 1 && *rest.as_bytes().first().expect("len() is 1") == b'Z' {
                         } else if rest.len() == 3 {
                             if let Ok(hrs) = rest.parse::<i32>() {
                                 offset = 60 * 60 * hrs;

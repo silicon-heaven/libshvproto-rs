@@ -1,4 +1,5 @@
 #![allow(clippy::cast_possible_truncation, reason = "Lots of casting here")]
+#![allow(clippy::indexing_slicing, reason = "Lots of indexing here")]
 use crate::reader::{ByteReader, ReadError, ReadErrorReason, Reader};
 use crate::rpcvalue::{IMap, Map};
 use crate::writer::{ByteWriter, Writer};
