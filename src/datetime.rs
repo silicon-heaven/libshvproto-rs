@@ -79,7 +79,7 @@ impl DateTime {
                     let mut msec = 0;
                     let mut offset = 0;
                     let mut rest = &s[PATTERN.len()..];
-                    if let Some(b'.') = rest.as_bytes().first() {
+                    if matches!(rest.as_bytes().first(), Some(b'.')) {
                         rest = &rest[1..];
                         if rest.len() >= 3 {
                             match rest[..3].parse::<i32>() {
