@@ -83,8 +83,8 @@ mod test {
             "oneFieldStruct" => shvproto::make_map!("x" => 4565),
             "vecIntField" => vec![1_i32, 2_i32].into_iter().map(shvproto::RpcValue::from).collect::<Vec<_>>(),
             "vecEmptyStructField" => vec![shvproto::make_map!(), shvproto::make_map!()].into_iter().map(shvproto::RpcValue::from).collect::<Vec<_>>(),
-            "mapIntField" => [("aaa".to_string(), 111)].into_iter().collect::<BTreeMap<_,_>>(),
-            "imapField" => [(420, 111)].into_iter().collect::<BTreeMap<_,_>>(),
+            "mapIntField" => std::iter::once(("aaa".to_string(), 111)).collect::<BTreeMap<_,_>>(),
+            "imapField" => std::iter::once((420, 111)).collect::<BTreeMap<_,_>>(),
             "rpcValueField" => RpcValue::from(42),
         ).into();
 
@@ -176,7 +176,7 @@ mod test {
         test_case(AllVariants::Blob(vec![1, 2, 3]));
         test_case(AllVariants::List(vec![shvproto::RpcValue::from("some_value")]));
         test_case(AllVariants::Map(shvproto::make_map!("key" => 1234)));
-        test_case(AllVariants::IMap([(420, 111.into())].into_iter().collect::<BTreeMap<_,_>>()));
+        test_case(AllVariants::IMap(std::iter::once((420, 111.into())).collect::<BTreeMap<_,_>>()));
 
         test_case(EnumWithUserStruct::OneFieldStructVariant(OneFieldStruct{x: 123}));
         test_case(EnumWithUserStruct::IntVariant(123));
