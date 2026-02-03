@@ -63,11 +63,7 @@ fn field_to_initializers(
     let is_option = is_option(&field.ty);
     let struct_initializer;
     let rpcvalue_insert;
-    let identifier_at_value = if let Some(value) = from_value {
-        quote! { #value.#identifier }
-    } else {
-        quote! { #identifier }
-    };
+    let identifier_at_value = from_value.map_or_else(|| quote! { #identifier }, |value| quote! { #value.#identifier });
     if is_option {
         struct_initializer = quote!{
             #identifier: match get_key(#field_name).ok() {
