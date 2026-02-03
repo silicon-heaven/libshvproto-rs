@@ -48,8 +48,7 @@ fn get_field_name(field: &syn::Field) -> String {
         .and_then(|attr| attr.meta.require_name_value().ok())
         .filter(|meta_name_value| meta_name_value.path.is_ident("field_name"))
         .map(|meta_name_value| if let syn::Expr::Lit(expr) = &meta_name_value.value { expr } else { panic!("Expected a string literal for 'field_name'") })
-        .map(|literal| if let syn::Lit::Str(expr) = &literal.lit { expr.value() } else { panic!("Expected a string literal for 'field_name'") })
-        .unwrap_or_else(|| field.ident.as_ref().unwrap().to_string().to_case(Case::Camel))
+        .map_or_else(|| field.ident.as_ref().unwrap().to_string().to_case(Case::Camel), |literal| if let syn::Lit::Str(expr) = &literal.lit { expr.value() } else { panic!("Expected a string literal for 'field_name'") })
 }
 
 fn field_to_initializers(
