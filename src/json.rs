@@ -549,21 +549,21 @@ mod test
         // read very long decimal without overflow error, value is capped
         assert_eq!(RpcValue::from_json("123456789012345678901234567890123456789012345678901234567890").unwrap().as_int(), i64::MAX);
 
-        assert_eq!(RpcValue::from_json("9223372036854775806").unwrap().as_int(), 9223372036854775806_i64);
+        assert_eq!(RpcValue::from_json("9223372036854775806").unwrap().as_int(), 9_223_372_036_854_775_806_i64);
         assert_eq!(RpcValue::from_json("9223372036854775807").unwrap().as_int(), i64::MAX);
         assert_eq!(RpcValue::from_json("9223372036854775808").unwrap().as_int(), i64::MAX);
 
-        assert_eq!(RpcValue::from_json("0x7FFFFFFFFFFFFFFE").unwrap().as_int(), 0x7FFFFFFFFFFFFFFE_i64);
+        assert_eq!(RpcValue::from_json("0x7FFFFFFFFFFFFFFE").unwrap().as_int(), 0x7FFF_FFFF_FFFF_FFFE_i64);
         assert_eq!(RpcValue::from_json("0x7FFFFFFFFFFFFFFF").unwrap().as_int(), i64::MAX);
         assert_eq!(RpcValue::from_json("0x8000000000000000").unwrap().as_int(), i64::MAX);
 
         assert_eq!(RpcValue::from_json("-123456789012345678901234567890123456789012345678901234567890").unwrap().as_int(), i64::MIN);
 
-        assert_eq!(RpcValue::from_json("-9223372036854775807").unwrap().as_int(), -9223372036854775807_i64);
+        assert_eq!(RpcValue::from_json("-9223372036854775807").unwrap().as_int(), -9_223_372_036_854_775_807_i64);
         assert_eq!(RpcValue::from_json("-9223372036854775808").unwrap().as_int(), i64::MIN);
         assert_eq!(RpcValue::from_json("-9223372036854775809").unwrap().as_int(), i64::MIN);
 
-        assert_eq!(RpcValue::from_json("-0x7FFFFFFFFFFFFFFF").unwrap().as_int(), -0x7FFFFFFFFFFFFFFF_i64);
+        assert_eq!(RpcValue::from_json("-0x7FFFFFFFFFFFFFFF").unwrap().as_int(), -0x7FFF_FFFF_FFFF_FFFF_i64);
         assert_eq!(RpcValue::from_json("-0x8000000000000000").unwrap().as_int(), i64::MIN);
         assert_eq!(RpcValue::from_json("-0x8000000000000001").unwrap().as_int(), i64::MIN);
 

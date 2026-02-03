@@ -604,12 +604,12 @@ mod test
         test_cpon_round_trip("123.4", Decimal::new(1234, -1));
         test_cpon_round_trip("0.123", Decimal::new(123, -3));
         test_cpon_round_trip("-0.123", Decimal::new(-123, -3));
-        test_cpon_round_trip("123000000e2", Decimal::new(123000000, 2));
+        test_cpon_round_trip("123000000e2", Decimal::new(123_000_000, 2));
         assert_eq!(Decimal::new(10000, 3).to_cpon_string(), "10000000.");
         assert_eq!(RpcValue::from_cpon("0e0").unwrap().as_decimal(), Decimal::new(0, 0));
         assert_eq!(RpcValue::from_cpon("0.123e3").unwrap().as_decimal(), Decimal::new(123, 0));
-        test_cpon_round_trip("1000000.", Decimal::new(1000000, 0));
-        test_cpon_round_trip("50.03138741402532", Decimal::new(5003138741402532, -14));
+        test_cpon_round_trip("1000000.", Decimal::new(1_000_000, 0));
+        test_cpon_round_trip("50.03138741402532", Decimal::new(5_003_138_741_402_532, -14));
         // We do not support such high precision.
         assert!(RpcValue::from_cpon("36.028797018963968").is_err());
         assert_eq!(RpcValue::from_cpon(r#""foo""#).unwrap().as_str(), "foo");
@@ -696,21 +696,21 @@ mod test
         // read very long decimal without overflow error, value is capped
         assert_eq!(RpcValue::from_cpon("123456789012345678901234567890123456789012345678901234567890").unwrap().as_int(), i64::MAX);
 
-        assert_eq!(RpcValue::from_cpon("9223372036854775806").unwrap().as_int(), 9223372036854775806_i64);
+        assert_eq!(RpcValue::from_cpon("9223372036854775806").unwrap().as_int(), 9_223_372_036_854_775_806_i64);
         assert_eq!(RpcValue::from_cpon("9223372036854775807").unwrap().as_int(), i64::MAX);
         assert_eq!(RpcValue::from_cpon("9223372036854775808").unwrap().as_int(), i64::MAX);
 
-        assert_eq!(RpcValue::from_cpon("0x7FFFFFFFFFFFFFFE").unwrap().as_int(), 0x7FFFFFFFFFFFFFFE_i64);
+        assert_eq!(RpcValue::from_cpon("0x7FFFFFFFFFFFFFFE").unwrap().as_int(), 0x7FFF_FFFF_FFFF_FFFE_i64);
         assert_eq!(RpcValue::from_cpon("0x7FFFFFFFFFFFFFFF").unwrap().as_int(), i64::MAX);
         assert_eq!(RpcValue::from_cpon("0x8000000000000000").unwrap().as_int(), i64::MAX);
 
         assert_eq!(RpcValue::from_cpon("-123456789012345678901234567890123456789012345678901234567890").unwrap().as_int(), i64::MIN);
 
-        assert_eq!(RpcValue::from_cpon("-9223372036854775807").unwrap().as_int(), -9223372036854775807_i64);
+        assert_eq!(RpcValue::from_cpon("-9223372036854775807").unwrap().as_int(), -9_223_372_036_854_775_807_i64);
         assert_eq!(RpcValue::from_cpon("-9223372036854775808").unwrap().as_int(), i64::MIN);
         assert_eq!(RpcValue::from_cpon("-9223372036854775809").unwrap().as_int(), i64::MIN);
 
-        assert_eq!(RpcValue::from_cpon("-0x7FFFFFFFFFFFFFFF").unwrap().as_int(), -0x7FFFFFFFFFFFFFFF_i64);
+        assert_eq!(RpcValue::from_cpon("-0x7FFFFFFFFFFFFFFF").unwrap().as_int(), -0x7FFF_FFFF_FFFF_FFFF_i64);
         assert_eq!(RpcValue::from_cpon("-0x8000000000000000").unwrap().as_int(), i64::MIN);
         assert_eq!(RpcValue::from_cpon("-0x8000000000000001").unwrap().as_int(), i64::MIN);
 

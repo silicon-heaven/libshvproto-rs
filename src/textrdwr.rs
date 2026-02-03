@@ -234,7 +234,7 @@ pub trait TextReader : Reader {
                     let ReadInt { value, digit_cnt, is_overflow, .. } = self.read_int(mantissa, true)?;
                     decimal_overflow = decimal_overflow || is_overflow;
                     mantissa = value;
-                    if mantissa >= 36028797018963968 {
+                    if mantissa >= 36_028_797_018_963_968 {
                         decimal_overflow = true;
                     }
                     dec_cnt = digit_cnt as i64;

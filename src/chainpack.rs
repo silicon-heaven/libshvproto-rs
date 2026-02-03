@@ -30,7 +30,7 @@ pub enum PackingSchema {
     TERM = 255,
 }
 
-const SHV_EPOCH_MSEC: i64 = 1517529600000;
+const SHV_EPOCH_MSEC: i64 = 1_517_529_600_000;
 
 pub struct ChainPackWriter<'a, W>
 where
@@ -60,11 +60,11 @@ where
     fn significant_bits_part_length(num: u64) -> u32 {
         let mut len = 0;
         let mut n = num;
-        if (n & 0xFFFFFFFF00000000) != 0 {
+        if (n & 0xFFFF_FFFF_0000_0000) != 0 {
             len += 32;
             n >>= 32;
         }
-        if (n & 0xFFFF0000) != 0 {
+        if (n & 0xFFFF_0000) != 0 {
             len += 16;
             n >>= 16;
         }
@@ -646,22 +646,22 @@ fn test_int() {
     assert_eq!(chainpack_to_rpcvalue("02").unwrap(), 2_u64.into());
     assert_eq!(chainpack_to_rpcvalue("8178").unwrap(), 120_u64.into());
     assert_eq!(chainpack_to_rpcvalue("8181FC").unwrap(), 508_u64.into());
-    assert_eq!(chainpack_to_rpcvalue("81CFFFFA").unwrap(), 1048570_u64.into());
-    assert_eq!(chainpack_to_rpcvalue("81E1FFFFE0").unwrap(), 33554400_u64.into());
-    assert_eq!(chainpack_to_rpcvalue("82F3138083FD18A37C").unwrap(), 5489328932823932_i64.into());
-    assert_eq!(chainpack_to_rpcvalue("82F47FFFFFFFFFFFFFFF").unwrap(), 9223372036854775807_i64.into());
+    assert_eq!(chainpack_to_rpcvalue("81CFFFFA").unwrap(), 1_048_570_u64.into());
+    assert_eq!(chainpack_to_rpcvalue("81E1FFFFE0").unwrap(), 33_554_400_u64.into());
+    assert_eq!(chainpack_to_rpcvalue("82F3138083FD18A37C").unwrap(), 5_489_328_932_823_932_i64.into());
+    assert_eq!(chainpack_to_rpcvalue("82F47FFFFFFFFFFFFFFF").unwrap(), 9_223_372_036_854_775_807_i64.into());
 
     assert_eq!(rpcvalue_to_chainpack(120_u64.into()), "8178");
     assert_eq!(rpcvalue_to_chainpack(2_u64.into()), "02");
     assert_eq!(rpcvalue_to_chainpack(508_u64.into()), "8181FC");
-    assert_eq!(rpcvalue_to_chainpack(1048570_u64.into()), "81CFFFFA");
-    assert_eq!(rpcvalue_to_chainpack(33554400_u64.into()), "81E1FFFFE0");
-    assert_eq!(rpcvalue_to_chainpack(5489328932823932_i64.into()), "82F3138083FD18A37C");
-    assert_eq!(rpcvalue_to_chainpack(9223372036854775807_i64.into()), "82F47FFFFFFFFFFFFFFF");
+    assert_eq!(rpcvalue_to_chainpack(1_048_570_u64.into()), "81CFFFFA");
+    assert_eq!(rpcvalue_to_chainpack(33_554_400_u64.into()), "81E1FFFFE0");
+    assert_eq!(rpcvalue_to_chainpack(5_489_328_932_823_932_i64.into()), "82F3138083FD18A37C");
+    assert_eq!(rpcvalue_to_chainpack(9_223_372_036_854_775_807_i64.into()), "82F47FFFFFFFFFFFFFFF");
 
     // Negative int
-    assert_eq!(chainpack_to_rpcvalue("82E9FFFFE0").unwrap(), (-33554400).into());
-    assert_eq!(rpcvalue_to_chainpack((-33554400).into()), "82E9FFFFE0");
+    assert_eq!(chainpack_to_rpcvalue("82E9FFFFE0").unwrap(), (-33_554_400).into());
+    assert_eq!(rpcvalue_to_chainpack((-33_554_400).into()), "82E9FFFFE0");
 }
 
 #[test]
@@ -736,43 +736,43 @@ fn test_imap() {
 
 #[test]
 fn test_datetime() {
-    assert_eq!(chainpack_to_rpcvalue("8D04").unwrap(), DateTime::from_epoch_msec_tz(1517529600001, 0).into());
-    assert_eq!(chainpack_to_rpcvalue("8D8211").unwrap(), DateTime::from_epoch_msec_tz(1517529600001, 3600).into());
-    assert_eq!(chainpack_to_rpcvalue("8DE63DDA02").unwrap(), DateTime::from_epoch_msec_tz(1543708800000, 0).into());
-    assert_eq!(chainpack_to_rpcvalue("8DE8A8BFFE").unwrap(), DateTime::from_epoch_msec_tz(1514764800000, 0).into());
-    assert_eq!(chainpack_to_rpcvalue("8DE6DC0E02").unwrap(), DateTime::from_epoch_msec_tz(1546300800000, 0).into());
-    assert_eq!(chainpack_to_rpcvalue("8DF00E60DC02").unwrap(), DateTime::from_epoch_msec_tz(1577836800000, 0).into());
-    assert_eq!(chainpack_to_rpcvalue("8DF015EAF002").unwrap(), DateTime::from_epoch_msec_tz(1609459200000, 0).into());
-    assert_eq!(chainpack_to_rpcvalue("8DF061258802").unwrap(), DateTime::from_epoch_msec_tz(1924992000000, 0).into());
-    assert_eq!(chainpack_to_rpcvalue("8DF100AC656602").unwrap(), DateTime::from_epoch_msec_tz(2240611200000, 0).into());
-    assert_eq!(chainpack_to_rpcvalue("8DF156D74D495F").unwrap(), DateTime::from_epoch_msec_tz(2246004900000, -36900).into());
-    assert_eq!(chainpack_to_rpcvalue("8DF301533905E2375D").unwrap(), DateTime::from_epoch_msec_tz(2246004900123, -36900).into());
+    assert_eq!(chainpack_to_rpcvalue("8D04").unwrap(), DateTime::from_epoch_msec_tz(1_517_529_600_001, 0).into());
+    assert_eq!(chainpack_to_rpcvalue("8D8211").unwrap(), DateTime::from_epoch_msec_tz(1_517_529_600_001, 3600).into());
+    assert_eq!(chainpack_to_rpcvalue("8DE63DDA02").unwrap(), DateTime::from_epoch_msec_tz(1_543_708_800_000, 0).into());
+    assert_eq!(chainpack_to_rpcvalue("8DE8A8BFFE").unwrap(), DateTime::from_epoch_msec_tz(1_514_764_800_000, 0).into());
+    assert_eq!(chainpack_to_rpcvalue("8DE6DC0E02").unwrap(), DateTime::from_epoch_msec_tz(1_546_300_800_000, 0).into());
+    assert_eq!(chainpack_to_rpcvalue("8DF00E60DC02").unwrap(), DateTime::from_epoch_msec_tz(1_577_836_800_000, 0).into());
+    assert_eq!(chainpack_to_rpcvalue("8DF015EAF002").unwrap(), DateTime::from_epoch_msec_tz(1_609_459_200_000, 0).into());
+    assert_eq!(chainpack_to_rpcvalue("8DF061258802").unwrap(), DateTime::from_epoch_msec_tz(1_924_992_000_000, 0).into());
+    assert_eq!(chainpack_to_rpcvalue("8DF100AC656602").unwrap(), DateTime::from_epoch_msec_tz(2_240_611_200_000, 0).into());
+    assert_eq!(chainpack_to_rpcvalue("8DF156D74D495F").unwrap(), DateTime::from_epoch_msec_tz(2_246_004_900_000, -36900).into());
+    assert_eq!(chainpack_to_rpcvalue("8DF301533905E2375D").unwrap(), DateTime::from_epoch_msec_tz(2_246_004_900_123, -36900).into());
     assert_eq!(chainpack_to_rpcvalue("8DF18169CEA7FE").unwrap(), DateTime::from_epoch_msec_tz(0, 0).into());
-    assert_eq!(chainpack_to_rpcvalue("8DEDA8E7F2").unwrap(), DateTime::from_epoch_msec_tz(1493790723000, 0).into());
-    assert_eq!(chainpack_to_rpcvalue("8DF1961334BEB4").unwrap(), DateTime::from_epoch_msec_tz(1493826723923, 0).into());
-    assert_eq!(chainpack_to_rpcvalue("8DF28B0DE42CD95F").unwrap(), DateTime::from_epoch_msec_tz(1493790751123, 36000).into());
-    assert_eq!(chainpack_to_rpcvalue("8DEDA6B572").unwrap(), DateTime::from_epoch_msec_tz(1493826723000, 0).into());
-    assert_eq!(chainpack_to_rpcvalue("8DF182D3308815").unwrap(), DateTime::from_epoch_msec_tz(1493832123000, -5400).into());
-    assert_eq!(chainpack_to_rpcvalue("8DF1961334BEB4").unwrap(), DateTime::from_epoch_msec_tz(1493826723923, 0).into());
+    assert_eq!(chainpack_to_rpcvalue("8DEDA8E7F2").unwrap(), DateTime::from_epoch_msec_tz(1_493_790_723_000, 0).into());
+    assert_eq!(chainpack_to_rpcvalue("8DF1961334BEB4").unwrap(), DateTime::from_epoch_msec_tz(1_493_826_723_923, 0).into());
+    assert_eq!(chainpack_to_rpcvalue("8DF28B0DE42CD95F").unwrap(), DateTime::from_epoch_msec_tz(1_493_790_751_123, 36000).into());
+    assert_eq!(chainpack_to_rpcvalue("8DEDA6B572").unwrap(), DateTime::from_epoch_msec_tz(1_493_826_723_000, 0).into());
+    assert_eq!(chainpack_to_rpcvalue("8DF182D3308815").unwrap(), DateTime::from_epoch_msec_tz(1_493_832_123_000, -5400).into());
+    assert_eq!(chainpack_to_rpcvalue("8DF1961334BEB4").unwrap(), DateTime::from_epoch_msec_tz(1_493_826_723_923, 0).into());
 
-    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(1517529600001, 0).into()), "8D04");
-    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(1517529600001, 3600).into()), "8D8211");
-    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(1543708800000, 0).into()), "8DE63DDA02");
-    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(1514764800000, 0).into()), "8DE8A8BFFE");
-    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(1546300800000, 0).into()), "8DE6DC0E02");
-    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(1577836800000, 0).into()), "8DF00E60DC02");
-    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(1609459200000, 0).into()), "8DF015EAF002");
-    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(1924992000000, 0).into()), "8DF061258802");
-    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(2240611200000, 0).into()), "8DF100AC656602");
-    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(2246004900000, -36900).into()), "8DF156D74D495F");
-    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(2246004900123, -36900).into()), "8DF301533905E2375D");
+    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(1_517_529_600_001, 0).into()), "8D04");
+    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(1_517_529_600_001, 3600).into()), "8D8211");
+    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(1_543_708_800_000, 0).into()), "8DE63DDA02");
+    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(1_514_764_800_000, 0).into()), "8DE8A8BFFE");
+    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(1_546_300_800_000, 0).into()), "8DE6DC0E02");
+    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(1_577_836_800_000, 0).into()), "8DF00E60DC02");
+    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(1_609_459_200_000, 0).into()), "8DF015EAF002");
+    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(1_924_992_000_000, 0).into()), "8DF061258802");
+    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(2_240_611_200_000, 0).into()), "8DF100AC656602");
+    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(2_246_004_900_000, -36900).into()), "8DF156D74D495F");
+    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(2_246_004_900_123, -36900).into()), "8DF301533905E2375D");
     assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(0, 0).into()), "8DF18169CEA7FE");
-    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(1493790723000, 0).into()), "8DEDA8E7F2");
-    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(1493826723923, 0).into()), "8DF1961334BEB4");
-    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(1493790751123, 36000).into()), "8DF28B0DE42CD95F");
-    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(1493826723000, 0).into()), "8DEDA6B572");
-    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(1493832123000, -5400).into()), "8DF182D3308815");
-    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(1493826723923, 0).into()), "8DF1961334BEB4");
+    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(1_493_790_723_000, 0).into()), "8DEDA8E7F2");
+    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(1_493_826_723_923, 0).into()), "8DF1961334BEB4");
+    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(1_493_790_751_123, 36000).into()), "8DF28B0DE42CD95F");
+    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(1_493_826_723_000, 0).into()), "8DEDA6B572");
+    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(1_493_832_123_000, -5400).into()), "8DF182D3308815");
+    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(1_493_826_723_923, 0).into()), "8DF1961334BEB4");
 }
 
 #[test]
