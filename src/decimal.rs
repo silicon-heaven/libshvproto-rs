@@ -26,7 +26,7 @@ impl Decimal {
     }
     pub fn decode(&self) -> (i64, i8) {
         let m = self.0 >> 8;
-        let e = self.0 as i8;
+        let e = (self.0 & 0xFF) as i8;
         (m, e)
     }
     pub fn mantissa(&self) -> i64 {
