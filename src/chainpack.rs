@@ -634,10 +634,10 @@ fn chainpack_to_rpcvalue(data: &str) -> Result<RpcValue, ReadError> {
 }
 
 #[cfg(test)]
-fn rpcvalue_to_chainpack(value: RpcValue) -> String {
+fn rpcvalue_to_chainpack(value: &RpcValue) -> String {
     let mut data = Vec::new();
     let mut wr = ChainPackWriter::new(&mut data);
-    wr.write(&value).expect("Write must work");
+    wr.write(value).expect("Write must work");
     hex::encode(data).to_uppercase()
 }
 
@@ -652,23 +652,23 @@ fn test_int() {
     assert_eq!(chainpack_to_rpcvalue("82F3138083FD18A37C").unwrap(), 5_489_328_932_823_932_i64.into());
     assert_eq!(chainpack_to_rpcvalue("82F47FFFFFFFFFFFFFFF").unwrap(), 9_223_372_036_854_775_807_i64.into());
 
-    assert_eq!(rpcvalue_to_chainpack(120_u64.into()), "8178");
-    assert_eq!(rpcvalue_to_chainpack(2_u64.into()), "02");
-    assert_eq!(rpcvalue_to_chainpack(508_u64.into()), "8181FC");
-    assert_eq!(rpcvalue_to_chainpack(1_048_570_u64.into()), "81CFFFFA");
-    assert_eq!(rpcvalue_to_chainpack(33_554_400_u64.into()), "81E1FFFFE0");
-    assert_eq!(rpcvalue_to_chainpack(5_489_328_932_823_932_i64.into()), "82F3138083FD18A37C");
-    assert_eq!(rpcvalue_to_chainpack(9_223_372_036_854_775_807_i64.into()), "82F47FFFFFFFFFFFFFFF");
+    assert_eq!(rpcvalue_to_chainpack(&120_u64.into()), "8178");
+    assert_eq!(rpcvalue_to_chainpack(&2_u64.into()), "02");
+    assert_eq!(rpcvalue_to_chainpack(&508_u64.into()), "8181FC");
+    assert_eq!(rpcvalue_to_chainpack(&1_048_570_u64.into()), "81CFFFFA");
+    assert_eq!(rpcvalue_to_chainpack(&33_554_400_u64.into()), "81E1FFFFE0");
+    assert_eq!(rpcvalue_to_chainpack(&5_489_328_932_823_932_i64.into()), "82F3138083FD18A37C");
+    assert_eq!(rpcvalue_to_chainpack(&9_223_372_036_854_775_807_i64.into()), "82F47FFFFFFFFFFFFFFF");
 
     // Negative int
     assert_eq!(chainpack_to_rpcvalue("82E9FFFFE0").unwrap(), (-33_554_400).into());
-    assert_eq!(rpcvalue_to_chainpack((-33_554_400).into()), "82E9FFFFE0");
+    assert_eq!(rpcvalue_to_chainpack(&(-33_554_400).into()), "82E9FFFFE0");
 }
 
 #[test]
 fn test_string() {
     assert_eq!(chainpack_to_rpcvalue("860541484F4A21").unwrap(), "AHOJ!".into());
-    assert_eq!(rpcvalue_to_chainpack("AHOJ!".into()), "860541484F4A21");
+    assert_eq!(rpcvalue_to_chainpack(&"AHOJ!".into()), "860541484F4A21");
 
     // Invalid UTF-8 string
     assert!(chainpack_to_rpcvalue("8602C328").is_err());
@@ -677,16 +677,16 @@ fn test_string() {
 #[test]
 fn test_true_false_packing_schema() {
     assert_eq!(chainpack_to_rpcvalue("FE").unwrap(), true.into());
-    assert_eq!(rpcvalue_to_chainpack(true.into()), "FE");
+    assert_eq!(rpcvalue_to_chainpack(&true.into()), "FE");
 
     assert_eq!(chainpack_to_rpcvalue("FD").unwrap(), false.into());
-    assert_eq!(rpcvalue_to_chainpack(false.into()), "FD");
+    assert_eq!(rpcvalue_to_chainpack(&false.into()), "FD");
 }
 
 #[test]
 fn test_cstring() {
     assert_eq!(chainpack_to_rpcvalue("8E41484F4A2100").unwrap(), "AHOJ!".into());
-    assert_eq!(rpcvalue_to_chainpack("AHOJ!".into()), "860541484F4A21");
+    assert_eq!(rpcvalue_to_chainpack(&"AHOJ!".into()), "860541484F4A21");
 
     // Invalid UTF-8 string
     assert!(chainpack_to_rpcvalue("8EC32800").is_err());
@@ -696,14 +696,14 @@ fn test_cstring() {
 fn test_blob() {
     let blob = vec![170u8; 10];
     assert_eq!(chainpack_to_rpcvalue("850AAAAAAAAAAAAAAAAAAAAA").unwrap(), blob.clone().into());
-    assert_eq!(rpcvalue_to_chainpack(blob.into()), "850AAAAAAAAAAAAAAAAAAAAA");
+    assert_eq!(rpcvalue_to_chainpack(&blob.into()), "850AAAAAAAAAAAAAAAAAAAAA");
 }
 
 #[test]
 fn test_list() {
     let list = crate::make_list!["a", 123, true, crate::make_list![1, 2, 3], RpcValue::null()];
     assert_eq!(chainpack_to_rpcvalue("8886016182807BFE88414243FF80FF").unwrap(), RpcValue::from(list.clone()));
-    assert_eq!(rpcvalue_to_chainpack(RpcValue::from(list)), "8886016182807BFE88414243FF80FF");
+    assert_eq!(rpcvalue_to_chainpack(&RpcValue::from(list)), "8886016182807BFE88414243FF80FF");
 }
 
 #[test]
@@ -714,7 +714,7 @@ fn test_map() {
         "foo" => vec![11,12,13]
     };
     assert_eq!(chainpack_to_rpcvalue("89860362617242860362617A438603666F6F884B4C4DFFFF").unwrap(), map.clone().into());
-    assert_eq!(rpcvalue_to_chainpack(map.into()), "89860362617242860362617A438603666F6F884B4C4DFFFF");
+    assert_eq!(rpcvalue_to_chainpack(&map.into()), "89860362617242860362617A438603666F6F884B4C4DFFFF");
 
     // Invalid key
     assert_eq!(chainpack_to_rpcvalue("898200").unwrap_err().msg, "ChainPack read error - Invalid Map key '0'");
@@ -729,7 +729,7 @@ fn test_imap() {
     };
 
     assert_eq!(chainpack_to_rpcvalue("8A418603666F6F42860362617282814D4FFF").unwrap(), imap.clone().into());
-    assert_eq!(rpcvalue_to_chainpack(imap.into()), "8A418603666F6F42860362617282814D4FFF");
+    assert_eq!(rpcvalue_to_chainpack(&imap.into()), "8A418603666F6F42860362617282814D4FFF");
 
     // Invalid key
     assert_eq!(chainpack_to_rpcvalue("8A8603626172").unwrap_err().msg, "ChainPack read error - Invalid IMap key '\"bar\"'");
@@ -756,37 +756,37 @@ fn test_datetime() {
     assert_eq!(chainpack_to_rpcvalue("8DF182D3308815").unwrap(), DateTime::from_epoch_msec_tz(1_493_832_123_000, -5400).into());
     assert_eq!(chainpack_to_rpcvalue("8DF1961334BEB4").unwrap(), DateTime::from_epoch_msec_tz(1_493_826_723_923, 0).into());
 
-    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(1_517_529_600_001, 0).into()), "8D04");
-    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(1_517_529_600_001, 3600).into()), "8D8211");
-    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(1_543_708_800_000, 0).into()), "8DE63DDA02");
-    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(1_514_764_800_000, 0).into()), "8DE8A8BFFE");
-    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(1_546_300_800_000, 0).into()), "8DE6DC0E02");
-    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(1_577_836_800_000, 0).into()), "8DF00E60DC02");
-    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(1_609_459_200_000, 0).into()), "8DF015EAF002");
-    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(1_924_992_000_000, 0).into()), "8DF061258802");
-    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(2_240_611_200_000, 0).into()), "8DF100AC656602");
-    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(2_246_004_900_000, -36900).into()), "8DF156D74D495F");
-    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(2_246_004_900_123, -36900).into()), "8DF301533905E2375D");
-    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(0, 0).into()), "8DF18169CEA7FE");
-    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(1_493_790_723_000, 0).into()), "8DEDA8E7F2");
-    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(1_493_826_723_923, 0).into()), "8DF1961334BEB4");
-    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(1_493_790_751_123, 36000).into()), "8DF28B0DE42CD95F");
-    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(1_493_826_723_000, 0).into()), "8DEDA6B572");
-    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(1_493_832_123_000, -5400).into()), "8DF182D3308815");
-    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(1_493_826_723_923, 0).into()), "8DF1961334BEB4");
+    assert_eq!(rpcvalue_to_chainpack(&DateTime::from_epoch_msec_tz(1_517_529_600_001, 0).into()), "8D04");
+    assert_eq!(rpcvalue_to_chainpack(&DateTime::from_epoch_msec_tz(1_517_529_600_001, 3600).into()), "8D8211");
+    assert_eq!(rpcvalue_to_chainpack(&DateTime::from_epoch_msec_tz(1_543_708_800_000, 0).into()), "8DE63DDA02");
+    assert_eq!(rpcvalue_to_chainpack(&DateTime::from_epoch_msec_tz(1_514_764_800_000, 0).into()), "8DE8A8BFFE");
+    assert_eq!(rpcvalue_to_chainpack(&DateTime::from_epoch_msec_tz(1_546_300_800_000, 0).into()), "8DE6DC0E02");
+    assert_eq!(rpcvalue_to_chainpack(&DateTime::from_epoch_msec_tz(1_577_836_800_000, 0).into()), "8DF00E60DC02");
+    assert_eq!(rpcvalue_to_chainpack(&DateTime::from_epoch_msec_tz(1_609_459_200_000, 0).into()), "8DF015EAF002");
+    assert_eq!(rpcvalue_to_chainpack(&DateTime::from_epoch_msec_tz(1_924_992_000_000, 0).into()), "8DF061258802");
+    assert_eq!(rpcvalue_to_chainpack(&DateTime::from_epoch_msec_tz(2_240_611_200_000, 0).into()), "8DF100AC656602");
+    assert_eq!(rpcvalue_to_chainpack(&DateTime::from_epoch_msec_tz(2_246_004_900_000, -36900).into()), "8DF156D74D495F");
+    assert_eq!(rpcvalue_to_chainpack(&DateTime::from_epoch_msec_tz(2_246_004_900_123, -36900).into()), "8DF301533905E2375D");
+    assert_eq!(rpcvalue_to_chainpack(&DateTime::from_epoch_msec_tz(0, 0).into()), "8DF18169CEA7FE");
+    assert_eq!(rpcvalue_to_chainpack(&DateTime::from_epoch_msec_tz(1_493_790_723_000, 0).into()), "8DEDA8E7F2");
+    assert_eq!(rpcvalue_to_chainpack(&DateTime::from_epoch_msec_tz(1_493_826_723_923, 0).into()), "8DF1961334BEB4");
+    assert_eq!(rpcvalue_to_chainpack(&DateTime::from_epoch_msec_tz(1_493_790_751_123, 36000).into()), "8DF28B0DE42CD95F");
+    assert_eq!(rpcvalue_to_chainpack(&DateTime::from_epoch_msec_tz(1_493_826_723_000, 0).into()), "8DEDA6B572");
+    assert_eq!(rpcvalue_to_chainpack(&DateTime::from_epoch_msec_tz(1_493_832_123_000, -5400).into()), "8DF182D3308815");
+    assert_eq!(rpcvalue_to_chainpack(&DateTime::from_epoch_msec_tz(1_493_826_723_923, 0).into()), "8DF1961334BEB4");
 }
 
 #[test]
 fn test_double() {
     assert_eq!(chainpack_to_rpcvalue("830000000000C208B8").unwrap(), RpcValue::from(-9.094_583_978_896_067E-39_f64));
-    assert_eq!(rpcvalue_to_chainpack(RpcValue::from(-9.094_583_978_896_067E-39_f64)), "830000000000C208B8");
+    assert_eq!(rpcvalue_to_chainpack(&RpcValue::from(-9.094_583_978_896_067E-39_f64)), "830000000000C208B8");
 }
 
 #[test]
 fn test_decimal() {
     let dec = crate::decimal::Decimal::new(0, 0);
     assert_eq!(chainpack_to_rpcvalue("8C0000").unwrap(), dec.into());
-    assert_eq!(rpcvalue_to_chainpack(dec.into()), "8C0000");
+    assert_eq!(rpcvalue_to_chainpack(&dec.into()), "8C0000");
 }
 
 #[test]
