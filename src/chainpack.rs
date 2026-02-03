@@ -1,3 +1,4 @@
+#![allow(clippy::cast_possible_truncation, reason = "Lots of casting here")]
 use crate::reader::{ByteReader, ReadError, ReadErrorReason, Reader};
 use crate::rpcvalue::{IMap, Map};
 use crate::writer::{ByteWriter, Writer};
@@ -78,7 +79,7 @@ where
         }
         const SIG_TABLE_4BIT: [u8; 16] = [0, 1, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4];
         len += SIG_TABLE_4BIT[n as usize];
-        len as u32
+        u32::from(len)
     }
     /// number of bytes needed to encode bit_len
     fn bytes_needed(bit_len: u32) -> u32 {
@@ -150,10 +151,10 @@ where
         let mut num: u64;
         let neg;
         if number < 0 {
-            num = (-number) as u64;
+            num = (-number).cast_unsigned();
             neg = true;
         } else {
-            num = number as u64;
+            num = number.cast_unsigned();
             neg = false;
         };
 
@@ -170,6 +171,7 @@ where
     fn write_int(&mut self, n: i64) -> WriteResult {
         let cnt = self.byte_writer.count();
         if (0..64).contains(&n) {
+            #[expect(clippy::cast_sign_loss, reason = "n is already between 0 and 64")]
             self.write_byte(((n % 64) + 64) as u8)?;
         } else {
             self.write_byte(PackingSchema::Int as u8)?;
@@ -196,7 +198,7 @@ where
     fn write_decimal(&mut self, decimal: &Decimal) -> WriteResult {
         let cnt = self.write_byte(PackingSchema::Decimal as u8)?;
         self.write_int_data(decimal.mantissa())?;
-        self.write_int_data(decimal.exponent() as i64)?;
+        self.write_int_data(i64::from(decimal.exponent()))?;
         Ok(self.byte_writer.count() - cnt)
     }
     fn write_datetime(&mut self, dt: &DateTime) -> WriteResult {
@@ -209,7 +211,7 @@ where
         }
         if offset != 0 {
             msecs <<= 7;
-            msecs |= offset as i64;
+            msecs |= i64::from(offset);
         }
         msecs <<= 2;
         if offset != 0 {
@@ -241,7 +243,7 @@ where
     fn write_imap(&mut self, map: &IMap) -> WriteResult {
         let cnt = self.write_byte(PackingSchema::IMap as u8)?;
         for (k, v) in map {
-            self.write_int(*k as i64)?;
+            self.write_int(i64::from(*k))?;
             self.write(v)?;
         }
         self.write_byte(PackingSchema::TERM as u8)?;
@@ -272,7 +274,7 @@ where
         for k in map.0.iter() {
             match &k.key {
                 MetaKey::Str(s) => self.write_string(s)?,
-                MetaKey::Int(i) => self.write_int(*i as i64)?,
+                MetaKey::Int(i) => self.write_int(i64::from(*i))?,
             };
             self.write(&k.value)?;
         }
@@ -353,19 +355,19 @@ where
         let bitlen;
         if (head & 128) == 0 {
             bytes_to_read_cnt = 0;
-            num = (head & 127) as u64;
+            num = u64::from(head & 127);
             bitlen = 7;
         } else if (head & 64) == 0 {
             bytes_to_read_cnt = 1;
-            num = (head & 63) as u64;
+            num = u64::from(head & 63);
             bitlen = 6 + 8;
         } else if (head & 32) == 0 {
             bytes_to_read_cnt = 2;
-            num = (head & 31) as u64;
+            num = u64::from(head & 31);
             bitlen = 5 + 2 * 8;
         } else if (head & 16) == 0 {
             bytes_to_read_cnt = 3;
-            num = (head & 15) as u64;
+            num = u64::from(head & 15);
             bitlen = 4 + 3 * 8;
         } else if head == 0xFF {
             return Err(self.make_error(
@@ -378,7 +380,7 @@ where
         }
         for _ in 0..bytes_to_read_cnt {
             let r = self.get_byte()?;
-            num = (num << 8) + (r as u64);
+            num = (num << 8) + u64::from(r);
         }
         Ok((num, bitlen))
     }
@@ -390,9 +392,9 @@ where
         let (num, bitlen) = self.read_uint_data_helper()?;
         let sign_bit_mask = (1_u64) << (bitlen - 1);
         let neg = (num & sign_bit_mask) != 0;
-        let mut snum = num as i64;
+        let mut snum = num.cast_signed();
         if neg {
-            snum &= !(sign_bit_mask as i64);
+            snum &= !(sign_bit_mask.cast_signed());
             snum = -snum;
         }
         Ok(snum)
@@ -514,7 +516,7 @@ where
             d *= 1000;
         }
         d += SHV_EPOCH_MSEC;
-        let dt = DateTime::from_epoch_msec_tz(d, (offset as i32 * 15) * 60);
+        let dt = DateTime::from_epoch_msec_tz(d, (i32::from(offset) * 15) * 60);
         Ok(Value::from(dt))
     }
     fn read_double_data(&mut self) -> Result<Value, ReadError> {
@@ -577,10 +579,10 @@ where
         let v = if b < 128 {
             if (b & 64) == 0 {
                 // tiny UInt
-                Value::from((b & 63) as u64)
+                Value::from(u64::from(b & 63))
             } else {
                 // tiny Int
-                Value::from((b & 63) as i64)
+                Value::from(i64::from(b & 63))
             }
         } else if b == PackingSchema::Int as u8 {
             let n = self.read_int_data()?;

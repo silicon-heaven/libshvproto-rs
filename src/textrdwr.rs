@@ -120,7 +120,7 @@ pub trait TextReader : Reader {
         let mut is_overflow = false;
         fn add_digit(val: i64, base: i64, digit: u8) -> Option<i64> {
             let res = val.checked_mul(base)?;
-            let res = res.checked_add(digit as i64)?;
+            let res = res.checked_add(i64::from(digit))?;
             Some(res)
         }
         loop {
@@ -237,7 +237,7 @@ pub trait TextReader : Reader {
                     if mantissa >= 36_028_797_018_963_968 {
                         decimal_overflow = true;
                     }
-                    dec_cnt = digit_cnt as i64;
+                    dec_cnt = i64::from(digit_cnt);
                 }
                 b'e' | b'E' => {
                     if state != State::Mantissa && state != State::Decimals {
@@ -263,13 +263,14 @@ pub trait TextReader : Reader {
             if decimal_overflow {
                 return Err(self.make_error("Not enough precision to read the Decimal", ReadErrorReason::InvalidCharacter))
             }
+            #[expect(clippy::cast_possible_truncation, reason = "We hope that the new exponent is not big enough to truncate")]
             return Ok(Value::from(Decimal::new(mantissa, (exponent - dec_cnt) as i8)))
         }
         if is_uint {
             if decimal_overflow {
                 return Ok(Value::from(i64::MAX as u64))
             }
-            return Ok(Value::from(mantissa as u64))
+            return Ok(Value::from(mantissa.cast_unsigned()))
         }
         if decimal_overflow {
             return Ok(Value::from(if is_negative { i64::MIN } else { i64::MAX }))

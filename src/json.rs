@@ -111,7 +111,7 @@ impl<'a, W> JsonWriter<'a, W>
                 self.write_byte(b',')?;
             }
             self.write_byte(b'"')?;
-            self.write_int(*k as i64)?;
+            self.write_int(i64::from(*k))?;
             self.write_byte(b'"')?;
             self.write_byte(b':')?;
             self.write(v)?;
@@ -209,7 +209,7 @@ where W: Write
                 self.write_bytes("false".as_bytes())
             },
             Value::Int(n) => self.write_int(*n),
-            Value::UInt(n) => self.write_int(*n as i64),
+            Value::UInt(n) => self.write_int(n.cast_signed()),
             Value::String(s) => self.write_string(s),
             Value::Blob(b) => self.write_blob(b),
             Value::Double(n) => self.write_double(*n),

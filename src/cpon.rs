@@ -258,7 +258,7 @@ impl<'a, W> CponWriter<'a, W>
                 self.write_byte(b',')?;
             }
             self.indent_element(is_oneliner, n == 0)?;
-            self.write_int(*k as i64)?;
+            self.write_int(i64::from(*k))?;
             self.write_byte(b':')?;
             self.write(v)?;
         }
@@ -440,6 +440,7 @@ impl<'a, R> CponReader<'a, R>
             let key = if is_negative { -value } else { value };
             self.skip_white_insignificant()?;
             let val = self.read()?;
+            #[expect(clippy::cast_possible_truncation, reason = "We hope that the key is small enough to fit")]
             map.insert(key as i32, val);
         }
         Ok(Value::from(map))

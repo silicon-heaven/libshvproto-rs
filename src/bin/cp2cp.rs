@@ -85,6 +85,7 @@ fn process_chainpack_rpc_block(mut reader: Box<dyn BufRead>) -> ! {
         cpon: "".to_string(),
     };
     let mut rd = ChainPackReader::new(&mut reader);
+    #[expect(clippy::cast_possible_truncation, reason = "We assume pointer size is 64-bit")]
     match rd.read_uint_data() {
         Ok(frame_length) => {
             result.block_length = Some(frame_length as usize + rd.position());

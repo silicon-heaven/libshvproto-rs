@@ -150,6 +150,7 @@ impl jaq_all::jaq_std::ValT for RpcValue {
 
     fn as_isize(&self) -> Option<isize> {
         match self.value {
+            #[expect(clippy::cast_possible_truncation, reason = "We assume pointer size is 64-bit")]
             Value::Int(num) => Some(num as isize),
             _ => None,
         }
@@ -191,7 +192,7 @@ impl jaq_all::jaq_core::ValT for RpcValue {
                 Box::new(list
                     .into_iter()
                     .enumerate()
-                    .map(|(idx, val)| Ok((RpcValue::from(idx as isize), val))))
+                    .map(|(idx, val)| Ok((RpcValue::from(idx.cast_signed()), val))))
             }
             Value::Map(map) => {
                 Box::new(map
@@ -231,7 +232,9 @@ impl jaq_all::jaq_core::ValT for RpcValue {
     fn index(self, index: &Self) -> ValR {
         match (&self.value, &index.value) {
             (Value::Null, _) => Ok(RpcValue::null()),
+            #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss, reason = "We assume pointer size is 64-bit")]
             (Value::String(rv), Value::Int(i)) => Ok(rv.chars().nth(*i as usize).map(|cha| cha.to_string()).into()),
+            #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss, reason = "We assume pointer size is 64-bit")]
             (Value::List(list), Value::Int(i)) => Ok((*list).get(*i as usize).cloned().unwrap_or(RpcValue::null())),
             (Value::Map(o), Value::String(key)) => Ok(o.get(key.as_str()).cloned().unwrap_or(RpcValue::null())),
             (_s, _) => Err(Error::typ(self, "")),

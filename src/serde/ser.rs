@@ -44,43 +44,43 @@ impl serde::Serializer for ValueSerializer {
     }
 
     fn serialize_i8(self, v: i8) -> Result<Self::Ok, Self::Error> {
-        Ok(Value::Int(v as _))
+        Ok(Value::Int(<_>::from(v)))
     }
 
     fn serialize_i16(self, v: i16) -> Result<Self::Ok, Self::Error> {
-        Ok(Value::Int(v as _))
+        Ok(Value::Int(<_>::from(v)))
     }
 
     fn serialize_i32(self, v: i32) -> Result<Self::Ok, Self::Error> {
-        Ok(Value::Int(v as _))
+        Ok(Value::Int(<_>::from(v)))
     }
 
     fn serialize_i64(self, v: i64) -> Result<Self::Ok, Self::Error> {
-        Ok(Value::Int(v as _))
+        Ok(Value::Int(v))
     }
 
     fn serialize_u8(self, v: u8) -> Result<Self::Ok, Self::Error> {
-        Ok(Value::UInt(v as _))
+        Ok(Value::UInt(<_>::from(v)))
     }
 
     fn serialize_u16(self, v: u16) -> Result<Self::Ok, Self::Error> {
-        Ok(Value::UInt(v as _))
+        Ok(Value::UInt(<_>::from(v)))
     }
 
     fn serialize_u32(self, v: u32) -> Result<Self::Ok, Self::Error> {
-        Ok(Value::UInt(v as _))
+        Ok(Value::UInt(<_>::from(v)))
     }
 
     fn serialize_u64(self, v: u64) -> Result<Self::Ok, Self::Error> {
-        Ok(Value::UInt(v as _))
+        Ok(Value::UInt(v))
     }
 
     fn serialize_f32(self, v: f32) -> Result<Self::Ok, Self::Error> {
-        Ok(Value::Double(v as _))
+        Ok(Value::Double(<_>::from(v)))
     }
 
     fn serialize_f64(self, v: f64) -> Result<Self::Ok, Self::Error> {
-        Ok(Value::Double(v as _))
+        Ok(Value::Double(v))
     }
 
     fn serialize_char(self, v: char) -> Result<Self::Ok, Self::Error> {
@@ -669,12 +669,8 @@ impl serde::ser::SerializeMap for ValueSerializeIMap {
 
     fn serialize_key<T: ?Sized + serde::Serialize>(&mut self, key: &T) -> Result<(), Self::Error> {
         if let Value::Int(i) = key.serialize(ValueSerializer)? {
-            if i <= i32::MAX as _ {
-                self.next_key = Some(i as _);
-                Ok(())
-            } else {
-                Err(Error::custom("IMap keys must be i32-compatible"))
-            }
+            self.next_key = Some(i32::try_from(i).map_err(|_err| Error::custom("IMap keys must be i32-compatible"))?);
+            Ok(())
         } else {
             Err(Error::custom("IMap key must be an integer"))
         }

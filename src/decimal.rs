@@ -1,3 +1,4 @@
+#![allow(clippy::cast_sign_loss, clippy::cast_possible_truncation, clippy::cast_precision_loss, reason = "Lots of casting here")]
 /// mantisa: 56, exponent: 8;
 /// I'm storing whole Decimal in one i64 to keep size_of RpcValue == 24
 #[derive(Debug, Copy, Clone)]
@@ -7,7 +8,7 @@ impl Decimal {
 
     pub fn new(mantissa: i64, exponent: i8) -> Decimal {
         let mut n = mantissa << 8;
-        n |= (exponent as i64) & 0xff;
+        n |= i64::from(exponent) & 0xff;
         Decimal(n)
     }
     pub fn normalize(&self) -> Decimal {

@@ -63,7 +63,7 @@ impl DateTime {
         let mut msec = epoch_msec;
         // offset in quarters of hour
         msec *= TZ_MASK + 1;
-        let offset = (utc_offset_sec / 60 / 15) as i64;
+        let offset = i64::from(utc_offset_sec / 60 / 15);
         msec |= offset & TZ_MASK;
         DateTime(msec)
     }
@@ -111,7 +111,7 @@ impl DateTime {
                             return Err(format!("Invalid DateTime TZ part: '{rest}, date time: {iso_str}"))
                         }
                     }
-                    let epoch_msec = (ndt.and_utc().timestamp() - (offset as i64)) * 1000 + (msec as i64);
+                    let epoch_msec = (ndt.and_utc().timestamp() - i64::from(offset)) * 1000 + i64::from(msec);
                     let dt = DateTime::from_epoch_msec_tz(epoch_msec, offset);
                     return Ok(dt)
                 }
@@ -125,6 +125,7 @@ impl DateTime {
             // sign extension
             offset |= !TZ_MASK;
         }
+        #[expect(clippy::cast_possible_truncation, reason = "We hope that the offset is small enough to fit")]
         let offset = (offset * 15 * 60) as i32;
         (msec, offset)
     }

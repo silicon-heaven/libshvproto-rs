@@ -42,11 +42,13 @@ impl GetIndex for i32 {
 }
 impl GetIndex for u32 {
     fn make_key(&self) -> GetKey<'_> {
+        #[expect(clippy::cast_possible_wrap, reason = "We hope that the key is small enough to fit")]
         GetKey::Int(*self as i32)
     }
 }
 impl GetIndex for usize {
     fn make_key(&self) -> GetKey<'_> {
+        #[expect(clippy::cast_possible_truncation, clippy::cast_possible_wrap, reason = "We hope that the key is small enough to fit")]
         GetKey::Int(*self as i32)
     }
 }
