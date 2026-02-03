@@ -12,7 +12,7 @@ impl Decimal {
         Decimal(n)
     }
     #[must_use]
-    pub fn normalize(&self) -> Decimal {
+    pub fn normalize(self) -> Decimal {
         let (mut mantissa, mut exponent) = self.decode();
         if mantissa == 0 {
             return Decimal::new(0, 0);
@@ -26,18 +26,18 @@ impl Decimal {
 
         Decimal::new(mantissa, exponent)
     }
-    pub fn decode(&self) -> (i64, i8) {
+    pub fn decode(self) -> (i64, i8) {
         let m = self.0 >> 8;
         let e = (self.0 & 0xFF) as i8;
         (m, e)
     }
-    pub fn mantissa(&self) -> i64 {
+    pub fn mantissa(self) -> i64 {
         self.decode().0
     }
-    pub fn exponent(&self) -> i8 {
+    pub fn exponent(self) -> i8 {
         self.decode().1
     }
-    pub fn to_cpon_string(&self) -> String {
+    pub fn to_cpon_string(self) -> String {
         let mut neg = false;
         let (mut mantissa, exponent) = self.decode();
         if mantissa < 0 {
@@ -79,7 +79,7 @@ impl Decimal {
         }
         s
     }
-    pub fn to_f64(&self) -> f64 {
+    pub fn to_f64(self) -> f64 {
         let decoded = self.decode();
         let mut d = decoded.0 as f64;
         let exp = decoded.1;
@@ -156,17 +156,17 @@ mod tests {
     #[test]
     fn decimal_normalization_removes_trailing_zeros() {
         let d1 = Decimal::new(1000, -3);
-        let n1 = Decimal::normalize(&d1);
+        let n1 = Decimal::normalize(d1);
         assert_eq!(n1.mantissa(), 1);
         assert_eq!(n1.exponent(), 0);
 
         let d2 = Decimal::new(1200, -3);
-        let n2 = Decimal::normalize(&d2);
+        let n2 = Decimal::normalize(d2);
         assert_eq!(n2.mantissa(), 12);
         assert_eq!(n2.exponent(), -1);
 
         let d3 = Decimal::new(500, -1);
-        let n3 = Decimal::normalize(&d3);
+        let n3 = Decimal::normalize(d3);
         assert_eq!(n3.mantissa(), 5);
         assert_eq!(n3.exponent(), 1);
     }
@@ -174,7 +174,7 @@ mod tests {
     #[test]
     fn decimal_normalization_zero() {
         let zero = Decimal::new(0, -10);
-        let n = Decimal::normalize(&zero);
+        let n = Decimal::normalize(zero);
         assert_eq!(n.mantissa(), 0);
         assert_eq!(n.exponent(), 0);
     }
@@ -182,7 +182,7 @@ mod tests {
     #[test]
     fn decimal_normalization_negative() {
         let d = Decimal::new(-5000, -3);
-        let n = Decimal::normalize(&d);
+        let n = Decimal::normalize(d);
         assert_eq!(n.mantissa(), -5);
         assert_eq!(n.exponent(), 0);
     }
@@ -192,7 +192,7 @@ mod tests {
         // This also tests conversion to f64 with a positive/negative/zero exponent.
         for exp in [-3, 0, 3] {
             let d = Decimal::new(1200, exp);
-            let n = Decimal::normalize(&d);
+            let n = Decimal::normalize(d);
             let diff = (d.to_f64() - n.to_f64()).abs();
             assert!(diff < 1e-12);
         }

@@ -118,7 +118,7 @@ impl DateTime {
             }
             Err(format!("Invalid DateTime: '{iso_str:?}"))
     }
-    pub fn epoc_msec_utc_offset(&self) -> (i64, i32) {
+    pub fn epoc_msec_utc_offset(self) -> (i64, i32) {
         let msec= self.0 / (TZ_MASK + 1);
         let mut offset = self.0 & TZ_MASK;
         if (offset & ((TZ_MASK + 1) / 2)) != 0 {
@@ -129,22 +129,22 @@ impl DateTime {
         let offset = (offset * 15 * 60) as i32;
         (msec, offset)
     }
-    pub fn epoch_msec(&self) -> i64 { self.epoc_msec_utc_offset().0 }
-    pub fn utc_offset(&self) -> i32 { self.epoc_msec_utc_offset().1 }
+    pub fn epoch_msec(self) -> i64 { self.epoc_msec_utc_offset().0 }
+    pub fn utc_offset(self) -> i32 { self.epoc_msec_utc_offset().1 }
 
-    pub fn to_chrono_naivedatetime(&self) -> chrono::NaiveDateTime {
+    pub fn to_chrono_naivedatetime(self) -> chrono::NaiveDateTime {
         let msec = self.epoch_msec();
         chrono::DateTime::from_timestamp_millis(msec).unwrap_or_default().naive_utc()
     }
-    pub fn to_chrono_datetime(&self) -> chrono::DateTime<chrono::offset::FixedOffset> {
+    pub fn to_chrono_datetime(self) -> chrono::DateTime<chrono::offset::FixedOffset> {
         let offset = FixedOffset::east_opt(self.utc_offset())
             .unwrap_or_else(|| FixedOffset::east_opt(0).expect("Zero is within the range"));
         chrono::DateTime::from_naive_utc_and_offset(self.to_chrono_naivedatetime(), offset)
     }
-    pub fn to_iso_string(&self) -> String {
+    pub fn to_iso_string(self) -> String {
         self.to_iso_string_opt(&ToISOStringOptions::default())
     }
-    pub fn to_iso_string_opt(&self, opts: &ToISOStringOptions) -> String {
+    pub fn to_iso_string_opt(self, opts: &ToISOStringOptions) -> String {
         let dt = self.to_chrono_datetime();
         let mut s = format!("{}", dt.format("%Y-%m-%dT%H:%M:%S"));
         let ms = self.epoch_msec() % 1000;
@@ -181,27 +181,27 @@ impl DateTime {
     }
 
     #[must_use]
-    pub fn add_days(&self, days: i64) -> Self {
+    pub fn add_days(self, days: i64) -> Self {
         let (msec, offset) = self.epoc_msec_utc_offset();
         Self::from_epoch_msec_tz(msec + (days * 24 * 60 * 60 * 1000), offset)
     }
     #[must_use]
-    pub fn add_hours(&self, hours: i64) -> Self {
+    pub fn add_hours(self, hours: i64) -> Self {
         let (msec, offset) = self.epoc_msec_utc_offset();
         Self::from_epoch_msec_tz(msec + (hours * 60 * 60 * 1000), offset)
     }
     #[must_use]
-    pub fn add_minutes(&self, minutes: i64) -> Self {
+    pub fn add_minutes(self, minutes: i64) -> Self {
         let (msec, offset) = self.epoc_msec_utc_offset();
         Self::from_epoch_msec_tz(msec + (minutes * 60 * 1000), offset)
     }
     #[must_use]
-    pub fn add_seconds(&self, seconds: i64) -> Self {
+    pub fn add_seconds(self, seconds: i64) -> Self {
         let (msec, offset) = self.epoc_msec_utc_offset();
         Self::from_epoch_msec_tz(msec + (seconds * 1000), offset)
     }
     #[must_use]
-    pub fn add_millis(&self, millis: i64) -> Self {
+    pub fn add_millis(self, millis: i64) -> Self {
         let (msec, offset) = self.epoc_msec_utc_offset();
         Self::from_epoch_msec_tz(msec + millis, offset)
     }
