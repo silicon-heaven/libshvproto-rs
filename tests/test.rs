@@ -200,7 +200,7 @@ mod test {
     fn generic_struct() {
         let int_struct_in: GenericStruct::<i64, String> = shvproto::make_map!("x" => 123, "y" => vec![123, 456], "z" => "some_string").try_into().expect("Failed to parse");
         let int_struct_rpcvalue: shvproto::RpcValue = int_struct_in.clone().into();
-        let int_struct_out: GenericStruct::<i64, String> = int_struct_rpcvalue.clone().try_into().expect("Failed to parse");
+        let int_struct_out: GenericStruct::<i64, String> = int_struct_rpcvalue.try_into().expect("Failed to parse");
         assert_eq!(int_struct_in, int_struct_out);
 
     }
