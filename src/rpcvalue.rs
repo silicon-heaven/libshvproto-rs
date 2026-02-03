@@ -57,6 +57,7 @@ pub enum Value {
     Bool(bool),
     DateTime(datetime::DateTime),
     Decimal(decimal::Decimal),
+    #[expect(clippy::box_collection, reason = "We're using the Box to lower stack size")]
     String(Box<String>),
     Blob(Box<Blob>),
     List(Box<List>),
