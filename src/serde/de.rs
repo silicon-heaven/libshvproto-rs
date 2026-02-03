@@ -11,7 +11,7 @@ pub struct ValueDeserializer<'a> {
     pub value: &'a Value,
 }
 
-impl<'de, 'a> IntoDeserializer<'de> for ValueDeserializer<'a> {
+impl IntoDeserializer<'_> for ValueDeserializer<'_> {
     type Deserializer = Self;
 
     fn into_deserializer(self) -> Self::Deserializer {
@@ -19,7 +19,7 @@ impl<'de, 'a> IntoDeserializer<'de> for ValueDeserializer<'a> {
     }
 }
 
-impl<'de, 'a> serde::Deserializer<'de> for ValueDeserializer<'a> {
+impl<'de> serde::Deserializer<'de> for ValueDeserializer<'_> {
     type Error = de::value::Error;
 
     fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
@@ -326,7 +326,7 @@ struct SimpleEnumAccess<'a> {
     value: Option<&'a Value>,
 }
 
-impl<'a, 'de> EnumAccess<'de> for SimpleEnumAccess<'a> {
+impl<'de> EnumAccess<'de> for SimpleEnumAccess<'_> {
     type Error = serde::de::value::Error;
     type Variant = Self;
 
@@ -337,7 +337,7 @@ impl<'a, 'de> EnumAccess<'de> for SimpleEnumAccess<'a> {
     }
 }
 
-impl<'a, 'de> VariantAccess<'de> for SimpleEnumAccess<'a> {
+impl<'de> VariantAccess<'de> for SimpleEnumAccess<'_> {
     type Error = serde::de::value::Error;
 
     fn unit_variant(self) -> Result<(), Self::Error> {
@@ -368,7 +368,7 @@ impl<'a, 'de> VariantAccess<'de> for SimpleEnumAccess<'a> {
 
 struct UntaggedEnumAccess<'a>(&'a Value);
 
-impl<'a, 'de> EnumAccess<'de> for UntaggedEnumAccess<'a> {
+impl<'de> EnumAccess<'de> for UntaggedEnumAccess<'_> {
     type Error = serde::de::value::Error;
     type Variant = Self;
 
@@ -382,7 +382,7 @@ impl<'a, 'de> EnumAccess<'de> for UntaggedEnumAccess<'a> {
     }
 }
 
-impl<'a, 'de> VariantAccess<'de> for UntaggedEnumAccess<'a> {
+impl<'de> VariantAccess<'de> for UntaggedEnumAccess<'_> {
     type Error = serde::de::value::Error;
 
     fn unit_variant(self) -> Result<(), Self::Error> {
@@ -412,7 +412,7 @@ impl<'de> serde::Deserialize<'de> for crate::DateTime {
     {
         struct DateTimeVisitor;
 
-        impl<'de> Visitor<'de> for DateTimeVisitor {
+        impl Visitor<'_> for DateTimeVisitor {
             type Value = crate::DateTime;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
@@ -485,7 +485,7 @@ impl<'de> serde::Deserialize<'de> for Blob
     {
         struct BlobVisitor;
 
-        impl<'de> Visitor<'de> for BlobVisitor {
+        impl Visitor<'_> for BlobVisitor {
             type Value = Blob;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
