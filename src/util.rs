@@ -34,7 +34,7 @@ pub fn hex_array(data: &[u8]) -> String {
         if ret.len() > 1 {
             ret += ",";
         }
-        ret += &format!("0x{:02x}", b);
+        ret += &format!("0x{b:02x}");
     }
     ret += "]";
     ret
@@ -53,21 +53,21 @@ pub fn hex_dump(data: &[u8]) -> String {
                 if i > 0 {
                     ret += "\n";
                 }
-                ret += &format!("{:04x} ", i);
+                ret += &format!("{i:04x} ");
             }
             hex_line.clear();
             char_line.clear();
         }
         let hex_str = match byte {
             None => { "   ".to_string() }
-            Some(b) => { format!("{:02x} ", b) }
+            Some(b) => { format!("{b:02x} ") }
         };
         let c_str = match byte {
             None => { " ".to_string() }
             Some(b) => {
                 let c = b as char;
                 let c = if c >= ' ' && c < (127 as char) { c } else { '.' };
-                format!("{}", c)
+                c.to_string()
             }
         };
         hex_line += &hex_str;

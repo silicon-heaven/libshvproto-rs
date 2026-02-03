@@ -363,7 +363,7 @@ impl<'a, R> CponReader<'a, R>
             b'A' ..= b'F' => Ok(b - b'A' + 10),
             b'a' ..= b'f' => Ok(b - b'a' + 10),
             b'0' ..= b'9' => Ok(b - b'0'),
-            c => Err(self.make_error(&format!("Illegal hex encoding character: {}", c), ReadErrorReason::InvalidCharacter)),
+            c => Err(self.make_error(&format!("Illegal hex encoding character: {c}"), ReadErrorReason::InvalidCharacter)),
         }
     }
     fn read_blob_esc(&mut self) -> Result<Value, ReadError> {
@@ -483,7 +483,7 @@ where R: Read
         self.byte_reader.get_byte()
     }
     fn make_error(&self, msg: &str, reason: ReadErrorReason) -> ReadError {
-        self.byte_reader.make_error(&format!("Cpon read error - {}", msg), reason)
+        self.byte_reader.make_error(&format!("Cpon read error - {msg}"), reason)
     }
     fn read_string(&mut self) -> Result<Value, ReadError> {
         let mut buff: Vec<u8> = Vec::new();
@@ -515,7 +515,7 @@ where R: Read
         let s = std::str::from_utf8(&buff);
         match s {
             Ok(s) => Ok(Value::from(s)),
-            Err(e) => Err(self.make_error(&format!("Invalid String, Utf8 error: {}", e), ReadErrorReason::InvalidCharacter)),
+            Err(e) => Err(self.make_error(&format!("Invalid String, Utf8 error: {e}"), ReadErrorReason::InvalidCharacter)),
         }
     }
 }

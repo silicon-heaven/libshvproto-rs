@@ -88,7 +88,7 @@ impl DateTime {
                                     rest = &rest[3..];
                                 }
                                 Err(err) => {
-                                    return Err(format!("Parsing DateTime msec part error: {}, in '{}", err, iso_str))
+                                    return Err(format!("Parsing DateTime msec part error: {err}, in '{iso_str}"))
                                 }
                             }
                         }
@@ -99,16 +99,16 @@ impl DateTime {
                             if let Ok(hrs) = rest.parse::<i32>() {
                                 offset = 60 * 60 * hrs;
                             } else {
-                                return Err(format!("Invalid DateTime TZ(3) part: '{}, date time: {}", rest, iso_str))
+                                return Err(format!("Invalid DateTime TZ(3) part: '{rest}, date time: {iso_str}"))
                             }
                         } else if rest.len() == 5 {
                             if let Ok(hrs) = rest.parse::<i32>() {
                                 offset = 60 * (60 * (hrs / 100) + (hrs % 100));
                             } else {
-                                return Err(format!("Invalid DateTime TZ(5) part: '{}, date time: {}", rest, iso_str))
+                                return Err(format!("Invalid DateTime TZ(5) part: '{rest}, date time: {iso_str}"))
                             }
                         } else {
-                            return Err(format!("Invalid DateTime TZ part: '{}, date time: {}", rest, iso_str))
+                            return Err(format!("Invalid DateTime TZ part: '{rest}, date time: {iso_str}"))
                         }
                     }
                     let epoch_msec = (ndt.and_utc().timestamp() - (offset as i64)) * 1000 + (msec as i64);
@@ -116,7 +116,7 @@ impl DateTime {
                     return Ok(dt)
                 }
             }
-            Err(format!("Invalid DateTime: '{:?}", iso_str))
+            Err(format!("Invalid DateTime: '{iso_str:?}"))
     }
     pub fn epoc_msec_utc_offset(&self) -> (i64, i32) {
         let msec= self.0 / (TZ_MASK + 1);
@@ -151,10 +151,10 @@ impl DateTime {
         let ms = self.epoch_msec() % 1000;
         match opts.include_millis {
             IncludeMilliseconds::Never => {}
-            IncludeMilliseconds::Always => { s.push_str(&format!(".{:03}", ms)); }
+            IncludeMilliseconds::Always => { s.push_str(&format!(".{ms:03}")); }
             IncludeMilliseconds::WhenNonZero => {
                 if ms > 0 {
-                    s.push_str(&format!(".{:03}", ms));
+                    s.push_str(&format!(".{ms:03}"));
                 }
             }
         }
@@ -172,9 +172,9 @@ impl DateTime {
                 }
                 let offset_hr = offset / 60 / 60;
                 let offset_min = offset / 60 % 60;
-                s += &format!("{:02}", offset_hr);
+                s += &format!("{offset_hr:02}");
                 if offset_min > 0 {
-                    s += &format!("{:02}", offset_min);
+                    s += &format!("{offset_min:02}");
                 }
             }
         }

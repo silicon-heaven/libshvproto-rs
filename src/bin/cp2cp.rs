@@ -53,7 +53,7 @@ struct ChainPackRpcBlockResult {
 }
 fn print_option<T: Display>(n: Option<T>) {
     if let Some(n) = n {
-        println!("{}", n);
+        println!("{n}");
     } else {
         println!();
     }
@@ -64,7 +64,7 @@ fn exit_with_result_and_code(result: &ChainPackRpcBlockResult, error: Option<Rea
             ReadErrorReason::UnexpectedEndOfStream => CODE_NOT_ENOUGH_DATA,
             ReadErrorReason::NotEnoughPrecision => CODE_READ_ERROR,
             ReadErrorReason::InvalidCharacter => {
-                eprintln!("Parse input error: {:?}", error);
+                eprintln!("Parse input error: {error:?}");
                 CODE_READ_ERROR
             }
         }
@@ -133,7 +133,7 @@ fn main() {
             logger = logger.with_module_level(&module_name, LevelFilter::Trace);
         }
     }
-    logger.init().unwrap();
+    logger.init().expect("Logger must work");
 
     if opts.chainpack_rpc_block {
         opts.indent = None;
@@ -143,7 +143,7 @@ fn main() {
 
     let mut reader: Box<dyn BufRead> = match opts.file {
         None => Box::new(BufReader::new(io::stdin())),
-        Some(filename) => Box::new(BufReader::new(fs::File::open(filename).unwrap())),
+        Some(filename) => Box::new(BufReader::new(fs::File::open(filename).expect("Opening files must work"))),
     };
 
     let read_result = if opts.cpon_input {
@@ -158,7 +158,7 @@ fn main() {
 
     let input_value = match read_result {
         Err(e) => {
-            eprintln!("Parse input error: {:?}", e);
+            eprintln!("Parse input error: {e:?}");
             process::exit(CODE_READ_ERROR);
         }
         Ok(rv) => rv,
@@ -210,7 +210,7 @@ fn main() {
         };
 
         if let Err(e) = res {
-            eprintln!("Write output error: {:?}", e);
+            eprintln!("Write output error: {e:?}");
             process::exit(CODE_WRITE_ERROR);
         };
     }

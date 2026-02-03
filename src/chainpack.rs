@@ -117,8 +117,7 @@ where
         let byte_cnt = Self::bytes_needed(bit_len);
         assert!(
             byte_cnt <= BYTE_CNT_MAX,
-            "Max int byte size {} exceeded",
-            BYTE_CNT_MAX
+            "Max int byte size {BYTE_CNT_MAX} exceeded"
         );
         let mut bytes: [u8; BYTE_CNT_MAX as usize] = [0; BYTE_CNT_MAX as usize];
         let mut num = number;
@@ -342,7 +341,7 @@ where
     }
     fn make_error(&self, msg: &str, reason: ReadErrorReason) -> ReadError {
         self.byte_reader
-            .make_error(&format!("ChainPack read error - {}", msg), reason)
+            .make_error(&format!("ChainPack read error - {msg}"), reason)
     }
 
     /// return (n, bitlen)
@@ -412,7 +411,7 @@ where
         match s {
             Ok(s) => Ok(Value::from(s)),
             Err(e) => Err(self.make_error(
-                &format!("Invalid string, Utf8 error: {}", e),
+                &format!("Invalid string, Utf8 error: {e}"),
                 ReadErrorReason::InvalidCharacter,
             )),
         }
@@ -428,7 +427,7 @@ where
         match s {
             Ok(s) => Ok(Value::from(s)),
             Err(e) => Err(self.make_error(
-                &format!("Invalid string, Utf8 error: {}", e),
+                &format!("Invalid string, Utf8 error: {e}"),
                 ReadErrorReason::InvalidCharacter,
             )),
         }
@@ -468,7 +467,7 @@ where
                 k.as_str()
             } else {
                 return Err(self.make_error(
-                    &format!("Invalid Map key '{}'", k),
+                    &format!("Invalid Map key '{k}'"),
                     ReadErrorReason::InvalidCharacter,
                 ));
             };
@@ -490,7 +489,7 @@ where
                 k.as_i32()
             } else {
                 return Err(self.make_error(
-                    &format!("Invalid IMap key '{}'", k),
+                    &format!("Invalid IMap key '{k}'"),
                     ReadErrorReason::InvalidCharacter,
                 ));
             };
@@ -615,7 +614,7 @@ where
             Value::from(())
         } else {
             return Err(self.make_error(
-                &format!("Invalid Packing schema: {}", b),
+                &format!("Invalid Packing schema: {b}"),
                 ReadErrorReason::InvalidCharacter,
             ));
         };

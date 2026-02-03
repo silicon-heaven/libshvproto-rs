@@ -133,11 +133,11 @@ impl fmt::Display for MetaMap {
         let mut wr = CponWriter::new(&mut buff);
         let res = wr.write_meta(self);
         if let Err(e) = res {
-            log::warn!("to_cpon write with error: {}", e);
+            log::warn!("to_cpon write with error: {e}");
             return write!(fmt, "<invalid>")
         }
         match String::from_utf8(buff) {
-            Ok(s) => write!(fmt, "{}", s),
+            Ok(s) => write!(fmt, "{s}"),
             Err(_) => write!(fmt, "<invalid>"),
         }
     }

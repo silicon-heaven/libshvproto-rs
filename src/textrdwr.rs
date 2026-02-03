@@ -12,7 +12,7 @@ pub trait TextWriter : Writer {
         Ok(self.write_count() - cnt)
     }
     fn write_double(&mut self, n: f64) -> WriteResult {
-        let s = format!("{}", n);
+        let s = n.to_string();
         let cnt = self.write_bytes(s.as_bytes())?;
         Ok(self.write_count() - cnt)
     }
@@ -94,7 +94,7 @@ pub trait TextReader : Reader {
         for c in token.as_bytes() {
             let b = self.get_byte()?;
             if b != *c {
-                return Err(self.make_error(&format!("Expected '{}'.", token), ReadErrorReason::InvalidCharacter))
+                return Err(self.make_error(&format!("Expected '{token}'."), ReadErrorReason::InvalidCharacter))
             }
         }
         Ok(())
@@ -312,7 +312,7 @@ pub trait TextReader : Reader {
                         _ => return Err(self.make_error("Read MetaMap key internal error", ReadErrorReason::InvalidCharacter)),
                     }
                 },
-                _ => return Err(self.make_error(&format!("Invalid Map key '{}'", b), ReadErrorReason::InvalidCharacter)),
+                _ => return Err(self.make_error(&format!("Invalid Map key '{b}'"), ReadErrorReason::InvalidCharacter)),
             };
             self.skip_white_insignificant()?;
             let val = self.read()?;

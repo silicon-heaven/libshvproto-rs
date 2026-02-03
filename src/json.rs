@@ -251,7 +251,7 @@ impl<'a, R> JsonReader<'a, R>
         let val = match t {
             Some("Blob") => {
                 if let Value::String(hex) = v {
-                    let data = hex::decode(hex.as_str()).map_err(|e| self.make_error(&format!("Hex blob decode error: {}.", e), ReadErrorReason::InvalidCharacter))?;
+                    let data = hex::decode(hex.as_str()).map_err(|e| self.make_error(&format!("Hex blob decode error: {e}."), ReadErrorReason::InvalidCharacter))?;
                     Value::from(data)
                 } else {
                     return Err(self.make_error("Blob must be encoded as hex string.", ReadErrorReason::InvalidCharacter))
@@ -259,7 +259,7 @@ impl<'a, R> JsonReader<'a, R>
             }
             Some("DateTime") => {
                 if let Value::String(dt) = v {
-                    let dt = DateTime::from_iso_str(dt).map_err(|e| self.make_error(&format!("DateTime decode error: {}.", e), ReadErrorReason::InvalidCharacter))?;
+                    let dt = DateTime::from_iso_str(dt).map_err(|e| self.make_error(&format!("DateTime decode error: {e}."), ReadErrorReason::InvalidCharacter))?;
                     Value::from(dt)
                 } else {
                     return Err(self.make_error("DateTime must be encoded as ISO string.", ReadErrorReason::InvalidCharacter))
@@ -269,7 +269,7 @@ impl<'a, R> JsonReader<'a, R>
                 if let Value::Map(im) = v {
                     let mut imap = crate::IMap::default();
                     for (k, v) in im.iter() {
-                        let ik = k.parse::<i32>().map_err(|e| self.make_error(&format!("IMap key decode error: {}.", e), ReadErrorReason::InvalidCharacter))?;
+                        let ik = k.parse::<i32>().map_err(|e| self.make_error(&format!("IMap key decode error: {e}."), ReadErrorReason::InvalidCharacter))?;
                         imap.insert(ik, v.clone());
                     }
                     Value::from(imap)
@@ -294,7 +294,7 @@ where R: Read
         self.byte_reader.get_byte()
     }
     fn make_error(&self, msg: &str, reason: ReadErrorReason) -> ReadError {
-        self.byte_reader.make_error(&format!("Cpon read error - {}", msg), reason)
+        self.byte_reader.make_error(&format!("Cpon read error - {msg}"), reason)
     }
     fn read_string(&mut self) -> Result<Value, ReadError> {
         let mut buff: Vec<u8> = Vec::new();
@@ -321,7 +321,7 @@ where R: Read
                             hex.push(self.get_byte()? as char);
                             hex.push(self.get_byte()? as char);
                             hex.push(self.get_byte()? as char);
-                            let code_point = u32::from_str_radix(&hex, 16).map_err(|e| self.make_error(&format!("Invalid unicode escape sequence: {:?} - {}", hex, e), ReadErrorReason::InvalidCharacter))?;
+                            let code_point = u32::from_str_radix(&hex, 16).map_err(|e| self.make_error(&format!("Invalid unicode escape sequence: {hex:?} - {e}"), ReadErrorReason::InvalidCharacter))?;
                             let ch = char::from_u32(code_point).ok_or(self.make_error(&format!("Invalid code point: {code_point}"), ReadErrorReason::InvalidCharacter))?;
                             let mut utf8 = [0; 4];
                             let s = ch.encode_utf8(&mut utf8);
@@ -346,7 +346,7 @@ where R: Read
         let s = std::str::from_utf8(&buff);
         match s {
             Ok(s) => Ok(Value::from(s)),
-            Err(e) => Err(self.make_error(&format!("Invalid String, Utf8 error: {}", e), ReadErrorReason::InvalidCharacter)),
+            Err(e) => Err(self.make_error(&format!("Invalid String, Utf8 error: {e}"), ReadErrorReason::InvalidCharacter)),
         }
     }
 }
