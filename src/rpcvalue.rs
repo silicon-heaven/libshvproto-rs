@@ -124,7 +124,7 @@ impl From<String> for Value {
 }
 impl From<&String> for Value {
     fn from(val: &String) -> Self {
-        Value::String(Box::new(val.to_string()))
+        Value::String(Box::new(val.clone()))
     }
 }
 
