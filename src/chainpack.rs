@@ -148,15 +148,8 @@ where
         Ok(self.byte_writer.count() - cnt)
     }
     fn write_int_data(&mut self, number: i64) -> WriteResult {
-        let mut num: u64;
-        let neg;
-        if number < 0 {
-            num = (-number).cast_unsigned();
-            neg = true;
-        } else {
-            num = number.cast_unsigned();
-            neg = false;
-        }
+        let neg = number < 0;
+        let mut num = number.abs().cast_unsigned();
 
         let bitlen = Self::significant_bits_part_length(num) + 1; // add sign bit
         if neg {
