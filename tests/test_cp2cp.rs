@@ -27,7 +27,7 @@ mod test {
         let output = run_cp2cp(data)?;
         let exit_code = output.status.code().unwrap();
         let output = String::from_utf8(output.stdout).map_err(|e| e.to_string())?;
-        let mut lines = output.split("\n");
+        let mut lines = output.split('\n');
         let block_length = lines.next().unwrap().parse::<usize>().unwrap();
         let frame_length = lines.next().unwrap().parse::<usize>().unwrap();
         let proto = lines.next().unwrap().parse::<i32>().unwrap();
@@ -98,9 +98,8 @@ mod test {
             thread::spawn(move || {
                 stdin.write_all(&block).expect("Failed to write to stdin");
             });
-            child.wait_with_output().map_err(|err| err.to_string()).and_then(|output| {
-                RpcValue::from_chainpack(output.stdout).map_err(|err| err.to_string())
-            })
+            let output = child.wait_with_output().map_err(|err| err.to_string())?;
+            RpcValue::from_chainpack(output.stdout).map_err(|err| err.to_string())
         }
 
         #[test]

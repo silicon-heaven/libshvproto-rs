@@ -1,3 +1,4 @@
+#![allow(clippy::print_stderr, clippy::print_stdout, clippy::exit, reason = "Fine for a binary")]
 use clap::Parser;
 use log::LevelFilter;
 use shvproto::reader::ReadErrorReason;
@@ -15,6 +16,7 @@ use jaq_all::{jaq_core::{Ctx, Vars, data::JustLut}, jaq_std};
 
 #[derive(Parser, Debug)]
 #[structopt(name = "cp2cp", version = env!("CARGO_PKG_VERSION"), author = env!("CARGO_PKG_AUTHORS"), about = "ChainPack to Cpon and back utility")]
+#[expect(clippy::struct_excessive_bools, reason = "Fine for cli args")]
 struct Cli {
     #[arg(short, long, help = "Cpon indentation string")]
     indent: Option<String>,
@@ -53,24 +55,20 @@ struct ChainPackRpcBlockResult {
 }
 fn print_option<T: Display>(n: Option<T>) {
     if let Some(n) = n {
-        println!("{}", n);
+        println!("{n}");
     } else {
         println!();
     }
 }
 fn exit_with_result_and_code(result: &ChainPackRpcBlockResult, error: Option<ReadErrorReason>) -> ! {
-    let exit_code = if let Some(error) = &error {
-        match error {
-            ReadErrorReason::UnexpectedEndOfStream => CODE_NOT_ENOUGH_DATA,
-            ReadErrorReason::NotEnoughPrecision => CODE_READ_ERROR,
-            ReadErrorReason::InvalidCharacter => {
-                eprintln!("Parse input error: {:?}", error);
-                CODE_READ_ERROR
-            }
+    let exit_code = error.map_or(CODE_SUCCESS, |error| match error {
+        ReadErrorReason::UnexpectedEndOfStream => CODE_NOT_ENOUGH_DATA,
+        ReadErrorReason::NotEnoughPrecision => CODE_READ_ERROR,
+        ReadErrorReason::InvalidCharacter => {
+            eprintln!("Parse input error: {error:?}");
+            CODE_READ_ERROR
         }
-    } else {
-        CODE_SUCCESS
-    };
+    });
     print_option(result.block_length);
     print_option(result.frame_length);
     print_option(result.proto);
@@ -85,6 +83,7 @@ fn process_chainpack_rpc_block(mut reader: Box<dyn BufRead>) -> ! {
         cpon: "".to_string(),
     };
     let mut rd = ChainPackReader::new(&mut reader);
+    #[expect(clippy::cast_possible_truncation, reason = "We assume pointer size is 64-bit")]
     match rd.read_uint_data() {
         Ok(frame_length) => {
             result.block_length = Some(frame_length as usize + rd.position());
@@ -106,10 +105,10 @@ fn process_chainpack_rpc_block(mut reader: Box<dyn BufRead>) -> ! {
         Err(e) => {
             exit_with_result_and_code(&result, Some(e.reason));
         }
-    };
+    }
     match rd.read() {
         Ok(rv) => {
-            result.cpon = rv.to_cpon().to_string();
+            result.cpon = rv.to_cpon();
             exit_with_result_and_code(&result, None);
         }
         Err(e) => {
@@ -133,7 +132,7 @@ fn main() {
             logger = logger.with_module_level(&module_name, LevelFilter::Trace);
         }
     }
-    logger.init().unwrap();
+    logger.init().expect("Logger must work");
 
     if opts.chainpack_rpc_block {
         opts.indent = None;
@@ -143,7 +142,7 @@ fn main() {
 
     let mut reader: Box<dyn BufRead> = match opts.file {
         None => Box::new(BufReader::new(io::stdin())),
-        Some(filename) => Box::new(BufReader::new(fs::File::open(filename).unwrap())),
+        Some(filename) => Box::new(BufReader::new(fs::File::open(filename).expect("Opening files must work"))),
     };
 
     let read_result = if opts.cpon_input {
@@ -158,7 +157,7 @@ fn main() {
 
     let input_value = match read_result {
         Err(e) => {
-            eprintln!("Parse input error: {:?}", e);
+            eprintln!("Parse input error: {e:?}");
             process::exit(CODE_READ_ERROR);
         }
         Ok(rv) => rv,
@@ -201,7 +200,7 @@ fn main() {
             wr.set_no_oneliners(opts.no_oneliners);
             if let Some(s) = &opts.indent {
                 if s == "\\t" {
-                    wr.set_indent("\t".as_bytes());
+                    wr.set_indent(b"\t");
                 } else {
                     wr.set_indent(s.as_bytes());
                 }
@@ -210,8 +209,8 @@ fn main() {
         };
 
         if let Err(e) = res {
-            eprintln!("Write output error: {:?}", e);
+            eprintln!("Write output error: {e:?}");
             process::exit(CODE_WRITE_ERROR);
-        };
+        }
     }
 }

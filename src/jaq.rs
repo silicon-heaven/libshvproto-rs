@@ -126,7 +126,7 @@ impl From<core::ops::Range<Option<RpcValue>>> for RpcValue {
     fn from(value: core::ops::Range<Option<RpcValue>>) -> Self {
         let kv = |(k, v): (&str, Option<_>)| v.map(|v| (k.to_owned(), v));
         let kvs = [("start", value.start), ("end", value.end)];
-        kvs.into_iter().flat_map(kv).collect::<BTreeMap<String,_>>().into()
+        kvs.into_iter().filter_map(kv).collect::<BTreeMap<String,_>>().into()
     }
 }
 
@@ -150,6 +150,7 @@ impl jaq_all::jaq_std::ValT for RpcValue {
 
     fn as_isize(&self) -> Option<isize> {
         match self.value {
+            #[expect(clippy::cast_possible_truncation, reason = "We assume pointer size is 64-bit")]
             Value::Int(num) => Some(num as isize),
             _ => None,
         }
@@ -178,7 +179,7 @@ impl jaq_all::jaq_std::ValT for RpcValue {
 
 impl jaq_all::jaq_core::ValT for RpcValue {
     fn from_num(n: &str) -> ValR {
-        Ok(n.parse::<i64>().map(RpcValue::from).unwrap_or(0_i64.into()))
+        Ok(n.parse::<i64>().map_or_else(|_| 0_i64.into(), RpcValue::from))
     }
 
     fn from_map<I: IntoIterator<Item = (Self, Self)>>(iter: I) -> ValR {
@@ -191,7 +192,7 @@ impl jaq_all::jaq_core::ValT for RpcValue {
                 Box::new(list
                     .into_iter()
                     .enumerate()
-                    .map(|(idx, val)| Ok((RpcValue::from(idx as isize), val))))
+                    .map(|(idx, val)| Ok((RpcValue::from(idx.cast_signed()), val))))
             }
             Value::Map(map) => {
                 Box::new(map
@@ -231,9 +232,11 @@ impl jaq_all::jaq_core::ValT for RpcValue {
     fn index(self, index: &Self) -> ValR {
         match (&self.value, &index.value) {
             (Value::Null, _) => Ok(RpcValue::null()),
+            #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss, reason = "We assume pointer size is 64-bit")]
             (Value::String(rv), Value::Int(i)) => Ok(rv.chars().nth(*i as usize).map(|cha| cha.to_string()).into()),
-            (Value::List(list), Value::Int(i)) => Ok((*list).get(*i as usize).cloned().unwrap_or(RpcValue::null())),
-            (Value::Map(o), Value::String(key)) => Ok(o.get(key.as_str()).cloned().unwrap_or(RpcValue::null())),
+            #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss, reason = "We assume pointer size is 64-bit")]
+            (Value::List(list), Value::Int(i)) => Ok((*list).get(*i as usize).cloned().unwrap_or_else(RpcValue::null)),
+            (Value::Map(o), Value::String(key)) => Ok(o.get(key.as_str()).cloned().unwrap_or_else(RpcValue::null)),
             (_s, _) => Err(Error::typ(self, "")),
         }
     }

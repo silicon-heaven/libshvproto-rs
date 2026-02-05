@@ -12,11 +12,11 @@ pub trait TextWriter : Writer {
         Ok(self.write_count() - cnt)
     }
     fn write_double(&mut self, n: f64) -> WriteResult {
-        let s = format!("{}", n);
+        let s = n.to_string();
         let cnt = self.write_bytes(s.as_bytes())?;
         Ok(self.write_count() - cnt)
     }
-    fn write_decimal(&mut self, decimal: &Decimal) -> WriteResult {
+    fn write_decimal(&mut self, decimal: Decimal) -> WriteResult {
         let s = decimal.to_cpon_string();
         let cnt = self.write_bytes(s.as_bytes())?;
         Ok(self.write_count() - cnt)
@@ -94,7 +94,7 @@ pub trait TextReader : Reader {
         for c in token.as_bytes() {
             let b = self.get_byte()?;
             if b != *c {
-                return Err(self.make_error(&format!("Expected '{}'.", token), ReadErrorReason::InvalidCharacter))
+                return Err(self.make_error(&format!("Expected '{token}'."), ReadErrorReason::InvalidCharacter))
             }
         }
         Ok(())
@@ -120,13 +120,12 @@ pub trait TextReader : Reader {
         let mut is_overflow = false;
         fn add_digit(val: i64, base: i64, digit: u8) -> Option<i64> {
             let res = val.checked_mul(base)?;
-            let res = res.checked_add(digit as i64)?;
+            let res = res.checked_add(i64::from(digit))?;
             Some(res)
         }
         loop {
             let b = self.peek_byte();
             let digit = match b {
-                0 => break,
                 b'+' | b'-' => {
                     if n != 0 {
                         break;
@@ -234,10 +233,10 @@ pub trait TextReader : Reader {
                     let ReadInt { value, digit_cnt, is_overflow, .. } = self.read_int(mantissa, true)?;
                     decimal_overflow = decimal_overflow || is_overflow;
                     mantissa = value;
-                    if mantissa >= 36028797018963968 {
+                    if mantissa >= 36_028_797_018_963_968 {
                         decimal_overflow = true;
                     }
-                    dec_cnt = digit_cnt as i64;
+                    dec_cnt = i64::from(digit_cnt);
                 }
                 b'e' | b'E' => {
                     if state != State::Mantissa && state != State::Decimals {
@@ -263,13 +262,14 @@ pub trait TextReader : Reader {
             if decimal_overflow {
                 return Err(self.make_error("Not enough precision to read the Decimal", ReadErrorReason::InvalidCharacter))
             }
+            #[expect(clippy::cast_possible_truncation, reason = "We hope that the new exponent is not big enough to truncate")]
             return Ok(Value::from(Decimal::new(mantissa, (exponent - dec_cnt) as i8)))
         }
         if is_uint {
             if decimal_overflow {
                 return Ok(Value::from(i64::MAX as u64))
             }
-            return Ok(Value::from(mantissa as u64))
+            return Ok(Value::from(mantissa.cast_unsigned()))
         }
         if decimal_overflow {
             return Ok(Value::from(if is_negative { i64::MIN } else { i64::MAX }))
@@ -312,7 +312,7 @@ pub trait TextReader : Reader {
                         _ => return Err(self.make_error("Read MetaMap key internal error", ReadErrorReason::InvalidCharacter)),
                     }
                 },
-                _ => return Err(self.make_error(&format!("Invalid Map key '{}'", b), ReadErrorReason::InvalidCharacter)),
+                _ => return Err(self.make_error(&format!("Invalid Map key '{b}'"), ReadErrorReason::InvalidCharacter)),
             };
             self.skip_white_insignificant()?;
             let val = self.read()?;

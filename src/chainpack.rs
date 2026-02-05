@@ -1,3 +1,5 @@
+#![allow(clippy::cast_possible_truncation, reason = "Lots of casting here")]
+#![allow(clippy::indexing_slicing, reason = "Lots of indexing here")]
 use crate::reader::{ByteReader, ReadError, ReadErrorReason, Reader};
 use crate::rpcvalue::{IMap, Map};
 use crate::writer::{ByteWriter, Writer};
@@ -6,9 +8,8 @@ use std::collections::BTreeMap;
 use std::io;
 use std::io::{Read, Write};
 
-#[allow(clippy::upper_case_acronyms)]
+#[expect(clippy::upper_case_acronyms, reason = "We just want these")]
 #[warn(non_camel_case_types)]
-#[allow(dead_code)]
 pub enum PackingSchema {
     Null = 128,
     UInt,
@@ -30,7 +31,7 @@ pub enum PackingSchema {
     TERM = 255,
 }
 
-const SHV_EPOCH_MSEC: i64 = 1517529600000;
+const SHV_EPOCH_MSEC: i64 = 1_517_529_600_000;
 
 pub struct ChainPackWriter<'a, W>
 where
@@ -60,11 +61,11 @@ where
     fn significant_bits_part_length(num: u64) -> u32 {
         let mut len = 0;
         let mut n = num;
-        if (n & 0xFFFFFFFF00000000) != 0 {
+        if (n & 0xFFFF_FFFF_0000_0000) != 0 {
             len += 32;
             n >>= 32;
         }
-        if (n & 0xFFFF0000) != 0 {
+        if (n & 0xFFFF_0000) != 0 {
             len += 16;
             n >>= 16;
         }
@@ -78,7 +79,7 @@ where
         }
         const SIG_TABLE_4BIT: [u8; 16] = [0, 1, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4];
         len += SIG_TABLE_4BIT[n as usize];
-        len as u32
+        u32::from(len)
     }
     /// number of bytes needed to encode bit_len
     fn bytes_needed(bit_len: u32) -> u32 {
@@ -117,8 +118,7 @@ where
         let byte_cnt = Self::bytes_needed(bit_len);
         assert!(
             byte_cnt <= BYTE_CNT_MAX,
-            "Max int byte size {} exceeded",
-            BYTE_CNT_MAX
+            "Max int byte size {BYTE_CNT_MAX} exceeded"
         );
         let mut bytes: [u8; BYTE_CNT_MAX as usize] = [0; BYTE_CNT_MAX as usize];
         let mut num = number;
@@ -148,15 +148,8 @@ where
         Ok(self.byte_writer.count() - cnt)
     }
     fn write_int_data(&mut self, number: i64) -> WriteResult {
-        let mut num: u64;
-        let neg;
-        if number < 0 {
-            num = (-number) as u64;
-            neg = true;
-        } else {
-            num = number as u64;
-            neg = false;
-        };
+        let neg = number < 0;
+        let mut num = number.abs().cast_unsigned();
 
         let bitlen = Self::significant_bits_part_length(num) + 1; // add sign bit
         if neg {
@@ -171,6 +164,7 @@ where
     fn write_int(&mut self, n: i64) -> WriteResult {
         let cnt = self.byte_writer.count();
         if (0..64).contains(&n) {
+            #[expect(clippy::cast_sign_loss, reason = "n is already between 0 and 64")]
             self.write_byte(((n % 64) + 64) as u8)?;
         } else {
             self.write_byte(PackingSchema::Int as u8)?;
@@ -194,13 +188,13 @@ where
         self.write_bytes(&bytes)?;
         Ok(self.byte_writer.count() - cnt)
     }
-    fn write_decimal(&mut self, decimal: &Decimal) -> WriteResult {
+    fn write_decimal(&mut self, decimal: Decimal) -> WriteResult {
         let cnt = self.write_byte(PackingSchema::Decimal as u8)?;
         self.write_int_data(decimal.mantissa())?;
-        self.write_int_data(decimal.exponent() as i64)?;
+        self.write_int_data(i64::from(decimal.exponent()))?;
         Ok(self.byte_writer.count() - cnt)
     }
-    fn write_datetime(&mut self, dt: &DateTime) -> WriteResult {
+    fn write_datetime(&mut self, dt: DateTime) -> WriteResult {
         let cnt = self.write_byte(PackingSchema::DateTime as u8)?;
         let mut msecs = dt.epoch_msec() - SHV_EPOCH_MSEC;
         let offset = (dt.utc_offset() / 60 / 15) & 0x7F;
@@ -210,7 +204,7 @@ where
         }
         if offset != 0 {
             msecs <<= 7;
-            msecs |= offset as i64;
+            msecs |= i64::from(offset);
         }
         msecs <<= 2;
         if offset != 0 {
@@ -242,7 +236,7 @@ where
     fn write_imap(&mut self, map: &IMap) -> WriteResult {
         let cnt = self.write_byte(PackingSchema::IMap as u8)?;
         for (k, v) in map {
-            self.write_int(*k as i64)?;
+            self.write_int(i64::from(*k))?;
             self.write(v)?;
         }
         self.write_byte(PackingSchema::TERM as u8)?;
@@ -273,7 +267,7 @@ where
         for k in map.0.iter() {
             match &k.key {
                 MetaKey::Str(s) => self.write_string(s)?,
-                MetaKey::Int(i) => self.write_int(*i as i64)?,
+                MetaKey::Int(i) => self.write_int(i64::from(*i))?,
             };
             self.write(&k.value)?;
         }
@@ -305,8 +299,8 @@ where
             Value::String(s) => self.write_string(s)?,
             Value::Blob(b) => self.write_blob(b)?,
             Value::Double(n) => self.write_double(*n)?,
-            Value::Decimal(d) => self.write_decimal(d)?,
-            Value::DateTime(d) => self.write_datetime(d)?,
+            Value::Decimal(d) => self.write_decimal(*d)?,
+            Value::DateTime(d) => self.write_datetime(*d)?,
             Value::List(lst) => self.write_list(lst)?,
             Value::Map(map) => self.write_map(map)?,
             Value::IMap(map) => self.write_imap(map)?,
@@ -342,7 +336,7 @@ where
     }
     fn make_error(&self, msg: &str, reason: ReadErrorReason) -> ReadError {
         self.byte_reader
-            .make_error(&format!("ChainPack read error - {}", msg), reason)
+            .make_error(&format!("ChainPack read error - {msg}"), reason)
     }
 
     /// return (n, bitlen)
@@ -354,19 +348,19 @@ where
         let bitlen;
         if (head & 128) == 0 {
             bytes_to_read_cnt = 0;
-            num = (head & 127) as u64;
+            num = u64::from(head & 127);
             bitlen = 7;
         } else if (head & 64) == 0 {
             bytes_to_read_cnt = 1;
-            num = (head & 63) as u64;
+            num = u64::from(head & 63);
             bitlen = 6 + 8;
         } else if (head & 32) == 0 {
             bytes_to_read_cnt = 2;
-            num = (head & 31) as u64;
+            num = u64::from(head & 31);
             bitlen = 5 + 2 * 8;
         } else if (head & 16) == 0 {
             bytes_to_read_cnt = 3;
-            num = (head & 15) as u64;
+            num = u64::from(head & 15);
             bitlen = 4 + 3 * 8;
         } else if head == 0xFF {
             return Err(self.make_error(
@@ -379,7 +373,7 @@ where
         }
         for _ in 0..bytes_to_read_cnt {
             let r = self.get_byte()?;
-            num = (num << 8) + (r as u64);
+            num = (num << 8) + u64::from(r);
         }
         Ok((num, bitlen))
     }
@@ -391,9 +385,9 @@ where
         let (num, bitlen) = self.read_uint_data_helper()?;
         let sign_bit_mask = (1_u64) << (bitlen - 1);
         let neg = (num & sign_bit_mask) != 0;
-        let mut snum = num as i64;
+        let mut snum = num.cast_signed();
         if neg {
-            snum &= !(sign_bit_mask as i64);
+            snum &= !(sign_bit_mask.cast_signed());
             snum = -snum;
         }
         Ok(snum)
@@ -412,7 +406,7 @@ where
         match s {
             Ok(s) => Ok(Value::from(s)),
             Err(e) => Err(self.make_error(
-                &format!("Invalid string, Utf8 error: {}", e),
+                &format!("Invalid string, Utf8 error: {e}"),
                 ReadErrorReason::InvalidCharacter,
             )),
         }
@@ -428,7 +422,7 @@ where
         match s {
             Ok(s) => Ok(Value::from(s)),
             Err(e) => Err(self.make_error(
-                &format!("Invalid string, Utf8 error: {}", e),
+                &format!("Invalid string, Utf8 error: {e}"),
                 ReadErrorReason::InvalidCharacter,
             )),
         }
@@ -468,7 +462,7 @@ where
                 k.as_str()
             } else {
                 return Err(self.make_error(
-                    &format!("Invalid Map key '{}'", k),
+                    &format!("Invalid Map key '{k}'"),
                     ReadErrorReason::InvalidCharacter,
                 ));
             };
@@ -490,7 +484,7 @@ where
                 k.as_i32()
             } else {
                 return Err(self.make_error(
-                    &format!("Invalid IMap key '{}'", k),
+                    &format!("Invalid IMap key '{k}'"),
                     ReadErrorReason::InvalidCharacter,
                 ));
             };
@@ -515,7 +509,7 @@ where
             d *= 1000;
         }
         d += SHV_EPOCH_MSEC;
-        let dt = DateTime::from_epoch_msec_tz(d, (offset as i32 * 15) * 60);
+        let dt = DateTime::from_epoch_msec_tz(d, (i32::from(offset) * 15) * 60);
         Ok(Value::from(dt))
     }
     fn read_double_data(&mut self) -> Result<Value, ReadError> {
@@ -578,10 +572,10 @@ where
         let v = if b < 128 {
             if (b & 64) == 0 {
                 // tiny UInt
-                Value::from((b & 63) as u64)
+                Value::from(u64::from(b & 63))
             } else {
                 // tiny Int
-                Value::from((b & 63) as i64)
+                Value::from(i64::from(b & 63))
             }
         } else if b == PackingSchema::Int as u8 {
             let n = self.read_int_data()?;
@@ -615,7 +609,7 @@ where
             Value::from(())
         } else {
             return Err(self.make_error(
-                &format!("Invalid Packing schema: {}", b),
+                &format!("Invalid Packing schema: {b}"),
                 ReadErrorReason::InvalidCharacter,
             ));
         };
@@ -633,10 +627,10 @@ fn chainpack_to_rpcvalue(data: &str) -> Result<RpcValue, ReadError> {
 }
 
 #[cfg(test)]
-fn rpcvalue_to_chainpack(value: RpcValue) -> String {
+fn rpcvalue_to_chainpack(value: &RpcValue) -> String {
     let mut data = Vec::new();
     let mut wr = ChainPackWriter::new(&mut data);
-    wr.write(&value).expect("Write must work");
+    wr.write(value).expect("Write must work");
     hex::encode(data).to_uppercase()
 }
 
@@ -646,28 +640,28 @@ fn test_int() {
     assert_eq!(chainpack_to_rpcvalue("02").unwrap(), 2_u64.into());
     assert_eq!(chainpack_to_rpcvalue("8178").unwrap(), 120_u64.into());
     assert_eq!(chainpack_to_rpcvalue("8181FC").unwrap(), 508_u64.into());
-    assert_eq!(chainpack_to_rpcvalue("81CFFFFA").unwrap(), 1048570_u64.into());
-    assert_eq!(chainpack_to_rpcvalue("81E1FFFFE0").unwrap(), 33554400_u64.into());
-    assert_eq!(chainpack_to_rpcvalue("82F3138083FD18A37C").unwrap(), 5489328932823932_i64.into());
-    assert_eq!(chainpack_to_rpcvalue("82F47FFFFFFFFFFFFFFF").unwrap(), 9223372036854775807_i64.into());
+    assert_eq!(chainpack_to_rpcvalue("81CFFFFA").unwrap(), 1_048_570_u64.into());
+    assert_eq!(chainpack_to_rpcvalue("81E1FFFFE0").unwrap(), 33_554_400_u64.into());
+    assert_eq!(chainpack_to_rpcvalue("82F3138083FD18A37C").unwrap(), 5_489_328_932_823_932_i64.into());
+    assert_eq!(chainpack_to_rpcvalue("82F47FFFFFFFFFFFFFFF").unwrap(), 9_223_372_036_854_775_807_i64.into());
 
-    assert_eq!(rpcvalue_to_chainpack(120_u64.into()), "8178");
-    assert_eq!(rpcvalue_to_chainpack(2_u64.into()), "02");
-    assert_eq!(rpcvalue_to_chainpack(508_u64.into()), "8181FC");
-    assert_eq!(rpcvalue_to_chainpack(1048570_u64.into()), "81CFFFFA");
-    assert_eq!(rpcvalue_to_chainpack(33554400_u64.into()), "81E1FFFFE0");
-    assert_eq!(rpcvalue_to_chainpack(5489328932823932_i64.into()), "82F3138083FD18A37C");
-    assert_eq!(rpcvalue_to_chainpack(9223372036854775807_i64.into()), "82F47FFFFFFFFFFFFFFF");
+    assert_eq!(rpcvalue_to_chainpack(&120_u64.into()), "8178");
+    assert_eq!(rpcvalue_to_chainpack(&2_u64.into()), "02");
+    assert_eq!(rpcvalue_to_chainpack(&508_u64.into()), "8181FC");
+    assert_eq!(rpcvalue_to_chainpack(&1_048_570_u64.into()), "81CFFFFA");
+    assert_eq!(rpcvalue_to_chainpack(&33_554_400_u64.into()), "81E1FFFFE0");
+    assert_eq!(rpcvalue_to_chainpack(&5_489_328_932_823_932_i64.into()), "82F3138083FD18A37C");
+    assert_eq!(rpcvalue_to_chainpack(&9_223_372_036_854_775_807_i64.into()), "82F47FFFFFFFFFFFFFFF");
 
     // Negative int
-    assert_eq!(chainpack_to_rpcvalue("82E9FFFFE0").unwrap(), (-33554400).into());
-    assert_eq!(rpcvalue_to_chainpack((-33554400).into()), "82E9FFFFE0");
+    assert_eq!(chainpack_to_rpcvalue("82E9FFFFE0").unwrap(), (-33_554_400).into());
+    assert_eq!(rpcvalue_to_chainpack(&(-33_554_400).into()), "82E9FFFFE0");
 }
 
 #[test]
 fn test_string() {
     assert_eq!(chainpack_to_rpcvalue("860541484F4A21").unwrap(), "AHOJ!".into());
-    assert_eq!(rpcvalue_to_chainpack("AHOJ!".into()), "860541484F4A21");
+    assert_eq!(rpcvalue_to_chainpack(&"AHOJ!".into()), "860541484F4A21");
 
     // Invalid UTF-8 string
     assert!(chainpack_to_rpcvalue("8602C328").is_err());
@@ -676,16 +670,16 @@ fn test_string() {
 #[test]
 fn test_true_false_packing_schema() {
     assert_eq!(chainpack_to_rpcvalue("FE").unwrap(), true.into());
-    assert_eq!(rpcvalue_to_chainpack(true.into()), "FE");
+    assert_eq!(rpcvalue_to_chainpack(&true.into()), "FE");
 
     assert_eq!(chainpack_to_rpcvalue("FD").unwrap(), false.into());
-    assert_eq!(rpcvalue_to_chainpack(false.into()), "FD");
+    assert_eq!(rpcvalue_to_chainpack(&false.into()), "FD");
 }
 
 #[test]
 fn test_cstring() {
     assert_eq!(chainpack_to_rpcvalue("8E41484F4A2100").unwrap(), "AHOJ!".into());
-    assert_eq!(rpcvalue_to_chainpack("AHOJ!".into()), "860541484F4A21");
+    assert_eq!(rpcvalue_to_chainpack(&"AHOJ!".into()), "860541484F4A21");
 
     // Invalid UTF-8 string
     assert!(chainpack_to_rpcvalue("8EC32800").is_err());
@@ -695,14 +689,14 @@ fn test_cstring() {
 fn test_blob() {
     let blob = vec![170u8; 10];
     assert_eq!(chainpack_to_rpcvalue("850AAAAAAAAAAAAAAAAAAAAA").unwrap(), blob.clone().into());
-    assert_eq!(rpcvalue_to_chainpack(blob.into()), "850AAAAAAAAAAAAAAAAAAAAA");
+    assert_eq!(rpcvalue_to_chainpack(&blob.into()), "850AAAAAAAAAAAAAAAAAAAAA");
 }
 
 #[test]
 fn test_list() {
     let list = crate::make_list!["a", 123, true, crate::make_list![1, 2, 3], RpcValue::null()];
     assert_eq!(chainpack_to_rpcvalue("8886016182807BFE88414243FF80FF").unwrap(), RpcValue::from(list.clone()));
-    assert_eq!(rpcvalue_to_chainpack(RpcValue::from(list)), "8886016182807BFE88414243FF80FF");
+    assert_eq!(rpcvalue_to_chainpack(&RpcValue::from(list)), "8886016182807BFE88414243FF80FF");
 }
 
 #[test]
@@ -713,7 +707,7 @@ fn test_map() {
         "foo" => vec![11,12,13]
     };
     assert_eq!(chainpack_to_rpcvalue("89860362617242860362617A438603666F6F884B4C4DFFFF").unwrap(), map.clone().into());
-    assert_eq!(rpcvalue_to_chainpack(map.into()), "89860362617242860362617A438603666F6F884B4C4DFFFF");
+    assert_eq!(rpcvalue_to_chainpack(&map.into()), "89860362617242860362617A438603666F6F884B4C4DFFFF");
 
     // Invalid key
     assert_eq!(chainpack_to_rpcvalue("898200").unwrap_err().msg, "ChainPack read error - Invalid Map key '0'");
@@ -728,7 +722,7 @@ fn test_imap() {
     };
 
     assert_eq!(chainpack_to_rpcvalue("8A418603666F6F42860362617282814D4FFF").unwrap(), imap.clone().into());
-    assert_eq!(rpcvalue_to_chainpack(imap.into()), "8A418603666F6F42860362617282814D4FFF");
+    assert_eq!(rpcvalue_to_chainpack(&imap.into()), "8A418603666F6F42860362617282814D4FFF");
 
     // Invalid key
     assert_eq!(chainpack_to_rpcvalue("8A8603626172").unwrap_err().msg, "ChainPack read error - Invalid IMap key '\"bar\"'");
@@ -736,56 +730,56 @@ fn test_imap() {
 
 #[test]
 fn test_datetime() {
-    assert_eq!(chainpack_to_rpcvalue("8D04").unwrap(), DateTime::from_epoch_msec_tz(1517529600001, 0).into());
-    assert_eq!(chainpack_to_rpcvalue("8D8211").unwrap(), DateTime::from_epoch_msec_tz(1517529600001, 3600).into());
-    assert_eq!(chainpack_to_rpcvalue("8DE63DDA02").unwrap(), DateTime::from_epoch_msec_tz(1543708800000, 0).into());
-    assert_eq!(chainpack_to_rpcvalue("8DE8A8BFFE").unwrap(), DateTime::from_epoch_msec_tz(1514764800000, 0).into());
-    assert_eq!(chainpack_to_rpcvalue("8DE6DC0E02").unwrap(), DateTime::from_epoch_msec_tz(1546300800000, 0).into());
-    assert_eq!(chainpack_to_rpcvalue("8DF00E60DC02").unwrap(), DateTime::from_epoch_msec_tz(1577836800000, 0).into());
-    assert_eq!(chainpack_to_rpcvalue("8DF015EAF002").unwrap(), DateTime::from_epoch_msec_tz(1609459200000, 0).into());
-    assert_eq!(chainpack_to_rpcvalue("8DF061258802").unwrap(), DateTime::from_epoch_msec_tz(1924992000000, 0).into());
-    assert_eq!(chainpack_to_rpcvalue("8DF100AC656602").unwrap(), DateTime::from_epoch_msec_tz(2240611200000, 0).into());
-    assert_eq!(chainpack_to_rpcvalue("8DF156D74D495F").unwrap(), DateTime::from_epoch_msec_tz(2246004900000, -36900).into());
-    assert_eq!(chainpack_to_rpcvalue("8DF301533905E2375D").unwrap(), DateTime::from_epoch_msec_tz(2246004900123, -36900).into());
+    assert_eq!(chainpack_to_rpcvalue("8D04").unwrap(), DateTime::from_epoch_msec_tz(1_517_529_600_001, 0).into());
+    assert_eq!(chainpack_to_rpcvalue("8D8211").unwrap(), DateTime::from_epoch_msec_tz(1_517_529_600_001, 3600).into());
+    assert_eq!(chainpack_to_rpcvalue("8DE63DDA02").unwrap(), DateTime::from_epoch_msec_tz(1_543_708_800_000, 0).into());
+    assert_eq!(chainpack_to_rpcvalue("8DE8A8BFFE").unwrap(), DateTime::from_epoch_msec_tz(1_514_764_800_000, 0).into());
+    assert_eq!(chainpack_to_rpcvalue("8DE6DC0E02").unwrap(), DateTime::from_epoch_msec_tz(1_546_300_800_000, 0).into());
+    assert_eq!(chainpack_to_rpcvalue("8DF00E60DC02").unwrap(), DateTime::from_epoch_msec_tz(1_577_836_800_000, 0).into());
+    assert_eq!(chainpack_to_rpcvalue("8DF015EAF002").unwrap(), DateTime::from_epoch_msec_tz(1_609_459_200_000, 0).into());
+    assert_eq!(chainpack_to_rpcvalue("8DF061258802").unwrap(), DateTime::from_epoch_msec_tz(1_924_992_000_000, 0).into());
+    assert_eq!(chainpack_to_rpcvalue("8DF100AC656602").unwrap(), DateTime::from_epoch_msec_tz(2_240_611_200_000, 0).into());
+    assert_eq!(chainpack_to_rpcvalue("8DF156D74D495F").unwrap(), DateTime::from_epoch_msec_tz(2_246_004_900_000, -36900).into());
+    assert_eq!(chainpack_to_rpcvalue("8DF301533905E2375D").unwrap(), DateTime::from_epoch_msec_tz(2_246_004_900_123, -36900).into());
     assert_eq!(chainpack_to_rpcvalue("8DF18169CEA7FE").unwrap(), DateTime::from_epoch_msec_tz(0, 0).into());
-    assert_eq!(chainpack_to_rpcvalue("8DEDA8E7F2").unwrap(), DateTime::from_epoch_msec_tz(1493790723000, 0).into());
-    assert_eq!(chainpack_to_rpcvalue("8DF1961334BEB4").unwrap(), DateTime::from_epoch_msec_tz(1493826723923, 0).into());
-    assert_eq!(chainpack_to_rpcvalue("8DF28B0DE42CD95F").unwrap(), DateTime::from_epoch_msec_tz(1493790751123, 36000).into());
-    assert_eq!(chainpack_to_rpcvalue("8DEDA6B572").unwrap(), DateTime::from_epoch_msec_tz(1493826723000, 0).into());
-    assert_eq!(chainpack_to_rpcvalue("8DF182D3308815").unwrap(), DateTime::from_epoch_msec_tz(1493832123000, -5400).into());
-    assert_eq!(chainpack_to_rpcvalue("8DF1961334BEB4").unwrap(), DateTime::from_epoch_msec_tz(1493826723923, 0).into());
+    assert_eq!(chainpack_to_rpcvalue("8DEDA8E7F2").unwrap(), DateTime::from_epoch_msec_tz(1_493_790_723_000, 0).into());
+    assert_eq!(chainpack_to_rpcvalue("8DF1961334BEB4").unwrap(), DateTime::from_epoch_msec_tz(1_493_826_723_923, 0).into());
+    assert_eq!(chainpack_to_rpcvalue("8DF28B0DE42CD95F").unwrap(), DateTime::from_epoch_msec_tz(1_493_790_751_123, 36000).into());
+    assert_eq!(chainpack_to_rpcvalue("8DEDA6B572").unwrap(), DateTime::from_epoch_msec_tz(1_493_826_723_000, 0).into());
+    assert_eq!(chainpack_to_rpcvalue("8DF182D3308815").unwrap(), DateTime::from_epoch_msec_tz(1_493_832_123_000, -5400).into());
+    assert_eq!(chainpack_to_rpcvalue("8DF1961334BEB4").unwrap(), DateTime::from_epoch_msec_tz(1_493_826_723_923, 0).into());
 
-    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(1517529600001, 0).into()), "8D04");
-    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(1517529600001, 3600).into()), "8D8211");
-    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(1543708800000, 0).into()), "8DE63DDA02");
-    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(1514764800000, 0).into()), "8DE8A8BFFE");
-    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(1546300800000, 0).into()), "8DE6DC0E02");
-    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(1577836800000, 0).into()), "8DF00E60DC02");
-    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(1609459200000, 0).into()), "8DF015EAF002");
-    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(1924992000000, 0).into()), "8DF061258802");
-    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(2240611200000, 0).into()), "8DF100AC656602");
-    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(2246004900000, -36900).into()), "8DF156D74D495F");
-    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(2246004900123, -36900).into()), "8DF301533905E2375D");
-    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(0, 0).into()), "8DF18169CEA7FE");
-    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(1493790723000, 0).into()), "8DEDA8E7F2");
-    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(1493826723923, 0).into()), "8DF1961334BEB4");
-    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(1493790751123, 36000).into()), "8DF28B0DE42CD95F");
-    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(1493826723000, 0).into()), "8DEDA6B572");
-    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(1493832123000, -5400).into()), "8DF182D3308815");
-    assert_eq!(rpcvalue_to_chainpack(DateTime::from_epoch_msec_tz(1493826723923, 0).into()), "8DF1961334BEB4");
+    assert_eq!(rpcvalue_to_chainpack(&DateTime::from_epoch_msec_tz(1_517_529_600_001, 0).into()), "8D04");
+    assert_eq!(rpcvalue_to_chainpack(&DateTime::from_epoch_msec_tz(1_517_529_600_001, 3600).into()), "8D8211");
+    assert_eq!(rpcvalue_to_chainpack(&DateTime::from_epoch_msec_tz(1_543_708_800_000, 0).into()), "8DE63DDA02");
+    assert_eq!(rpcvalue_to_chainpack(&DateTime::from_epoch_msec_tz(1_514_764_800_000, 0).into()), "8DE8A8BFFE");
+    assert_eq!(rpcvalue_to_chainpack(&DateTime::from_epoch_msec_tz(1_546_300_800_000, 0).into()), "8DE6DC0E02");
+    assert_eq!(rpcvalue_to_chainpack(&DateTime::from_epoch_msec_tz(1_577_836_800_000, 0).into()), "8DF00E60DC02");
+    assert_eq!(rpcvalue_to_chainpack(&DateTime::from_epoch_msec_tz(1_609_459_200_000, 0).into()), "8DF015EAF002");
+    assert_eq!(rpcvalue_to_chainpack(&DateTime::from_epoch_msec_tz(1_924_992_000_000, 0).into()), "8DF061258802");
+    assert_eq!(rpcvalue_to_chainpack(&DateTime::from_epoch_msec_tz(2_240_611_200_000, 0).into()), "8DF100AC656602");
+    assert_eq!(rpcvalue_to_chainpack(&DateTime::from_epoch_msec_tz(2_246_004_900_000, -36900).into()), "8DF156D74D495F");
+    assert_eq!(rpcvalue_to_chainpack(&DateTime::from_epoch_msec_tz(2_246_004_900_123, -36900).into()), "8DF301533905E2375D");
+    assert_eq!(rpcvalue_to_chainpack(&DateTime::from_epoch_msec_tz(0, 0).into()), "8DF18169CEA7FE");
+    assert_eq!(rpcvalue_to_chainpack(&DateTime::from_epoch_msec_tz(1_493_790_723_000, 0).into()), "8DEDA8E7F2");
+    assert_eq!(rpcvalue_to_chainpack(&DateTime::from_epoch_msec_tz(1_493_826_723_923, 0).into()), "8DF1961334BEB4");
+    assert_eq!(rpcvalue_to_chainpack(&DateTime::from_epoch_msec_tz(1_493_790_751_123, 36000).into()), "8DF28B0DE42CD95F");
+    assert_eq!(rpcvalue_to_chainpack(&DateTime::from_epoch_msec_tz(1_493_826_723_000, 0).into()), "8DEDA6B572");
+    assert_eq!(rpcvalue_to_chainpack(&DateTime::from_epoch_msec_tz(1_493_832_123_000, -5400).into()), "8DF182D3308815");
+    assert_eq!(rpcvalue_to_chainpack(&DateTime::from_epoch_msec_tz(1_493_826_723_923, 0).into()), "8DF1961334BEB4");
 }
 
 #[test]
 fn test_double() {
     assert_eq!(chainpack_to_rpcvalue("830000000000C208B8").unwrap(), RpcValue::from(-9.094_583_978_896_067E-39_f64));
-    assert_eq!(rpcvalue_to_chainpack(RpcValue::from(-9.094_583_978_896_067E-39_f64)), "830000000000C208B8");
+    assert_eq!(rpcvalue_to_chainpack(&RpcValue::from(-9.094_583_978_896_067E-39_f64)), "830000000000C208B8");
 }
 
 #[test]
 fn test_decimal() {
     let dec = crate::decimal::Decimal::new(0, 0);
     assert_eq!(chainpack_to_rpcvalue("8C0000").unwrap(), dec.into());
-    assert_eq!(rpcvalue_to_chainpack(dec.into()), "8C0000");
+    assert_eq!(rpcvalue_to_chainpack(&dec.into()), "8C0000");
 }
 
 #[test]

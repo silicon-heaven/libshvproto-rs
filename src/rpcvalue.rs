@@ -57,6 +57,7 @@ pub enum Value {
     Bool(bool),
     DateTime(datetime::DateTime),
     Decimal(decimal::Decimal),
+    #[expect(clippy::box_collection, reason = "We're using the Box to lower stack size")]
     String(Box<String>),
     Blob(Box<Blob>),
     List(Box<List>),
@@ -100,7 +101,7 @@ impl Value {
 }
 
 impl From<()> for Value {
-    fn from(_: ()) -> Self {
+    fn from((): ()) -> Self {
         Value::Null
     }
 }
@@ -124,7 +125,7 @@ impl From<String> for Value {
 }
 impl From<&String> for Value {
     fn from(val: &String) -> Self {
-        Value::String(Box::new(val.to_string()))
+        Value::String(Box::new(val.clone()))
     }
 }
 
@@ -858,7 +859,7 @@ where
 
     fn try_from(value: RpcValue) -> Result<Self, Self::Error> {
         let mut res = Self::new();
-        for (key, val) in Map::try_from(value)?.into_iter() {
+        for (key, val) in Map::try_from(value)? {
             let val = val.try_into().map_err(|e| format!("Wrong item at key `{key}`: {e}"))?;
             res.insert(key,val);
         }
@@ -893,7 +894,7 @@ where
 
     fn try_from(value: RpcValue) -> Result<Self, Self::Error> {
         let mut res = Self::new();
-        for (key, val) in IMap::try_from(value)?.into_iter() {
+        for (key, val) in IMap::try_from(value)? {
             res.insert(
                 key,
                 val.try_into()
@@ -934,11 +935,13 @@ impl GetIndex for i32 {
 }
 impl GetIndex for u32 {
     fn make_key(&self) -> GetKey<'_> {
+        #[expect(clippy::cast_possible_wrap, reason = "We hope that the key is small enough to fit")]
         GetKey::Int(*self as i32)
     }
 }
 impl GetIndex for usize {
     fn make_key(&self) -> GetKey<'_> {
+        #[expect(clippy::cast_possible_truncation, clippy::cast_possible_wrap, reason = "We hope that the key is small enough to fit")]
         GetKey::Int(*self as i32)
     }
 }
@@ -994,22 +997,26 @@ impl RpcValue {
     pub fn as_i64(&self) -> i64 {
         match &self.value {
             Value::Int(d) => *d,
-            Value::UInt(d) => *d as i64,
+            Value::UInt(d) => d.cast_signed(),
             _ => 0,
         }
     }
     pub fn as_i32(&self) -> i32 {
-        self.as_i64() as i32
+        #[expect(clippy::cast_possible_truncation, reason = "If the user wants an i32, we don't care about overflows")]
+        let res = self.as_i64() as i32;
+        res
     }
     pub fn as_u64(&self) -> u64 {
         match &self.value {
-            Value::Int(d) => *d as u64,
+            Value::Int(d) => d.cast_unsigned(),
             Value::UInt(d) => *d,
             _ => 0,
         }
     }
     pub fn as_u32(&self) -> u32 {
-        self.as_u64() as u32
+        #[expect(clippy::cast_possible_truncation, reason = "If the user wants an u32, we don't care about overflows")]
+        let res = self.as_u64() as u32;
+        res
     }
     pub fn as_f64(&self) -> f64 {
         match &self.value {
@@ -1019,7 +1026,9 @@ impl RpcValue {
     }
     pub fn as_usize(&self) -> usize {
         match &self.value {
+            #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss, reason = "We expect a 64-bit platform")]
             Value::Int(d) => *d as usize,
+            #[expect(clippy::cast_possible_truncation, reason = "We expect a 64-bit platform")]
             Value::UInt(d) => *d as usize,
             _ => 0_usize,
         }
@@ -1078,12 +1087,14 @@ impl RpcValue {
             _ => EMPTY_IMAP.get_or_init(IMap::new),
         }
     }
+    #[expect(clippy::needless_pass_by_value, reason = "GetIndex is implemented for a lot of types, and some might not be owned")]
     pub fn get<I>(&self, key: I) -> Option<&RpcValue>
     where
         I: GetIndex,
     {
         match key.make_key() {
             GetKey::Int(ix) => match &self.value {
+                #[expect(clippy::cast_sign_loss, reason = "We expect the int to be positive")]
                 Value::List(lst) => lst.get(ix as usize),
                 Value::IMap(map) => map.get(&ix),
                 _ => None,
@@ -1242,8 +1253,8 @@ mod test {
         let dt = chrono::offset::Local::now();
         let rv = RpcValue::from(dt);
         assert_eq!(
-            rv.as_datetime().epoch_msec() + rv.as_datetime().utc_offset() as i64 * 1000,
-            dt.timestamp_millis() + dt.offset().fix().local_minus_utc() as i64 * 1000
+            rv.as_datetime().epoch_msec() + i64::from(rv.as_datetime().utc_offset()) * 1000,
+            dt.timestamp_millis() + i64::from(dt.offset().fix().local_minus_utc()) * 1000
         );
 
         let vec1 = vec![RpcValue::from(123), RpcValue::from("foo")];

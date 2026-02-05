@@ -42,11 +42,13 @@ impl GetIndex for i32 {
 }
 impl GetIndex for u32 {
     fn make_key(&self) -> GetKey<'_> {
+        #[expect(clippy::cast_possible_wrap, reason = "We hope that the key is small enough to fit")]
         GetKey::Int(*self as i32)
     }
 }
 impl GetIndex for usize {
     fn make_key(&self) -> GetKey<'_> {
+        #[expect(clippy::cast_possible_truncation, clippy::cast_possible_wrap, reason = "We hope that the key is small enough to fit")]
         GetKey::Int(*self as i32)
     }
 }
@@ -70,6 +72,7 @@ impl MetaMap {
     pub fn len(&self) -> usize {
         self.0.len()
     }
+    #[expect(clippy::needless_pass_by_value, reason = "GetIndex is implemented for a lot of types, and some might not be owned")]
     pub fn insert<I>(&mut self, key: I, value: RpcValue) -> &mut Self
         where I: GetIndex
     {
@@ -77,12 +80,13 @@ impl MetaMap {
             None => {
                 let key = key.make_key();
                 let key = MetaKey::from(&key);
-                self.0.push(MetaKeyVal{key, value })
+                self.0.push(MetaKeyVal{key, value });
             },
-            Some(ix) => self.0[ix].value = value,
+            Some(ix) => self.0.get_mut(ix).expect("The value has been found with .find()").value = value,
         }
         self
     }
+    #[expect(clippy::needless_pass_by_value, reason = "GetIndex is implemented for a lot of types, and some might not be owned")]
     pub fn remove<I>(&mut self, key: I) -> Option<RpcValue>
         where I: GetIndex
     {
@@ -91,13 +95,11 @@ impl MetaMap {
             Some(ix) => Some(self.0.remove(ix).value),
         }
     }
+    #[expect(clippy::needless_pass_by_value, reason = "GetIndex is implemented for a lot of types, and some might not be owned")]
     pub fn get<I>(&self, key: I) -> Option<&RpcValue>
         where I: GetIndex
     {
-        match self.find(&key) {
-            Some(ix) => Some(&self.0[ix].value),
-            None => None,
-        }
+        self.find(&key).map(|ix| &self.0.get(ix).expect("The value has been found with .find()").value)
     }
     fn find<I>(&self, key: &I) -> Option<usize>
         where I: GetIndex
@@ -133,11 +135,11 @@ impl fmt::Display for MetaMap {
         let mut wr = CponWriter::new(&mut buff);
         let res = wr.write_meta(self);
         if let Err(e) = res {
-            log::warn!("to_cpon write with error: {}", e);
+            log::warn!("to_cpon write with error: {e}");
             return write!(fmt, "<invalid>")
         }
         match String::from_utf8(buff) {
-            Ok(s) => write!(fmt, "{}", s),
+            Ok(s) => write!(fmt, "{s}"),
             Err(_) => write!(fmt, "<invalid>"),
         }
     }

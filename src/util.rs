@@ -1,3 +1,4 @@
+#![allow(clippy::indexing_slicing, reason = "Lots of indexing here")]
 use log::LevelFilter;
 
 pub fn parse_log_verbosity<'a>(verbosity: &'a str, module_path: &'a str) -> Vec<(Option<&'a str>, LevelFilter)> {
@@ -34,15 +35,15 @@ pub fn hex_array(data: &[u8]) -> String {
         if ret.len() > 1 {
             ret += ",";
         }
-        ret += &format!("0x{:02x}", b);
+        ret += &format!("0x{b:02x}");
     }
     ret += "]";
     ret
 }
 pub fn hex_dump(data: &[u8]) -> String {
-    let mut ret: String = Default::default();
-    let mut hex_line: String = Default::default();
-    let mut char_line: String = Default::default();
+    let mut ret = String::default();
+    let mut hex_line = String::default();
+    let mut char_line = String::default();
     let box_size = (data.len() / 16 + 1) * 16 + 1;
     for i in 0..box_size {
         let byte = if i < data.len() { Some(data[i]) } else { None };
@@ -53,23 +54,17 @@ pub fn hex_dump(data: &[u8]) -> String {
                 if i > 0 {
                     ret += "\n";
                 }
-                ret += &format!("{:04x} ", i);
+                ret += &format!("{i:04x} ");
             }
             hex_line.clear();
             char_line.clear();
         }
-        let hex_str = match byte {
-            None => { "   ".to_string() }
-            Some(b) => { format!("{:02x} ", b) }
-        };
-        let c_str = match byte {
-            None => { " ".to_string() }
-            Some(b) => {
-                let c = b as char;
-                let c = if c >= ' ' && c < (127 as char) { c } else { '.' };
-                format!("{}", c)
-            }
-        };
+        let hex_str = byte.map_or_else(|| "   ".to_string(), |b| format!("{b:02x} "));
+        let c_str = byte.map_or_else(|| " ".to_string(), |b| {
+            let c = b as char;
+            let c = if c >= ' ' && c < (127 as char) { c } else { '.' };
+            c.to_string()
+        });
         hex_line += &hex_str;
         char_line += &c_str;
     }

@@ -24,7 +24,7 @@ impl<'a, W> CponWriter<'a, W>
     pub fn new(write: &'a mut W) -> Self {
         CponWriter {
             byte_writer: ByteWriter::new(write),
-            indent: "".as_bytes().to_vec(),
+            indent: b"".to_vec(),
             no_oneliners: false,
             nest_count: 0,
         }
@@ -41,11 +41,8 @@ impl<'a, W> CponWriter<'a, W>
             return false;
         }
         for it in lst.iter() {
-            match &it.value {
-                Value::List(_) => return false,
-                Value::Map(_) => return false,
-                Value::IMap(_) => return false,
-                _ => continue,
+            if matches!(&it.value, Value::List(_) | Value::Map(_) | Value::IMap(_)) {
+                return false;
             }
         }
         true
@@ -62,14 +59,12 @@ impl<'a, W> CponWriter<'a, W>
             match iter.next() {
                 Some(val) => {
                     match &val.1.value {
-                        Value::List(_) => return false,
-                        Value::Map(_) => return false,
-                        Value::IMap(_) => return false,
+                        Value::List(_) | Value::Map(_) | Value::IMap(_) => return false,
                         _ => (),
                     }
                 },
                 None => break,
-            };
+            }
             n += 1;
         };
         true
@@ -80,11 +75,8 @@ impl<'a, W> CponWriter<'a, W>
             return false;
         }
         for k in map.0.iter() {
-            match &k.value.value {
-                Value::List(_) => return false,
-                Value::Map(_) => return false,
-                Value::IMap(_) => return false,
-                _ => continue,
+            if matches!(&k.value.value, Value::List(_) | Value::Map(_) | Value::IMap(_)) {
+                return false;
             }
         }
         true
@@ -203,8 +195,8 @@ impl<'a, W> CponWriter<'a, W>
         self.write_byte(b'"')?;
         Ok(self.byte_writer.count() - cnt)
     }
-    fn write_datetime(&mut self, dt: &DateTime) -> WriteResult {
-        let cnt = self.write_bytes("d\"".as_bytes())?;
+    fn write_datetime(&mut self, dt: DateTime) -> WriteResult {
+        let cnt = self.write_bytes(b"d\"")?;
         let s = dt.to_iso_string_opt(&ToISOStringOptions {
             include_millis: IncludeMilliseconds::WhenNonZero,
             include_timezone: true
@@ -258,7 +250,7 @@ impl<'a, W> CponWriter<'a, W>
                 self.write_byte(b',')?;
             }
             self.indent_element(is_oneliner, n == 0)?;
-            self.write_int(*k as i64)?;
+            self.write_int(i64::from(*k))?;
             self.write_byte(b':')?;
             self.write(v)?;
         }
@@ -322,11 +314,11 @@ impl<W> Writer for CponWriter<'_, W>
     fn write_value(&mut self, val: &Value) -> WriteResult {
         let cnt: usize = self.byte_writer.count();
         match val {
-            Value::Null => self.write_bytes("null".as_bytes()),
+            Value::Null => self.write_bytes(b"null"),
             Value::Bool(b) => if *b {
-                self.write_bytes("true".as_bytes())
+                self.write_bytes(b"true")
             } else {
-                self.write_bytes("false".as_bytes())
+                self.write_bytes(b"false")
             },
             Value::Int(n) => self.write_int(*n),
             Value::UInt(n) => {
@@ -336,8 +328,8 @@ impl<W> Writer for CponWriter<'_, W>
             Value::String(s) => self.write_string(s),
             Value::Blob(b) => self.write_blob(b),
             Value::Double(n) => self.write_double(*n),
-            Value::Decimal(d) => self.write_decimal(d),
-            Value::DateTime(d) => self.write_datetime(d),
+            Value::Decimal(d) => self.write_decimal(*d),
+            Value::DateTime(d) => self.write_datetime(*d),
             Value::List(lst) => self.write_list(lst),
             Value::Map(map) => self.write_map(map),
             Value::IMap(map) => self.write_imap(map),
@@ -363,7 +355,7 @@ impl<'a, R> CponReader<'a, R>
             b'A' ..= b'F' => Ok(b - b'A' + 10),
             b'a' ..= b'f' => Ok(b - b'a' + 10),
             b'0' ..= b'9' => Ok(b - b'0'),
-            c => Err(self.make_error(&format!("Illegal hex encoding character: {}", c), ReadErrorReason::InvalidCharacter)),
+            c => Err(self.make_error(&format!("Illegal hex encoding character: {c}"), ReadErrorReason::InvalidCharacter)),
         }
     }
     fn read_blob_esc(&mut self) -> Result<Value, ReadError> {
@@ -385,7 +377,7 @@ impl<'a, R> CponReader<'a, R>
                             let hi = b;
                             let lo = self.get_byte()?;
                             let b = self.decode_hex_byte(hi)? * 16 + self.decode_hex_byte(lo)?;
-                            buff.push(b)
+                            buff.push(b);
                         },
                     }
                 }
@@ -440,6 +432,7 @@ impl<'a, R> CponReader<'a, R>
             let key = if is_negative { -value } else { value };
             self.skip_white_insignificant()?;
             let val = self.read()?;
+            #[expect(clippy::cast_possible_truncation, reason = "We hope that the key is small enough to fit")]
             map.insert(key as i32, val);
         }
         Ok(Value::from(map))
@@ -483,7 +476,7 @@ where R: Read
         self.byte_reader.get_byte()
     }
     fn make_error(&self, msg: &str, reason: ReadErrorReason) -> ReadError {
-        self.byte_reader.make_error(&format!("Cpon read error - {}", msg), reason)
+        self.byte_reader.make_error(&format!("Cpon read error - {msg}"), reason)
     }
     fn read_string(&mut self) -> Result<Value, ReadError> {
         let mut buff: Vec<u8> = Vec::new();
@@ -515,7 +508,7 @@ where R: Read
         let s = std::str::from_utf8(&buff);
         match s {
             Ok(s) => Ok(Value::from(s)),
-            Err(e) => Err(self.make_error(&format!("Invalid String, Utf8 error: {}", e), ReadErrorReason::InvalidCharacter)),
+            Err(e) => Err(self.make_error(&format!("Invalid String, Utf8 error: {e}"), ReadErrorReason::InvalidCharacter)),
         }
     }
 }
@@ -604,12 +597,12 @@ mod test
         test_cpon_round_trip("123.4", Decimal::new(1234, -1));
         test_cpon_round_trip("0.123", Decimal::new(123, -3));
         test_cpon_round_trip("-0.123", Decimal::new(-123, -3));
-        test_cpon_round_trip("123000000e2", Decimal::new(123000000, 2));
+        test_cpon_round_trip("123000000e2", Decimal::new(123_000_000, 2));
         assert_eq!(Decimal::new(10000, 3).to_cpon_string(), "10000000.");
         assert_eq!(RpcValue::from_cpon("0e0").unwrap().as_decimal(), Decimal::new(0, 0));
         assert_eq!(RpcValue::from_cpon("0.123e3").unwrap().as_decimal(), Decimal::new(123, 0));
-        test_cpon_round_trip("1000000.", Decimal::new(1000000, 0));
-        test_cpon_round_trip("50.03138741402532", Decimal::new(5003138741402532, -14));
+        test_cpon_round_trip("1000000.", Decimal::new(1_000_000, 0));
+        test_cpon_round_trip("50.03138741402532", Decimal::new(5_003_138_741_402_532, -14));
         // We do not support such high precision.
         assert!(RpcValue::from_cpon("36.028797018963968").is_err());
         assert_eq!(RpcValue::from_cpon(r#""foo""#).unwrap().as_str(), "foo");
@@ -635,8 +628,7 @@ mod test
         assert_eq!(RpcValue::from_cpon(r#"d"2022-01-02T12:59:06Z""#).unwrap().as_datetime(), DateTime::from_datetime(&dt));
 
 
-        // Allow in tests
-        #[allow(clippy::too_many_arguments)]
+        #[expect(clippy::too_many_arguments, reason = "Allow in tests")]
         fn dt_from_ymd_hms_milli_tz_offset(year: i32, month: u32, day: u32, hour: u32, min: u32, sec: u32, milli: i64, tz_offset: i32) -> chrono::DateTime<FixedOffset> {
             if let LocalResult::Single(dt) = FixedOffset::east_opt(tz_offset).unwrap()
                 .with_ymd_and_hms(year, month, day, hour, min, sec) {
@@ -696,21 +688,21 @@ mod test
         // read very long decimal without overflow error, value is capped
         assert_eq!(RpcValue::from_cpon("123456789012345678901234567890123456789012345678901234567890").unwrap().as_int(), i64::MAX);
 
-        assert_eq!(RpcValue::from_cpon("9223372036854775806").unwrap().as_int(), 9223372036854775806_i64);
+        assert_eq!(RpcValue::from_cpon("9223372036854775806").unwrap().as_int(), 9_223_372_036_854_775_806_i64);
         assert_eq!(RpcValue::from_cpon("9223372036854775807").unwrap().as_int(), i64::MAX);
         assert_eq!(RpcValue::from_cpon("9223372036854775808").unwrap().as_int(), i64::MAX);
 
-        assert_eq!(RpcValue::from_cpon("0x7FFFFFFFFFFFFFFE").unwrap().as_int(), 0x7FFFFFFFFFFFFFFE_i64);
+        assert_eq!(RpcValue::from_cpon("0x7FFFFFFFFFFFFFFE").unwrap().as_int(), 0x7FFF_FFFF_FFFF_FFFE_i64);
         assert_eq!(RpcValue::from_cpon("0x7FFFFFFFFFFFFFFF").unwrap().as_int(), i64::MAX);
         assert_eq!(RpcValue::from_cpon("0x8000000000000000").unwrap().as_int(), i64::MAX);
 
         assert_eq!(RpcValue::from_cpon("-123456789012345678901234567890123456789012345678901234567890").unwrap().as_int(), i64::MIN);
 
-        assert_eq!(RpcValue::from_cpon("-9223372036854775807").unwrap().as_int(), -9223372036854775807_i64);
+        assert_eq!(RpcValue::from_cpon("-9223372036854775807").unwrap().as_int(), -9_223_372_036_854_775_807_i64);
         assert_eq!(RpcValue::from_cpon("-9223372036854775808").unwrap().as_int(), i64::MIN);
         assert_eq!(RpcValue::from_cpon("-9223372036854775809").unwrap().as_int(), i64::MIN);
 
-        assert_eq!(RpcValue::from_cpon("-0x7FFFFFFFFFFFFFFF").unwrap().as_int(), -0x7FFFFFFFFFFFFFFF_i64);
+        assert_eq!(RpcValue::from_cpon("-0x7FFFFFFFFFFFFFFF").unwrap().as_int(), -0x7FFF_FFFF_FFFF_FFFF_i64);
         assert_eq!(RpcValue::from_cpon("-0x8000000000000000").unwrap().as_int(), i64::MIN);
         assert_eq!(RpcValue::from_cpon("-0x8000000000000001").unwrap().as_int(), i64::MIN);
 

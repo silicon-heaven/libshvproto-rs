@@ -1,4 +1,4 @@
-//use crate::rpcvalue::RpcValue;
+#![allow(clippy::string_slice, reason = "strings are not utf8")]
 
 use std::cmp::Ordering;
 use std::fmt;
@@ -9,7 +9,6 @@ use chrono::{FixedOffset, NaiveDateTime, Offset};
 /// I'm storing whole DateTime in one i64 to keep size_of RpcValue == 24
 const TZ_MASK: i64 = 127;
 pub enum IncludeMilliseconds {
-    #[allow(dead_code)]
     Never,
     Always,
     WhenNonZero,
@@ -64,7 +63,7 @@ impl DateTime {
         let mut msec = epoch_msec;
         // offset in quarters of hour
         msec *= TZ_MASK + 1;
-        let offset = (utc_offset_sec / 60 / 15) as i64;
+        let offset = i64::from(utc_offset_sec / 60 / 15);
         msec |= offset & TZ_MASK;
         DateTime(msec)
     }
@@ -80,7 +79,7 @@ impl DateTime {
                     let mut msec = 0;
                     let mut offset = 0;
                     let mut rest = &s[PATTERN.len()..];
-                    if !rest.is_empty() && rest.as_bytes()[0] == b'.' {
+                    if matches!(rest.as_bytes().first(), Some(b'.')) {
                         rest = &rest[1..];
                         if rest.len() >= 3 {
                             match rest[..3].parse::<i32>() {
@@ -89,73 +88,72 @@ impl DateTime {
                                     rest = &rest[3..];
                                 }
                                 Err(err) => {
-                                    return Err(format!("Parsing DateTime msec part error: {}, in '{}", err, iso_str))
+                                    return Err(format!("Parsing DateTime msec part error: {err}, in '{iso_str}"))
                                 }
                             }
                         }
                     }
                     if !rest.is_empty() {
-                        if rest.len() == 1 && rest.as_bytes()[0] == b'Z' {
+                        if rest.len() == 1 && *rest.as_bytes().first().expect("len() is 1") == b'Z' {
                         } else if rest.len() == 3 {
                             if let Ok(hrs) = rest.parse::<i32>() {
                                 offset = 60 * 60 * hrs;
                             } else {
-                                return Err(format!("Invalid DateTime TZ(3) part: '{}, date time: {}", rest, iso_str))
+                                return Err(format!("Invalid DateTime TZ(3) part: '{rest}, date time: {iso_str}"))
                             }
                         } else if rest.len() == 5 {
                             if let Ok(hrs) = rest.parse::<i32>() {
                                 offset = 60 * (60 * (hrs / 100) + (hrs % 100));
                             } else {
-                                return Err(format!("Invalid DateTime TZ(5) part: '{}, date time: {}", rest, iso_str))
+                                return Err(format!("Invalid DateTime TZ(5) part: '{rest}, date time: {iso_str}"))
                             }
                         } else {
-                            return Err(format!("Invalid DateTime TZ part: '{}, date time: {}", rest, iso_str))
+                            return Err(format!("Invalid DateTime TZ part: '{rest}, date time: {iso_str}"))
                         }
                     }
-                    let epoch_msec = (ndt.and_utc().timestamp() - (offset as i64)) * 1000 + (msec as i64);
+                    let epoch_msec = (ndt.and_utc().timestamp() - i64::from(offset)) * 1000 + i64::from(msec);
                     let dt = DateTime::from_epoch_msec_tz(epoch_msec, offset);
                     return Ok(dt)
                 }
             }
-            Err(format!("Invalid DateTime: '{:?}", iso_str))
+            Err(format!("Invalid DateTime: '{iso_str:?}"))
     }
-    pub fn epoc_msec_utc_offset(&self) -> (i64, i32) {
+    pub fn epoc_msec_utc_offset(self) -> (i64, i32) {
         let msec= self.0 / (TZ_MASK + 1);
         let mut offset = self.0 & TZ_MASK;
         if (offset & ((TZ_MASK + 1) / 2)) != 0 {
             // sign extension
             offset |= !TZ_MASK;
         }
+        #[expect(clippy::cast_possible_truncation, reason = "We hope that the offset is small enough to fit")]
         let offset = (offset * 15 * 60) as i32;
         (msec, offset)
     }
-    pub fn epoch_msec(&self) -> i64 { self.epoc_msec_utc_offset().0 }
-    pub fn utc_offset(&self) -> i32 { self.epoc_msec_utc_offset().1 }
+    pub fn epoch_msec(self) -> i64 { self.epoc_msec_utc_offset().0 }
+    pub fn utc_offset(self) -> i32 { self.epoc_msec_utc_offset().1 }
 
-    pub fn to_chrono_naivedatetime(&self) -> chrono::NaiveDateTime {
+    pub fn to_chrono_naivedatetime(self) -> chrono::NaiveDateTime {
         let msec = self.epoch_msec();
         chrono::DateTime::from_timestamp_millis(msec).unwrap_or_default().naive_utc()
     }
-    pub fn to_chrono_datetime(&self) -> chrono::DateTime<chrono::offset::FixedOffset> {
-        let offset = match FixedOffset::east_opt(self.utc_offset()) {
-            None => {FixedOffset::east_opt(0).unwrap()}
-            Some(o) => {o}
-        };
+    pub fn to_chrono_datetime(self) -> chrono::DateTime<chrono::offset::FixedOffset> {
+        let offset = FixedOffset::east_opt(self.utc_offset())
+            .unwrap_or_else(|| FixedOffset::east_opt(0).expect("Zero is within the range"));
         chrono::DateTime::from_naive_utc_and_offset(self.to_chrono_naivedatetime(), offset)
     }
-    pub fn to_iso_string(&self) -> String {
+    pub fn to_iso_string(self) -> String {
         self.to_iso_string_opt(&ToISOStringOptions::default())
     }
-    pub fn to_iso_string_opt(&self, opts: &ToISOStringOptions) -> String {
+    pub fn to_iso_string_opt(self, opts: &ToISOStringOptions) -> String {
         let dt = self.to_chrono_datetime();
         let mut s = format!("{}", dt.format("%Y-%m-%dT%H:%M:%S"));
         let ms = self.epoch_msec() % 1000;
         match opts.include_millis {
             IncludeMilliseconds::Never => {}
-            IncludeMilliseconds::Always => { s.push_str(&format!(".{:03}", ms)); }
+            IncludeMilliseconds::Always => { s.push_str(&format!(".{ms:03}")); }
             IncludeMilliseconds::WhenNonZero => {
                 if ms > 0 {
-                    s.push_str(&format!(".{:03}", ms));
+                    s.push_str(&format!(".{ms:03}"));
                 }
             }
         }
@@ -173,32 +171,37 @@ impl DateTime {
                 }
                 let offset_hr = offset / 60 / 60;
                 let offset_min = offset / 60 % 60;
-                s += &format!("{:02}", offset_hr);
+                s += &format!("{offset_hr:02}");
                 if offset_min > 0 {
-                    s += &format!("{:02}", offset_min);
+                    s += &format!("{offset_min:02}");
                 }
             }
         }
         s
     }
 
-    pub fn add_days(&self, days: i64) -> Self {
+    #[must_use]
+    pub fn add_days(self, days: i64) -> Self {
         let (msec, offset) = self.epoc_msec_utc_offset();
         Self::from_epoch_msec_tz(msec + (days * 24 * 60 * 60 * 1000), offset)
     }
-    pub fn add_hours(&self, hours: i64) -> Self {
+    #[must_use]
+    pub fn add_hours(self, hours: i64) -> Self {
         let (msec, offset) = self.epoc_msec_utc_offset();
         Self::from_epoch_msec_tz(msec + (hours * 60 * 60 * 1000), offset)
     }
-    pub fn add_minutes(&self, minutes: i64) -> Self {
+    #[must_use]
+    pub fn add_minutes(self, minutes: i64) -> Self {
         let (msec, offset) = self.epoc_msec_utc_offset();
         Self::from_epoch_msec_tz(msec + (minutes * 60 * 1000), offset)
     }
-    pub fn add_seconds(&self, seconds: i64) -> Self {
+    #[must_use]
+    pub fn add_seconds(self, seconds: i64) -> Self {
         let (msec, offset) = self.epoc_msec_utc_offset();
         Self::from_epoch_msec_tz(msec + (seconds * 1000), offset)
     }
-    pub fn add_millis(&self, millis: i64) -> Self {
+    #[must_use]
+    pub fn add_millis(self, millis: i64) -> Self {
         let (msec, offset) = self.epoc_msec_utc_offset();
         Self::from_epoch_msec_tz(msec + millis, offset)
     }

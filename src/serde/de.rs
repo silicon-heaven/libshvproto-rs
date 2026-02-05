@@ -11,7 +11,7 @@ pub struct ValueDeserializer<'a> {
     pub value: &'a Value,
 }
 
-impl<'de, 'a> IntoDeserializer<'de> for ValueDeserializer<'a> {
+impl IntoDeserializer<'_> for ValueDeserializer<'_> {
     type Deserializer = Self;
 
     fn into_deserializer(self) -> Self::Deserializer {
@@ -19,7 +19,7 @@ impl<'de, 'a> IntoDeserializer<'de> for ValueDeserializer<'a> {
     }
 }
 
-impl<'de, 'a> serde::Deserializer<'de> for ValueDeserializer<'a> {
+impl<'de> serde::Deserializer<'de> for ValueDeserializer<'_> {
     type Error = de::value::Error;
 
     fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
@@ -103,7 +103,7 @@ impl<'de, 'a> serde::Deserializer<'de> for ValueDeserializer<'a> {
     {
         match self.value {
             Value::UInt(u) => visitor.visit_u64(*u),
-            Value::Int(i) if *i >= 0 => visitor.visit_u64(*i as u64),
+            Value::Int(i) if *i >= 0 => visitor.visit_u64(i.cast_unsigned()),
             // Value::Double(f) if *f >= 0.0 => visitor.visit_u64(*f as u64),
             _ => Err(de::Error::custom("expected unsigned integer-compatible value")),
         }
@@ -137,7 +137,9 @@ impl<'de, 'a> serde::Deserializer<'de> for ValueDeserializer<'a> {
         match self.value {
             Value::Double(f) => visitor.visit_f64(*f),
             Value::Decimal(decimal) => visitor.visit_f64(decimal.to_f64()),
+            #[expect(clippy::cast_precision_loss, reason = "We hope we don't lose precision by casting to f64")]
             Value::Int(i) => visitor.visit_f64(*i as f64),
+            #[expect(clippy::cast_precision_loss, reason = "We hope we don't lose precision by casting to f64")]
             Value::UInt(u) => visitor.visit_f64(*u as f64),
             _ => Err(de::Error::custom("expected float-compatible value")),
         }
@@ -267,7 +269,7 @@ impl<'de, 'a> serde::Deserializer<'de> for ValueDeserializer<'a> {
         match self.value {
             // Externally tagged (e.g. { "Variant": {...} })
             Value::Map(map) if map.len() == 1 => {
-                let (variant, value) = map.iter().next().unwrap();
+                let (variant, value) = map.iter().next().expect("len() is 1");
                 let enum_access = SimpleEnumAccess {
                     variant,
                     value: Some(&value.value)
@@ -324,7 +326,7 @@ struct SimpleEnumAccess<'a> {
     value: Option<&'a Value>,
 }
 
-impl<'a, 'de> EnumAccess<'de> for SimpleEnumAccess<'a> {
+impl<'de> EnumAccess<'de> for SimpleEnumAccess<'_> {
     type Error = serde::de::value::Error;
     type Variant = Self;
 
@@ -335,22 +337,18 @@ impl<'a, 'de> EnumAccess<'de> for SimpleEnumAccess<'a> {
     }
 }
 
-impl<'a, 'de> VariantAccess<'de> for SimpleEnumAccess<'a> {
+impl<'de> VariantAccess<'de> for SimpleEnumAccess<'_> {
     type Error = serde::de::value::Error;
 
     fn unit_variant(self) -> Result<(), Self::Error> {
-        match self.value {
-            Some(v) => serde::Deserialize::deserialize(ValueDeserializer { value: v }),
-            None => Ok(()),
-        }
+        self.value
+            .map_or(Ok(()), |v| serde::Deserialize::deserialize(ValueDeserializer { value: v }))
     }
 
     fn newtype_variant_seed<T>(self, seed: T) -> Result<T::Value, Self::Error>
     where T: DeserializeSeed<'de> {
-        match self.value {
-            Some(v) => seed.deserialize(ValueDeserializer { value: v }),
-            None => Err(de::Error::custom("Expected value for newtype variant")),
-        }
+        self.value
+            .map_or_else(|| Err(de::Error::custom("Expected value for newtype variant")), |v| seed.deserialize(ValueDeserializer { value: v }))
     }
 
     fn tuple_variant<V>(self, _len: usize, visitor: V) -> Result<V::Value, Self::Error>
@@ -366,7 +364,7 @@ impl<'a, 'de> VariantAccess<'de> for SimpleEnumAccess<'a> {
 
 struct UntaggedEnumAccess<'a>(&'a Value);
 
-impl<'a, 'de> EnumAccess<'de> for UntaggedEnumAccess<'a> {
+impl<'de> EnumAccess<'de> for UntaggedEnumAccess<'_> {
     type Error = serde::de::value::Error;
     type Variant = Self;
 
@@ -380,7 +378,7 @@ impl<'a, 'de> EnumAccess<'de> for UntaggedEnumAccess<'a> {
     }
 }
 
-impl<'a, 'de> VariantAccess<'de> for UntaggedEnumAccess<'a> {
+impl<'de> VariantAccess<'de> for UntaggedEnumAccess<'_> {
     type Error = serde::de::value::Error;
 
     fn unit_variant(self) -> Result<(), Self::Error> {
@@ -410,7 +408,7 @@ impl<'de> serde::Deserialize<'de> for crate::DateTime {
     {
         struct DateTimeVisitor;
 
-        impl<'de> Visitor<'de> for DateTimeVisitor {
+        impl Visitor<'_> for DateTimeVisitor {
             type Value = crate::DateTime;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
@@ -483,7 +481,7 @@ impl<'de> serde::Deserialize<'de> for Blob
     {
         struct BlobVisitor;
 
-        impl<'de> Visitor<'de> for BlobVisitor {
+        impl Visitor<'_> for BlobVisitor {
             type Value = Blob;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {

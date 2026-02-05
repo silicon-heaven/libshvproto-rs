@@ -15,7 +15,7 @@ fn is_option(ty: &syn::Type) -> bool {
     if !(typepath.qself.is_none() && typepath.path.segments.len() == 1) {
         return false
     }
-    let segment = &typepath.path.segments[0];
+    let segment = typepath.path.segments.first().expect("len() is 1");
 
     if segment.ident != "Option" {
         return false;
@@ -27,7 +27,7 @@ fn is_option(ty: &syn::Type) -> bool {
         return false;
     }
 
-    matches!(data.args[0], syn::GenericArgument::Type(_))
+    matches!(data.args.first().expect("len() is 1"), syn::GenericArgument::Type(_))
 }
 
 fn get_type(ty: &syn::Type) -> Option<String> {
@@ -48,8 +48,7 @@ fn get_field_name(field: &syn::Field) -> String {
         .and_then(|attr| attr.meta.require_name_value().ok())
         .filter(|meta_name_value| meta_name_value.path.is_ident("field_name"))
         .map(|meta_name_value| if let syn::Expr::Lit(expr) = &meta_name_value.value { expr } else { panic!("Expected a string literal for 'field_name'") })
-        .map(|literal| if let syn::Lit::Str(expr) = &literal.lit { expr.value() } else { panic!("Expected a string literal for 'field_name'") })
-        .unwrap_or_else(|| field.ident.as_ref().unwrap().to_string().to_case(Case::Camel))
+        .map_or_else(|| field.ident.as_ref().unwrap().to_string().to_case(Case::Camel), |literal| if let syn::Lit::Str(expr) = &literal.lit { expr.value() } else { panic!("Expected a string literal for 'field_name'") })
 }
 
 fn field_to_initializers(
@@ -63,11 +62,7 @@ fn field_to_initializers(
     let is_option = is_option(&field.ty);
     let struct_initializer;
     let rpcvalue_insert;
-    let identifier_at_value = if let Some(value) = from_value {
-        quote! { #value.#identifier }
-    } else {
-        quote! { #identifier }
-    };
+    let identifier_at_value = from_value.map_or_else(|| quote! { #identifier }, |value| quote! { #value.#identifier });
     if is_option {
         struct_initializer = quote!{
             #identifier: match get_key(#field_name).ok() {
@@ -235,9 +230,7 @@ pub fn derive_from_rpcvalue(item: TokenStream) -> TokenStream {
                 };
                 match &variant.fields {
                     syn::Fields::Unnamed(variant_types) => {
-                        if variant_types.unnamed.len() != 1 {
-                            panic!("Only single element variant tuples are supported for FromRpcValue");
-                        }
+                        assert!(variant_types.unnamed.len() == 1, "Only single element variant tuples are supported for FromRpcValue");
                         let source_variant_type = &variant_types.unnamed.first().expect("No tuple elements").ty;
                         let deref_code = quote!((*x));
                         let unbox_code = quote!((x.as_ref().clone()));
@@ -431,9 +424,7 @@ pub fn derive_to_rpcvalue(item: TokenStream) -> TokenStream {
                 let variant_ident = &variant.ident;
                 match &variant.fields {
                     syn::Fields::Unnamed(variant_types) => {
-                        if variant_types.unnamed.len() != 1 {
-                            panic!("Only single element variant tuples are supported for ToRpcValue");
-                        }
+                        assert!(variant_types.unnamed.len() == 1, "Only single element variant tuples are supported for ToRpcValue");
                         match_arms_ser.extend(quote!{
                             #struct_identifier::#variant_ident(val) => shvproto::RpcValue::from(val),
                         });

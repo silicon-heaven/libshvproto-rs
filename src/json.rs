@@ -64,7 +64,7 @@ impl<'a, W> JsonWriter<'a, W>
         self.write_byte(b'"')?;
         Ok(self.byte_writer.count() - cnt)
     }
-    fn write_datetime(&mut self, dt: &DateTime) -> WriteResult {
+    fn write_datetime(&mut self, dt: DateTime) -> WriteResult {
         let cnt = self.byte_writer.count();
         self.add_wrap_type_tag("DateTime")?;
         self.write_byte(b'"')?;
@@ -111,7 +111,7 @@ impl<'a, W> JsonWriter<'a, W>
                 self.write_byte(b',')?;
             }
             self.write_byte(b'"')?;
-            self.write_int(*k as i64)?;
+            self.write_int(i64::from(*k))?;
             self.write_byte(b'"')?;
             self.write_byte(b':')?;
             self.write(v)?;
@@ -202,19 +202,19 @@ where W: Write
     fn write_value(&mut self, val: &Value) -> WriteResult {
         let cnt: usize = self.byte_writer.count();
         match val {
-            Value::Null => self.write_bytes("null".as_bytes()),
+            Value::Null => self.write_bytes(b"null"),
             Value::Bool(b) => if *b {
-                self.write_bytes("true".as_bytes())
+                self.write_bytes(b"true")
             } else {
-                self.write_bytes("false".as_bytes())
+                self.write_bytes(b"false")
             },
             Value::Int(n) => self.write_int(*n),
-            Value::UInt(n) => self.write_int(*n as i64),
+            Value::UInt(n) => self.write_int(n.cast_signed()),
             Value::String(s) => self.write_string(s),
             Value::Blob(b) => self.write_blob(b),
             Value::Double(n) => self.write_double(*n),
-            Value::Decimal(d) => self.write_decimal(d),
-            Value::DateTime(d) => self.write_datetime(d),
+            Value::Decimal(d) => self.write_decimal(*d),
+            Value::DateTime(d) => self.write_datetime(*d),
             Value::List(lst) => self.write_list(lst),
             Value::Map(map) => self.write_map(map),
             Value::IMap(map) => self.write_imap(map),
@@ -251,7 +251,7 @@ impl<'a, R> JsonReader<'a, R>
         let val = match t {
             Some("Blob") => {
                 if let Value::String(hex) = v {
-                    let data = hex::decode(hex.as_str()).map_err(|e| self.make_error(&format!("Hex blob decode error: {}.", e), ReadErrorReason::InvalidCharacter))?;
+                    let data = hex::decode(hex.as_str()).map_err(|e| self.make_error(&format!("Hex blob decode error: {e}."), ReadErrorReason::InvalidCharacter))?;
                     Value::from(data)
                 } else {
                     return Err(self.make_error("Blob must be encoded as hex string.", ReadErrorReason::InvalidCharacter))
@@ -259,7 +259,7 @@ impl<'a, R> JsonReader<'a, R>
             }
             Some("DateTime") => {
                 if let Value::String(dt) = v {
-                    let dt = DateTime::from_iso_str(dt).map_err(|e| self.make_error(&format!("DateTime decode error: {}.", e), ReadErrorReason::InvalidCharacter))?;
+                    let dt = DateTime::from_iso_str(dt).map_err(|e| self.make_error(&format!("DateTime decode error: {e}."), ReadErrorReason::InvalidCharacter))?;
                     Value::from(dt)
                 } else {
                     return Err(self.make_error("DateTime must be encoded as ISO string.", ReadErrorReason::InvalidCharacter))
@@ -269,7 +269,7 @@ impl<'a, R> JsonReader<'a, R>
                 if let Value::Map(im) = v {
                     let mut imap = crate::IMap::default();
                     for (k, v) in im.iter() {
-                        let ik = k.parse::<i32>().map_err(|e| self.make_error(&format!("IMap key decode error: {}.", e), ReadErrorReason::InvalidCharacter))?;
+                        let ik = k.parse::<i32>().map_err(|e| self.make_error(&format!("IMap key decode error: {e}."), ReadErrorReason::InvalidCharacter))?;
                         imap.insert(ik, v.clone());
                     }
                     Value::from(imap)
@@ -294,7 +294,7 @@ where R: Read
         self.byte_reader.get_byte()
     }
     fn make_error(&self, msg: &str, reason: ReadErrorReason) -> ReadError {
-        self.byte_reader.make_error(&format!("Cpon read error - {}", msg), reason)
+        self.byte_reader.make_error(&format!("Cpon read error - {msg}"), reason)
     }
     fn read_string(&mut self) -> Result<Value, ReadError> {
         let mut buff: Vec<u8> = Vec::new();
@@ -321,16 +321,16 @@ where R: Read
                             hex.push(self.get_byte()? as char);
                             hex.push(self.get_byte()? as char);
                             hex.push(self.get_byte()? as char);
-                            let code_point = u32::from_str_radix(&hex, 16).map_err(|e| self.make_error(&format!("Invalid unicode escape sequence: {:?} - {}", hex, e), ReadErrorReason::InvalidCharacter))?;
-                            let ch = char::from_u32(code_point).ok_or(self.make_error(&format!("Invalid code point: {code_point}"), ReadErrorReason::InvalidCharacter))?;
+                            let code_point = u32::from_str_radix(&hex, 16).map_err(|e| self.make_error(&format!("Invalid unicode escape sequence: {hex:?} - {e}"), ReadErrorReason::InvalidCharacter))?;
+                            let ch = char::from_u32(code_point).ok_or_else(|| self.make_error(&format!("Invalid code point: {code_point}"), ReadErrorReason::InvalidCharacter))?;
                             let mut utf8 = [0; 4];
                             let s = ch.encode_utf8(&mut utf8);
                             for b in s.as_bytes() {
-                                buff.push(*b)
+                                buff.push(*b);
                             }
                         }
                         _ => {
-                            buff.push(b)
+                            buff.push(b);
                         },
                     }
                 }
@@ -346,7 +346,7 @@ where R: Read
         let s = std::str::from_utf8(&buff);
         match s {
             Ok(s) => Ok(Value::from(s)),
-            Err(e) => Err(self.make_error(&format!("Invalid String, Utf8 error: {}", e), ReadErrorReason::InvalidCharacter)),
+            Err(e) => Err(self.make_error(&format!("Invalid String, Utf8 error: {e}"), ReadErrorReason::InvalidCharacter)),
         }
     }
 }
@@ -386,7 +386,7 @@ impl<R> Reader for JsonReader<'_, R>
                         break 'a RpcValue::new(val, None);
                     }
                 }
-            };
+            }
             break 'a RpcValue::new(val, None);
         };
         Ok(rv)
@@ -429,7 +429,7 @@ mod test
         let rv2 = RpcValue::from(val);
         assert_eq!(rv1, rv2);
         let json2 = rv1.to_json();
-        assert_eq!(&json.replace(" ", ""), &json2);
+        assert_eq!(&json.replace(' ', ""), &json2);
     }
     fn test_cpon_cross_check(json: &str, cpon: &str) {
         let json1 = fix_tags(json);
@@ -438,7 +438,7 @@ mod test
         assert_eq!(rv1, rv2);
         let json2 = rv1.to_json();
         // println!("{json2} <=> {json2}");
-        assert_eq!(&json1.replace(" ", ""), &json2);
+        assert_eq!(&json1.replace(' ', ""), &json2);
     }
     #[test]
     fn test_string() {
@@ -509,7 +509,7 @@ mod test
         const MINUTE: i32 = 60;
         const HOUR: i32 = 60 * MINUTE;
 
-        #[allow(clippy::too_many_arguments)]
+        #[expect(clippy::too_many_arguments, reason = "Allow in tests")]
         fn dt_from_ymd_hms_milli_tz_offset(year: i32, month: u32, day: u32, hour: u32, min: u32, sec: u32, milli: i64, tz_offset: i32) -> chrono::DateTime<FixedOffset> {
             if let LocalResult::Single(dt) = FixedOffset::east_opt(tz_offset).unwrap()
                 .with_ymd_and_hms(year, month, day, hour, min, sec) {
@@ -549,21 +549,21 @@ mod test
         // read very long decimal without overflow error, value is capped
         assert_eq!(RpcValue::from_json("123456789012345678901234567890123456789012345678901234567890").unwrap().as_int(), i64::MAX);
 
-        assert_eq!(RpcValue::from_json("9223372036854775806").unwrap().as_int(), 9223372036854775806_i64);
+        assert_eq!(RpcValue::from_json("9223372036854775806").unwrap().as_int(), 9_223_372_036_854_775_806_i64);
         assert_eq!(RpcValue::from_json("9223372036854775807").unwrap().as_int(), i64::MAX);
         assert_eq!(RpcValue::from_json("9223372036854775808").unwrap().as_int(), i64::MAX);
 
-        assert_eq!(RpcValue::from_json("0x7FFFFFFFFFFFFFFE").unwrap().as_int(), 0x7FFFFFFFFFFFFFFE_i64);
+        assert_eq!(RpcValue::from_json("0x7FFFFFFFFFFFFFFE").unwrap().as_int(), 0x7FFF_FFFF_FFFF_FFFE_i64);
         assert_eq!(RpcValue::from_json("0x7FFFFFFFFFFFFFFF").unwrap().as_int(), i64::MAX);
         assert_eq!(RpcValue::from_json("0x8000000000000000").unwrap().as_int(), i64::MAX);
 
         assert_eq!(RpcValue::from_json("-123456789012345678901234567890123456789012345678901234567890").unwrap().as_int(), i64::MIN);
 
-        assert_eq!(RpcValue::from_json("-9223372036854775807").unwrap().as_int(), -9223372036854775807_i64);
+        assert_eq!(RpcValue::from_json("-9223372036854775807").unwrap().as_int(), -9_223_372_036_854_775_807_i64);
         assert_eq!(RpcValue::from_json("-9223372036854775808").unwrap().as_int(), i64::MIN);
         assert_eq!(RpcValue::from_json("-9223372036854775809").unwrap().as_int(), i64::MIN);
 
-        assert_eq!(RpcValue::from_json("-0x7FFFFFFFFFFFFFFF").unwrap().as_int(), -0x7FFFFFFFFFFFFFFF_i64);
+        assert_eq!(RpcValue::from_json("-0x7FFFFFFFFFFFFFFF").unwrap().as_int(), -0x7FFF_FFFF_FFFF_FFFF_i64);
         assert_eq!(RpcValue::from_json("-0x8000000000000000").unwrap().as_int(), i64::MIN);
         assert_eq!(RpcValue::from_json("-0x8000000000000001").unwrap().as_int(), i64::MIN);
 
