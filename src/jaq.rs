@@ -157,23 +157,38 @@ impl jaq_all::jaq_std::ValT for RpcValue {
     }
 
     fn as_f64(&self) -> Option<f64> {
-        todo!("{}", fn_name::uninstantiated!());
+        if let Value::Double(double) = self.value {
+            Some(double)
+        } else {
+            None
+        }
     }
 
     fn is_utf8_str(&self) -> bool {
-        todo!("{}", fn_name::uninstantiated!());
+        self.is_string()
     }
 
     fn as_bytes(&self) -> Option<&[u8]> {
-        todo!("{}", fn_name::uninstantiated!());
+        if let Value::String(str) = &self.value {
+            Some(str.as_bytes())
+        } else {
+            None
+        }
     }
 
-    fn as_sub_str(&self, _sub: &[u8]) -> Self {
-        todo!("{}", fn_name::uninstantiated!());
+    fn as_sub_str(&self, sub: &[u8]) -> Self {
+        if matches!(&self.value, Value::String(_)) {
+            // We do not have any fancy bytes handling, so we will just believe that the sub range
+            // is a substring of self, and create a string out of it.
+            String::from_utf8_lossy(sub).to_string().into()
+        } else {
+            // jaq-json panics here, but I don't really like that, so if self is not a String, let's just give null.
+            RpcValue::null()
+        }
     }
 
-    fn from_utf8_bytes(_b: impl AsRef<[u8]> + Send + 'static) -> Self {
-        todo!("{}", fn_name::uninstantiated!());
+    fn from_utf8_bytes(b: impl AsRef<[u8]> + Send + 'static) -> Self {
+        String::from_utf8_lossy(b.as_ref()).to_string().into()
     }
 }
 
@@ -241,16 +256,45 @@ impl jaq_all::jaq_core::ValT for RpcValue {
         }
     }
 
-    fn range(self, _range: jaq_all::jaq_core::val::Range<&Self>) -> ValR {
-        todo!("{}", fn_name::uninstantiated!());
+    fn range(self, range: jaq_all::jaq_core::val::Range<&Self>) -> ValR {
+        let start = range.start.map_or(0, RpcValue::as_usize);
+        let end = range.end.map_or(0, RpcValue::as_usize);
+        match &self.value {
+            Value::String(str) => {
+                let bytes = str.as_bytes();
+                bytes.get(start..end).map(|bytes| String::from_utf8_lossy(bytes).to_string().into()).ok_or_else(|| Error::typ(self, ".."))
+            }
+            Value::List(lst) => {
+                lst
+                    .get(start..end)
+                    .map(|new_range| new_range.to_vec().into())
+                    .ok_or_else(|| Error::typ(self, ".."))
+            }
+            _ => Err(Error::typ(self, "")),
+        }
     }
 
-    fn map_values<I: Iterator<Item = ValX>>(
-        self,
-        _opt: jaq_all::jaq_core::path::Opt,
-        _f: impl Fn(Self) -> I,
+    fn map_values<I: Iterator<Item = ValX>>(self, opt: jaq_all::jaq_core::path::Opt, f: impl Fn(Self) -> I,
     ) -> ValX {
-        todo!("{}", fn_name::uninstantiated!());
+        match self.value {
+            Value::List(lst) => {
+                lst
+                    .into_iter()
+                    .flat_map(f)
+                    .collect::<Result<Vec<_>,_>>()
+                    .map(Into::into)
+            }
+            Value::Map(map) => {
+                map
+                    .into_iter()
+                    .filter_map(|(k, v)| f(v)
+                        .next()
+                        .map(|v| Ok((k, v?))))
+                    .collect::<Result<BTreeMap<_,_>,_>>()
+                    .map(Into::into)
+            }
+            v => opt.fail(RpcValue { meta: None, value: v }, |v| jaq_all::jaq_core::Exn::from(Error::typ(v, ""))),
+        }
     }
 
     fn map_index<I: Iterator<Item = ValX>>(
