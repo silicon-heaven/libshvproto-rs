@@ -5,7 +5,7 @@ name = "shvproto"
 description = "Rust implementation of the SHV protocol"
 license = "MIT"
 repository = "https://github.com/silicon-heaven/libshvproto-rs"
-version = "5.0.0"
+version = "5.0.1"
 edition = "2024"
 
 [dependencies]
@@ -16,7 +16,7 @@ hex = "0.4"
 clap = { version = "4.5", features = ["derive"] }
 simple_logger = { version = "5.0", features = ["stderr"], optional = true }
 serde = { version = "1.0.219", features = ["derive"], optional = true }
-jaq-all = { git = "https://github.com/01mf02/jaq", tag = "v3.0.0-beta", optional = true }
+jaq-all = { git = "https://github.com/01mf02/jaq", tag = "v3.0.0-beta", version = "0.1.0-beta", optional = true }
 # FIXME: remove this after jaq support is complete
 fn_name = "0.1.0"
 
