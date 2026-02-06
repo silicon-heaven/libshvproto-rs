@@ -233,7 +233,7 @@ pub trait TextReader : Reader {
                     let ReadInt { value, digit_cnt, is_overflow, .. } = self.read_int(mantissa, true)?;
                     decimal_overflow = decimal_overflow || is_overflow;
                     mantissa = value;
-                    if mantissa >= 36_028_797_018_963_968 {
+                    if mantissa >= 0x80_0000_0000_0000 {
                         decimal_overflow = true;
                     }
                     dec_cnt = i64::from(digit_cnt);
@@ -260,7 +260,7 @@ pub trait TextReader : Reader {
         let mantissa = if is_negative { -mantissa } else { mantissa };
         if is_decimal {
             if decimal_overflow {
-                return Err(self.make_error("Not enough precision to read the Decimal", ReadErrorReason::InvalidCharacter))
+                return Err(self.make_error("Not enough precision to read the Decimal", ReadErrorReason::NumericValueOverflow))
             }
             #[expect(clippy::cast_possible_truncation, reason = "We hope that the new exponent is not big enough to truncate")]
             return Ok(Value::from(Decimal::new(mantissa, (exponent - dec_cnt) as i8)))
