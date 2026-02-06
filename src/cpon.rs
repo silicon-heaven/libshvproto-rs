@@ -572,7 +572,7 @@ mod test
     use std::collections::BTreeMap;
     use chrono::{Duration, FixedOffset, LocalResult, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
     use crate::cpon::CponReader;
-    use crate::reader::Reader;
+    use crate::reader::{ReadErrorReason, Reader};
     use crate::rpcvalue::Map;
     #[test]
     fn test_read() {
@@ -604,7 +604,7 @@ mod test
         test_cpon_round_trip("1000000.", Decimal::new(1_000_000, 0));
         test_cpon_round_trip("50.03138741402532", Decimal::new(5_003_138_741_402_532, -14));
         // We do not support such high precision.
-        assert!(RpcValue::from_cpon("36.028797018963968").is_err());
+        assert!(RpcValue::from_cpon("36.028797018963968").is_err_and(|err| matches!(err.reason, ReadErrorReason::NumericValueOverflow)));
         assert_eq!(RpcValue::from_cpon(r#""foo""#).unwrap().as_str(), "foo");
         assert_eq!(RpcValue::from_cpon(r#""ěščřžýáí""#).unwrap().as_str(), "ěščřžýáí");
         assert_eq!(RpcValue::from_cpon("b\"foo\tbar\nbaz\"").unwrap().as_blob(), b"foo\tbar\nbaz");
@@ -706,8 +706,8 @@ mod test
         assert_eq!(RpcValue::from_cpon("-0x8000000000000000").unwrap().as_int(), i64::MIN);
         assert_eq!(RpcValue::from_cpon("-0x8000000000000001").unwrap().as_int(), i64::MIN);
 
-        assert!(RpcValue::from_cpon("1.23456789012345678901234567890123456789012345678901234567890").is_err());
-        assert!(RpcValue::from_cpon("12345678901234567890123456789012345678901234567890123456.7890").is_err());
-        assert!(RpcValue::from_cpon("123456789012345678901234567890123456789012345678901234567890.").is_err());
+        assert!(RpcValue::from_cpon("1.23456789012345678901234567890123456789012345678901234567890").is_err_and(|err| matches!(err.reason, ReadErrorReason::NumericValueOverflow)));
+        assert!(RpcValue::from_cpon("12345678901234567890123456789012345678901234567890123456.7890").is_err_and(|err| matches!(err.reason, ReadErrorReason::NumericValueOverflow)));
+        assert!(RpcValue::from_cpon("123456789012345678901234567890123456789012345678901234567890.").is_err_and(|err| matches!(err.reason, ReadErrorReason::NumericValueOverflow)));
     }
 }

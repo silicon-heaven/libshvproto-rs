@@ -415,6 +415,7 @@ impl<R> Reader for JsonReader<'_, R>
 mod test
 {
     use crate::Map;
+    use crate::reader::ReadErrorReason;
     use chrono::{Duration, FixedOffset, LocalResult};
     use crate::json::{TAG_META, TAG_TYPE};
     use crate::{Decimal, IMap, RpcValue};
@@ -567,8 +568,8 @@ mod test
         assert_eq!(RpcValue::from_json("-0x8000000000000000").unwrap().as_int(), i64::MIN);
         assert_eq!(RpcValue::from_json("-0x8000000000000001").unwrap().as_int(), i64::MIN);
 
-        assert!(RpcValue::from_json("1.23456789012345678901234567890123456789012345678901234567890").is_err());
-        assert!(RpcValue::from_json("12345678901234567890123456789012345678901234567890123456.7890").is_err());
-        assert!(RpcValue::from_json("123456789012345678901234567890123456789012345678901234567890.").is_err());
+        assert!(RpcValue::from_json("1.23456789012345678901234567890123456789012345678901234567890").is_err_and(|err| matches!(err.reason, ReadErrorReason::NumericValueOverflow)));
+        assert!(RpcValue::from_json("12345678901234567890123456789012345678901234567890123456.7890").is_err_and(|err| matches!(err.reason, ReadErrorReason::NumericValueOverflow)));
+        assert!(RpcValue::from_json("123456789012345678901234567890123456789012345678901234567890.").is_err_and(|err| matches!(err.reason, ReadErrorReason::NumericValueOverflow)));
     }
 }
