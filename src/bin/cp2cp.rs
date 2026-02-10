@@ -16,7 +16,6 @@ use jaq_all::{jaq_core::{Ctx, Vars, data::JustLut}, jaq_std};
 
 #[derive(Parser, Debug)]
 #[structopt(name = "cp2cp", version = env!("CARGO_PKG_VERSION"), author = env!("CARGO_PKG_AUTHORS"), about = "ChainPack to Cpon and back utility")]
-#[expect(clippy::struct_excessive_bools, reason = "Fine for cli args")]
 struct Cli {
     #[arg(short, long, help = "Cpon indentation string")]
     indent: Option<String>,
