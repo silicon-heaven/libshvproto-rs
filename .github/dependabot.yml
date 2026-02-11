@@ -20,6 +20,11 @@ updates:
       day: monday
       time: "06:00"
     groups:
-      cargo-deps:
+      cargo-minor-patch:
         patterns:
           - '*'
+        exclude-patterns:
+          - shvproto
+          - shvrpc
+        update-types:
+          - major
