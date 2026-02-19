@@ -532,6 +532,10 @@ where
         const MAP_TAG: u8 = PackingSchema::Map as u8;
         const IMAP_TAG: u8 = PackingSchema::IMap as u8;
 
+        if path.is_empty() {
+            return Ok(self.position());
+        }
+
         let mut dir_ix = 0;
         while dir_ix < path.len() {
             let dir = path[dir_ix];
@@ -1105,15 +1109,15 @@ fn test_find_path_deeply_nested() {
 
 #[test]
 fn test_find_path_empty_path() {
-    // Empty path should return error
+    // Empty path should return current position (0 at start)
     let map = crate::make_map!{"foo" => 100};
     let buff = rpcvalue_to_chainpack(&map.into());
     let mut data_slice = &buff[..];
     let mut rd = ChainPackReader::new(&mut data_slice);
 
-    // Empty path means we're already at the target, but find_path doesn't handle this
-    // It should fail because we're looking for nothing
-    assert!(rd.find_path(&[]).is_err());
+    // Empty path means we're already at the target
+    let pos = rd.find_path(&[]).unwrap();
+    assert_eq!(pos, 0);
 }
 
 #[test]
