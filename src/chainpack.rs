@@ -526,6 +526,90 @@ where
         let d = Decimal::new(mantisa, exponent as i8);
         Ok(Value::from(d))
     }
+
+    fn find_path(&mut self, path: &[&str]) -> Result<usize, ReadError> {
+        const LIST_TAG: u8 = PackingSchema::List as u8;
+        const MAP_TAG: u8 = PackingSchema::Map as u8;
+        const IMAP_TAG: u8 = PackingSchema::IMap as u8;
+        const TERM_TAG: u8 = PackingSchema::TERM as u8;
+
+        let mut dir_ix = 0;
+        while dir_ix < path.len() {
+            let dir = path[dir_ix];
+            self.try_read_meta()?;
+            let b = self.peek_byte();
+            match b {
+                LIST_TAG => {
+                    self.get_byte()?;
+                    let mut n = 0;
+                    loop {
+                        if format!("{n}") == dir {
+                            dir_ix += 1;
+                            if dir_ix == path.len() {
+                                return Ok(self.position());
+                            }
+                        }
+                        n += 1;
+                        let b = self.peek_byte();
+                        if b == PackingSchema::TERM as u8 {
+                            self.get_byte()?;
+                            break;
+                        }
+                        self.read()?;
+                    }
+                }
+                MAP_TAG => {
+                    loop {
+                        let b = self.peek_byte();
+                        if b == PackingSchema::TERM as u8 {
+                            self.get_byte()?;
+                            break;
+                        }
+                        let k = self.read()?;
+                        let key = if k.is_string() {
+                            k.as_str()
+                        } else {
+                            return Err(self.make_error( &format!("Invalid Map key '{k}'"), ReadErrorReason::InvalidCharacter, ));
+                        };
+                        if key == dir {
+                            dir_ix += 1;
+                            if dir_ix == path.len() {
+                                return Ok(self.position());
+                            }
+                        }
+                        self.read()?;
+                    }
+                }
+                IMAP_TAG => {
+                    loop {
+                        let b = self.peek_byte();
+                        if b == PackingSchema::TERM as u8 {
+                            self.get_byte()?;
+                            break;
+                        }
+                        let k = self.read()?;
+                        let key = if k.is_int() {
+                            k.as_i32()
+                        } else {
+                            return Err(self.make_error( &format!("Invalid IMap key '{k}'"), ReadErrorReason::InvalidCharacter, ));
+                        };
+                        if format!("{key}") == dir {
+                            dir_ix += 1;
+                            if dir_ix == path.len() {
+                                return Ok(self.position());
+                            }
+                        }
+                        self.read()?;
+                    }
+                }
+                _ => {
+                    self.read()?;
+                }
+            }
+        }
+        Err(self.make_error( "Path not found", ReadErrorReason::InvalidCharacter, ))
+    }
+
 }
 
 impl<R> Reader for ChainPackReader<'_, R>
@@ -834,4 +918,3 @@ fn test_try_read_meta_missing() {
     let val = rd.read().unwrap();
     assert!(val.is_imap());
 }
-
