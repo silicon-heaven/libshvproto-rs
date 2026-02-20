@@ -314,6 +314,7 @@ where
     R: Read,
 {
     byte_reader: ByteReader<'a, R>,
+    dry_run: bool,
 }
 
 impl<'a, R> ChainPackReader<'a, R>
@@ -323,6 +324,7 @@ where
     pub fn new(read: &'a mut R) -> Self {
         ChainPackReader {
             byte_reader: ByteReader::new(read),
+            dry_run: false,
         }
     }
     pub fn position(&self) -> usize {
@@ -399,7 +401,9 @@ where
             let b = self.get_byte()?;
             match &b {
                 0 => break,
-                _ => buff.push(b),
+                _ => if !self.dry_run {
+                    buff.push(b);
+                }
             }
         }
         let s = std::str::from_utf8(&buff);
@@ -416,7 +420,9 @@ where
         let mut buff: Vec<u8> = Vec::new();
         for _ in 0..len {
             let b = self.get_byte()?;
-            buff.push(b);
+            if !self.dry_run {
+                buff.push(b);
+            }
         }
         let s = std::str::from_utf8(&buff);
         match s {
@@ -432,7 +438,9 @@ where
         let mut buff: Vec<u8> = Vec::new();
         for _ in 0..len {
             let b = self.get_byte()?;
-            buff.push(b);
+            if !self.dry_run {
+                buff.push(b);
+            }
         }
         Ok(Value::from(buff))
     }
@@ -445,7 +453,9 @@ where
                 break;
             }
             let val = self.read()?;
-            lst.push(val);
+            if !self.dry_run {
+                lst.push(val);
+            }
         }
         Ok(Value::from(lst))
     }
@@ -467,7 +477,9 @@ where
                 ));
             };
             let val = self.read()?;
-            map.insert(key.to_string(), val);
+            if !self.dry_run {
+                map.insert(key.to_string(), val);
+            }
         }
         Ok(Value::from(map))
     }
@@ -489,7 +501,9 @@ where
                 ));
             };
             let val = self.read()?;
-            map.insert(key, val);
+            if !self.dry_run {
+                map.insert(key, val);
+            }
         }
         Ok(Value::from(map))
     }
@@ -641,10 +655,14 @@ where
             let val = self.read()?;
             match key {
                 Value::Int(i) => {
-                    map.insert(i as i32, val);
+                    if !self.dry_run {
+                        map.insert(i as i32, val);
+                    }
                 }
                 Value::String(s) => {
-                    map.insert(&**s.clone(), val);
+                    if !self.dry_run {
+                        map.insert(&**s.clone(), val);
+                    }
                 }
                 _ => {
                     return Err(self.make_error(
