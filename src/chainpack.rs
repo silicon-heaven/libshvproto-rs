@@ -541,110 +541,7 @@ where
         Ok(Value::from(d))
     }
 
-    pub fn open_container(&mut self, skip_meta: bool) -> Result<Option<ContainerType>, ReadError> {
-        let b = self.peek_byte();
-        if b == PackingSchema::List as u8 {
-            self.get_byte()?;
-            Ok(Some(ContainerType::List))
-        } else if b == PackingSchema::Map as u8 {
-            self.get_byte()?;
-            Ok(Some(ContainerType::Map))
-        } else if b == PackingSchema::IMap as u8 {
-            self.get_byte()?;
-            Ok(Some(ContainerType::IMap))
-        } else if b == PackingSchema::MetaMap as u8 && !skip_meta {
-            self.get_byte()?;
-            Ok(Some(ContainerType::MetaMap))
-        } else {
-            Ok(None)
-        }
-    }
 
-    pub fn read_next(&mut self) -> Result<Option<RpcValue>, ReadError> {
-        let b = self.peek_byte();
-        if b == PackingSchema::TERM as u8 {
-            self.get_byte()?;
-            Ok(None)
-        } else {
-            Ok(Some(self.read()?))
-        }
-    }
-
-    pub fn read_next_key(&mut self) -> Result<Option<MapKey>, ReadError> {
-        let k = self.read()?;
-        if k.is_string() {
-            Ok(Some(MapKey::String(k.as_str().to_string())))
-        } else if k.is_int() {
-            Ok(Some(MapKey::Int(k.as_int())))
-        } else {
-            return Err(self.make_error( &format!("Invalid Map key '{k}'"), ReadErrorReason::InvalidCharacter, ));
-        }
-    }
-
-    pub fn skip_next(&mut self) -> Result<Option<()>, ReadError> {
-        self.dry_run = true;
-        let b = self.peek_byte();
-        let res = if b == PackingSchema::TERM as u8 {
-            self.get_byte().map(|_| None)
-        } else {
-            self.read().map(|_| Some(()))
-        };
-        self.dry_run = false;
-        res
-    }
-
-    pub fn find_path(&mut self, path: &[&str]) -> Result<(), ReadError> {
-
-        if path.is_empty() {
-            return Ok(());
-        }
-
-        let mut dir_ix = 0;
-        for &dir in path {
-            dir_ix += 1;
-            match self.open_container(true)? {
-                Some(ContainerType::List) => {
-                    let n: usize = dir.parse().map_err(|_| self.make_error(&format!("Invalid List index {dir}"), ReadErrorReason::InvalidCharacter, ))?;
-                    for _ in 0..n {
-                        self.skip_next()?.ok_or_else(|| self.make_error(&format!("List index {dir} out of range"), ReadErrorReason::InvalidCharacter, ))?;
-                    }
-                    if self.peek_byte() == PackingSchema::TERM as u8 {
-                        return Err(self.make_error(&format!("List index {dir} out of range"), ReadErrorReason::InvalidCharacter, ));
-                    }
-                    if dir_ix == path.len() {
-                        return Ok(());
-                    }
-                }
-                Some(ContainerType::Map) | Some(ContainerType::IMap) => {
-                    let mut found = false;
-                    loop {
-                        match self.read_next_key()? {
-                            Some(MapKey::String(key)) => if key == dir {
-                                if dir_ix == path.len() {
-                                    return Ok(());
-                                }
-                                found = true;
-                                break;
-                            }
-                            Some(MapKey::Int(key)) => if format!("{}", key) == dir {
-                                if dir_ix == path.len() {
-                                    return Ok(());
-                                }
-                                found = true;
-                                break;
-                            }
-                            None => break,
-                        }
-                    }
-                    if !found {
-                        return Err(self.make_error(&format!("Invalid Map index '{dir}'"), ReadErrorReason::InvalidCharacter, ));
-                    }
-                }
-                _ => return Err(self.make_error(&format!("Not continer"), ReadErrorReason::InvalidCharacter, ))
-            }
-        }
-        Err(self.make_error( "Path not found", ReadErrorReason::InvalidCharacter, ))
-    }
 
 }
 
@@ -739,6 +636,125 @@ where
         };
 
         Ok(v)
+    }
+
+    fn open_container(&mut self, skip_meta: bool) -> Result<Option<ContainerType>, ReadError> {
+        let b = self.peek_byte();
+        if b == PackingSchema::List as u8 {
+            self.get_byte()?;
+            Ok(Some(ContainerType::List))
+        } else if b == PackingSchema::Map as u8 {
+            self.get_byte()?;
+            Ok(Some(ContainerType::Map))
+        } else if b == PackingSchema::IMap as u8 {
+            self.get_byte()?;
+            Ok(Some(ContainerType::IMap))
+        } else if b == PackingSchema::MetaMap as u8 && !skip_meta {
+            self.get_byte()?;
+            Ok(Some(ContainerType::MetaMap))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn read_next(&mut self) -> Result<Option<RpcValue>, ReadError> {
+        let b = self.peek_byte();
+        if b == PackingSchema::TERM as u8 {
+            self.get_byte()?;
+            Ok(None)
+        } else {
+            Ok(Some(self.read()?))
+        }
+    }
+
+    fn read_next_key(&mut self) -> Result<Option<MapKey>, ReadError> {
+        let k = self.read()?;
+        if k.is_string() {
+            Ok(Some(MapKey::String(k.as_str().to_string())))
+        } else if k.is_int() {
+            Ok(Some(MapKey::Int(k.as_int())))
+        } else {
+            return Err(self.make_error( &format!("Invalid Map key '{k}'"), ReadErrorReason::InvalidCharacter, ));
+        }
+    }
+
+    fn skip_next(&mut self) -> Result<Option<()>, ReadError> {
+        self.dry_run = true;
+        let b = self.peek_byte();
+        let res = if b == PackingSchema::TERM as u8 {
+            self.get_byte().map(|_| None)
+        } else {
+            self.read().map(|_| Some(()))
+        };
+        self.dry_run = false;
+        res
+    }
+
+    fn find_path(&mut self, path: &[&str]) -> Result<(), ReadError> {
+        if path.is_empty() {
+            return Ok(());
+        }
+
+        let mut dir_ix = 0;
+        while dir_ix < path.len() {
+            let dir = path[dir_ix];
+            match self.open_container(true)? {
+                Some(ContainerType::List) => {
+                    let mut n = 0;
+                    loop {
+                        // Check if we've reached the end of the list
+                        let peek = self.peek_byte();
+                        if peek == PackingSchema::TERM as u8 {
+                            // No more elements - index not found
+                            return Err(self.make_error(&format!("Invalid List index '{dir}'"), ReadErrorReason::InvalidCharacter, ));
+                        }
+                        
+                        // Check if current index matches
+                        if format!("{n}") == dir {
+                            dir_ix += 1;
+                            if dir_ix == path.len() {
+                                return Ok(());
+                            }
+                            // Found the element, continue to next path component
+                            break;
+                        }
+                        
+                        // Skip current element and continue
+                        self.skip_next()?;
+                        n += 1;
+                    }
+                }
+                Some(ContainerType::Map) | Some(ContainerType::IMap) => {
+                    let mut found = false;
+                    loop {
+                        match self.read_next_key()? {
+                            Some(MapKey::String(key)) => if key == dir {
+                                dir_ix += 1;
+                                if dir_ix == path.len() {
+                                    return Ok(());
+                                }
+                                found = true;
+                                break;
+                            }
+                            Some(MapKey::Int(key)) => if format!("{}", key) == dir {
+                                dir_ix += 1;
+                                if dir_ix == path.len() {
+                                    return Ok(());
+                                }
+                                found = true;
+                                break;
+                            }
+                            None => break,
+                        }
+                    }
+                    if !found {
+                        return Err(self.make_error(&format!("Invalid Map index '{dir}'"), ReadErrorReason::InvalidCharacter, ));
+                    }
+                }
+                _ => return Err(self.make_error(&format!("Not continer"), ReadErrorReason::InvalidCharacter, ))
+            }
+        }
+        Err(self.make_error( "Path not found", ReadErrorReason::InvalidCharacter, ))
     }
 }
 

@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 use crate::datetime::{IncludeMilliseconds, ToISOStringOptions};
 use crate::writer::{WriteResult, Writer, ByteWriter};
 use crate::metamap::MetaKey;
-use crate::reader::{Reader, ByteReader, ReadError, ReadErrorReason};
+use crate::reader::{Reader, ByteReader, ReadError, ReadErrorReason, ContainerType, MapKey};
 use crate::rpcvalue::{Map};
 use crate::textrdwr::{TextReader, TextWriter};
 
@@ -408,6 +408,26 @@ impl<R> Reader for JsonReader<'_, R>
             _ => Err(self.make_error(&format!("Invalid char {}, code: {}", char::from(b), b), ReadErrorReason::InvalidCharacter)),
         }?;
         Ok(v)
+    }
+
+    fn open_container(&mut self, _skip_meta: bool) -> Result<Option<ContainerType>, ReadError> {
+        Err(self.make_error("open_container not supported for JSON", ReadErrorReason::InvalidCharacter))
+    }
+
+    fn read_next_key(&mut self) -> Result<Option<MapKey>, ReadError> {
+        Err(self.make_error("read_next_key not supported for JSON", ReadErrorReason::InvalidCharacter))
+    }
+
+    fn read_next(&mut self) -> Result<Option<RpcValue>, ReadError> {
+        Err(self.make_error("read_next not supported for JSON", ReadErrorReason::InvalidCharacter))
+    }
+
+    fn skip_next(&mut self) -> Result<Option<()>, ReadError> {
+        Err(self.make_error("skip_next not supported for JSON", ReadErrorReason::InvalidCharacter))
+    }
+
+    fn find_path(&mut self, _path: &[&str]) -> Result<(), ReadError> {
+        Err(self.make_error("find_path not supported for JSON", ReadErrorReason::InvalidCharacter))
     }
 }
 

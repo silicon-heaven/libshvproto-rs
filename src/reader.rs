@@ -127,4 +127,10 @@ pub trait Reader {
     }
     fn try_read_meta(&mut self) -> Result<Option<MetaMap>, ReadError>;
     fn read_value(&mut self) -> Result<Value, ReadError>;
+    fn find_path(&mut self, path: &[&str]) -> Result<(), ReadError>;
+
+    fn open_container(&mut self, skip_meta: bool) -> Result<Option<ContainerType>, ReadError>;
+    fn read_next_key(&mut self) -> Result<Option<MapKey>, ReadError>;
+    fn read_next(&mut self) -> Result<Option<RpcValue>, ReadError>;
+    fn skip_next(&mut self) -> Result<Option<()>, ReadError>;
 }

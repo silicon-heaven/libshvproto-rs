@@ -465,158 +465,7 @@ impl<'a, R> CponReader<'a, R>
         Ok(Value::from(()))
     }
 
-    pub fn open_container(&mut self, skip_meta: bool) -> Result<Option<ContainerType>, ReadError> {
-        self.skip_white_or_insignificant()?;
-        let b = self.peek_byte();
-        if b == b'[' {
-            self.get_byte()?;
-            Ok(Some(ContainerType::List))
-        } else if b == b'{' {
-            self.get_byte()?;
-            Ok(Some(ContainerType::Map))
-        } else if b == b'i' {
-            // Check if it's an IMap
-            self.get_byte()?;
-            let next_b = self.peek_byte();
-            if next_b == b'{' {
-                self.get_byte()?;
-                Ok(Some(ContainerType::IMap))
-            } else {
-                // Not an IMap, this is an error - we already consumed 'i'
-                Err(self.make_error("Expected '{' after 'i' for IMap", ReadErrorReason::InvalidCharacter))
-            }
-        } else if b == b'<' && !skip_meta {
-            self.get_byte()?;
-            Ok(Some(ContainerType::MetaMap))
-        } else {
-            Ok(None)
-        }
-    }
 
-    pub fn skip_next(&mut self) -> Result<Option<()>, ReadError> {
-        self.skip_white_or_insignificant()?;
-        let b = self.peek_byte();
-        if b == b']' || b == b'}' || b == b'>' {
-            // End of container
-            Ok(None)
-        } else {
-            // Read and discard the value
-            self.read()?;
-            Ok(Some(()))
-        }
-    }
-
-    pub fn read_next_key(&mut self) -> Result<Option<MapKey>, ReadError> {
-        self.skip_white_or_insignificant()?;
-        let b = self.peek_byte();
-        if b == b'}' {
-            // End of map
-            return Ok(None);
-        }
-
-        // Auto-detect key type: string keys start with '"', integer keys with digit or sign
-        if b == b'"' {
-            // Regular map keys are strings
-            let key = self.read_string()?;
-            if let Value::String(s) = key {
-                Ok(Some(MapKey::String((*s).clone())))
-            } else {
-                Err(self.make_error("Expected string key in map", ReadErrorReason::InvalidCharacter))
-            }
-        } else if b.is_ascii_digit() || b == b'+' || b == b'-' {
-            // IMap keys are integers
-            let ReadInt{ value, is_negative, .. } = self.read_int(0, false)?;
-            let key = if is_negative { -value } else { value };
-            Ok(Some(MapKey::Int(key)))
-        } else {
-            Err(self.make_error(&format!("Unexpected key start character: {}", char::from(b)), ReadErrorReason::InvalidCharacter))
-        }
-    }
-
-    pub fn find_path(&mut self, path: &[&str]) -> Result<(), ReadError> {
-        if path.is_empty() {
-            return Ok(());
-        }
-
-        let mut dir_ix = 0;
-        while dir_ix < path.len() {
-            let dir = path[dir_ix];
-            match self.open_container(true)? {
-                Some(ContainerType::List) => {
-                    let mut n = 0;
-                    loop {
-                        // Check if we've reached the end of the list
-                        self.skip_white_or_insignificant()?;
-                        let peek = self.peek_byte();
-                        if peek == b']' {
-                            // No more elements - index not found
-                            return Err(self.make_error(&format!("Invalid List index '{dir}'"), ReadErrorReason::InvalidCharacter));
-                        }
-
-                        // Check if current index matches
-                        if format!("{n}") == dir {
-                            dir_ix += 1;
-                            if dir_ix == path.len() {
-                                return Ok(());
-                            }
-                            // Found the element, continue to next path component
-                            break;
-                        }
-
-                        // Skip current element and continue
-                        self.skip_next()?;
-                        n += 1;
-                    }
-                }
-                Some(ContainerType::Map) | Some(ContainerType::IMap) => {
-                    let mut found = false;
-                    loop {
-                        self.skip_white_or_insignificant()?;
-                        let b = self.peek_byte();
-                        if b == b'}' {
-                            // End of map
-                            break;
-                        }
-
-                        match self.read_next_key()? {
-                            Some(MapKey::String(key)) => {
-                                if key == dir {
-                                    dir_ix += 1;
-                                    if dir_ix == path.len() {
-                                        return Ok(());
-                                    }
-                                    found = true;
-                                    break;
-                                }
-                                // Key doesn't match, skip the value
-                                // self.skip_white_or_insignificant()?;
-                                self.read()?;
-                            }
-                            Some(MapKey::Int(key)) => {
-                                if format!("{}", key) == dir {
-                                    dir_ix += 1;
-                                    if dir_ix == path.len() {
-                                        return Ok(());
-                                    }
-                                    found = true;
-                                    break;
-                                }
-                                // Key doesn't match, skip the value
-                                // self.skip_white_or_insignificant()?;
-                                self.read()?;
-                            }
-                            None => break,
-                        }
-                    }
-                    if !found {
-                        return Err(self.make_error(&format!("Invalid Map key '{dir}'"), ReadErrorReason::InvalidCharacter));
-                    }
-                }
-                _ => return Err(self.make_error("Not container", ReadErrorReason::InvalidCharacter))
-            }
-        }
-        Err(self.make_error("Path not found", ReadErrorReason::InvalidCharacter))
-    }
 
 }
 impl<R> TextReader for CponReader<'_, R>
@@ -714,6 +563,169 @@ impl<R> Reader for CponReader<'_, R>
             _ => Err(self.make_error(&format!("Invalid char {}, code: {}", char::from(b), b), ReadErrorReason::InvalidCharacter)),
         }?;
         Ok(v)
+    }
+
+    fn open_container(&mut self, skip_meta: bool) -> Result<Option<ContainerType>, ReadError> {
+        self.skip_white_or_insignificant()?;
+        let b = self.peek_byte();
+        if b == b'[' {
+            self.get_byte()?;
+            Ok(Some(ContainerType::List))
+        } else if b == b'{' {
+            self.get_byte()?;
+            Ok(Some(ContainerType::Map))
+        } else if b == b'i' {
+            // Check if it's an IMap
+            self.get_byte()?;
+            let next_b = self.peek_byte();
+            if next_b == b'{' {
+                self.get_byte()?;
+                Ok(Some(ContainerType::IMap))
+            } else {
+                // Not an IMap, this is an error - we already consumed 'i'
+                Err(self.make_error("Expected '{' after 'i' for IMap", ReadErrorReason::InvalidCharacter))
+            }
+        } else if b == b'<' && !skip_meta {
+            self.get_byte()?;
+            Ok(Some(ContainerType::MetaMap))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn skip_next(&mut self) -> Result<Option<()>, ReadError> {
+        self.skip_white_or_insignificant()?;
+        let b = self.peek_byte();
+        if b == b']' || b == b'}' || b == b'>' {
+            // End of container
+            Ok(None)
+        } else {
+            // Read and discard the value
+            self.read()?;
+            Ok(Some(()))
+        }
+    }
+
+    fn read_next_key(&mut self) -> Result<Option<MapKey>, ReadError> {
+        self.skip_white_or_insignificant()?;
+        let b = self.peek_byte();
+        if b == b'}' {
+            // End of map
+            return Ok(None);
+        }
+
+        // Auto-detect key type: string keys start with '"', integer keys with digit or sign
+        if b == b'"' {
+            // Regular map keys are strings
+            let key = self.read_string()?;
+            if let Value::String(s) = key {
+                Ok(Some(MapKey::String((*s).clone())))
+            } else {
+                Err(self.make_error("Expected string key in map", ReadErrorReason::InvalidCharacter))
+            }
+        } else if b.is_ascii_digit() || b == b'+' || b == b'-' {
+            // IMap keys are integers
+            let ReadInt{ value, is_negative, .. } = self.read_int(0, false)?;
+            let key = if is_negative { -value } else { value };
+            Ok(Some(MapKey::Int(key)))
+        } else {
+            Err(self.make_error(&format!("Unexpected key start character: {}", char::from(b)), ReadErrorReason::InvalidCharacter))
+        }
+    }
+
+    fn read_next(&mut self) -> Result<Option<RpcValue>, ReadError> {
+        self.skip_white_or_insignificant()?;
+        let b = self.peek_byte();
+        if b == b']' || b == b'}' || b == b'>' {
+            Ok(None)
+        } else {
+            Ok(Some(self.read()?))
+        }
+    }
+
+    fn find_path(&mut self, path: &[&str]) -> Result<(), ReadError> {
+        if path.is_empty() {
+            return Ok(());
+        }
+
+        let mut dir_ix = 0;
+        while dir_ix < path.len() {
+            let dir = path[dir_ix];
+            match self.open_container(true)? {
+                Some(ContainerType::List) => {
+                    let mut n = 0;
+                    loop {
+                        // Check if we've reached the end of the list
+                        self.skip_white_or_insignificant()?;
+                        let peek = self.peek_byte();
+                        if peek == b']' {
+                            // No more elements - index not found
+                            return Err(self.make_error(&format!("Invalid List index '{dir}'"), ReadErrorReason::InvalidCharacter));
+                        }
+                        
+                        // Check if current index matches
+                        if format!("{n}") == dir {
+                            dir_ix += 1;
+                            if dir_ix == path.len() {
+                                return Ok(());
+                            }
+                            // Found the element, continue to next path component
+                            break;
+                        }
+                        
+                        // Skip current element and continue
+                        self.skip_next()?;
+                        n += 1;
+                    }
+                }
+                Some(ContainerType::Map) | Some(ContainerType::IMap) => {
+                    let mut found = false;
+                    loop {
+                        self.skip_white_or_insignificant()?;
+                        let b = self.peek_byte();
+                        if b == b'}' {
+                            // End of map
+                            break;
+                        }
+
+                        match self.read_next_key()? {
+                            Some(MapKey::String(key)) => {
+                                if key == dir {
+                                    dir_ix += 1;
+                                    if dir_ix == path.len() {
+                                        return Ok(());
+                                    }
+                                    found = true;
+                                    break;
+                                }
+                                // Key doesn't match, skip the value
+                                self.skip_white_or_insignificant()?;
+                                self.read()?;
+                            }
+                            Some(MapKey::Int(key)) => {
+                                if format!("{}", key) == dir {
+                                    dir_ix += 1;
+                                    if dir_ix == path.len() {
+                                        return Ok(());
+                                    }
+                                    found = true;
+                                    break;
+                                }
+                                // Key doesn't match, skip the value
+                                self.skip_white_or_insignificant()?;
+                                self.read()?;
+                            }
+                            None => break,
+                        }
+                    }
+                    if !found {
+                        return Err(self.make_error(&format!("Invalid Map key '{dir}'"), ReadErrorReason::InvalidCharacter));
+                    }
+                }
+                _ => return Err(self.make_error("Not container", ReadErrorReason::InvalidCharacter))
+            }
+        }
+        Err(self.make_error("Path not found", ReadErrorReason::InvalidCharacter))
     }
 }
 
