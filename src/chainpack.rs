@@ -674,7 +674,7 @@ where
         } else if k.is_int() {
             Ok(Some(MapKey::Int(k.as_int())))
         } else {
-            return Err(self.make_error( &format!("Invalid Map key '{k}'"), ReadErrorReason::InvalidCharacter, ));
+            Err(self.make_error( &format!("Invalid Map key '{k}'"), ReadErrorReason::InvalidCharacter, ))
         }
     }
 
@@ -708,7 +708,7 @@ where
                             // No more elements - index not found
                             return Err(self.make_error(&format!("Invalid List index '{dir}'"), ReadErrorReason::InvalidCharacter, ));
                         }
-                        
+
                         // Check if current index matches
                         if format!("{n}") == dir {
                             dir_ix += 1;
@@ -718,13 +718,13 @@ where
                             // Found the element, continue to next path component
                             break;
                         }
-                        
+
                         // Skip current element and continue
                         self.skip_next()?;
                         n += 1;
                     }
                 }
-                Some(ContainerType::Map) | Some(ContainerType::IMap) => {
+                Some(ContainerType::Map | ContainerType::IMap) => {
                     let mut found = false;
                     loop {
                         match self.read_next_key()? {
@@ -736,7 +736,7 @@ where
                                 found = true;
                                 break;
                             }
-                            Some(MapKey::Int(key)) => if format!("{}", key) == dir {
+                            Some(MapKey::Int(key)) => if format!("{key}") == dir {
                                 dir_ix += 1;
                                 if dir_ix == path.len() {
                                     return Ok(());
@@ -751,7 +751,7 @@ where
                         return Err(self.make_error(&format!("Invalid Map index '{dir}'"), ReadErrorReason::InvalidCharacter, ));
                     }
                 }
-                _ => return Err(self.make_error(&format!("Not continer"), ReadErrorReason::InvalidCharacter, ))
+                _ => return Err(self.make_error("Not container", ReadErrorReason::InvalidCharacter, ))
             }
         }
         Err(self.make_error( "Path not found", ReadErrorReason::InvalidCharacter, ))

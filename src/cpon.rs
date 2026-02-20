@@ -650,7 +650,7 @@ impl<R> Reader for CponReader<'_, R>
 
         let mut dir_ix = 0;
         while dir_ix < path.len() {
-            let dir = path[dir_ix];
+            let dir = *path.get(dir_ix).expect("Index must be valid here");
             match self.open_container(true)? {
                 Some(ContainerType::List) => {
                     let mut n = 0;
@@ -662,7 +662,7 @@ impl<R> Reader for CponReader<'_, R>
                             // No more elements - index not found
                             return Err(self.make_error(&format!("Invalid List index '{dir}'"), ReadErrorReason::InvalidCharacter));
                         }
-                        
+
                         // Check if current index matches
                         if format!("{n}") == dir {
                             dir_ix += 1;
@@ -672,13 +672,13 @@ impl<R> Reader for CponReader<'_, R>
                             // Found the element, continue to next path component
                             break;
                         }
-                        
+
                         // Skip current element and continue
                         self.skip_next()?;
                         n += 1;
                     }
                 }
-                Some(ContainerType::Map) | Some(ContainerType::IMap) => {
+                Some(ContainerType::Map | ContainerType::IMap) => {
                     let mut found = false;
                     loop {
                         self.skip_white_or_insignificant()?;
@@ -703,7 +703,7 @@ impl<R> Reader for CponReader<'_, R>
                                 self.read()?;
                             }
                             Some(MapKey::Int(key)) => {
-                                if format!("{}", key) == dir {
+                                if format!("{key}") == dir {
                                     dir_ix += 1;
                                     if dir_ix == path.len() {
                                         return Ok(());
