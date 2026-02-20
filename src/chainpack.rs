@@ -600,32 +600,19 @@ where
         }
 
         let mut dir_ix = 0;
-        while dir_ix < path.len() {
-            let dir = path[dir_ix];
+        for &dir in path {
+            dir_ix += 1;
             match self.open_container(true)? {
                 Some(ContainerType::List) => {
-                    let mut n = 0;
-                    loop {
-                        // Check if we've reached the end of the list
-                        let peek = self.peek_byte();
-                        if peek == PackingSchema::TERM as u8 {
-                            // No more elements - index not found
-                            return Err(self.make_error(&format!("Invalid List index '{dir}'"), ReadErrorReason::InvalidCharacter, ));
-                        }
-
-                        // Check if current index matches
-                        if format!("{n}") == dir {
-                            dir_ix += 1;
-                            if dir_ix == path.len() {
-                                return Ok(());
-                            }
-                            // Found the element, continue to next path component
-                            break;
-                        }
-
-                        // Skip current element and continue
-                        self.skip_next()?;
-                        n += 1;
+                    let n: usize = dir.parse().map_err(|_| self.make_error(&format!("Invalid List index {dir}"), ReadErrorReason::InvalidCharacter, ))?;
+                    for _ in 0..n {
+                        self.skip_next()?.ok_or_else(|| self.make_error(&format!("List index {dir} out of range"), ReadErrorReason::InvalidCharacter, ))?;
+                    }
+                    if self.peek_byte() == PackingSchema::TERM as u8 {
+                        return Err(self.make_error(&format!("List index {dir} out of range"), ReadErrorReason::InvalidCharacter, ));
+                    }
+                    if dir_ix == path.len() {
+                        return Ok(());
                     }
                 }
                 Some(ContainerType::Map) | Some(ContainerType::IMap) => {
@@ -633,7 +620,6 @@ where
                     loop {
                         match self.read_next_key()? {
                             Some(MapKey::String(key)) => if key == dir {
-                                dir_ix += 1;
                                 if dir_ix == path.len() {
                                     return Ok(());
                                 }
@@ -641,7 +627,6 @@ where
                                 break;
                             }
                             Some(MapKey::Int(key)) => if format!("{}", key) == dir {
-                                dir_ix += 1;
                                 if dir_ix == path.len() {
                                     return Ok(());
                                 }
@@ -987,14 +972,12 @@ fn test_find_path_list() {
     // Create a list: [10, 20, 30]
     let list = crate::make_list![10, 20, 30];
     let buff = rpcvalue_to_chainpack(&list.into());
-    let mut data_slice = &buff[..];
-    let mut rd = ChainPackReader::new(&mut data_slice);
 
     // Find index 0
+    let mut data_slice = &buff[..];
+    let mut rd = ChainPackReader::new(&mut data_slice);
     rd.find_path(&["0"]).unwrap();
-    let mut data_slice = &buff[rd.position()..];
-    let mut rd2 = ChainPackReader::new(&mut data_slice);
-    assert_eq!(rd2.read().unwrap(), 10.into());
+    assert_eq!(rd.read().unwrap(), 10.into());
 
     // Find index 1
     let mut data_slice = &buff[..];
@@ -1011,7 +994,8 @@ fn test_find_path_list() {
     // Index out of bounds should not find
     let mut data_slice = &buff[..];
     let mut rd = ChainPackReader::new(&mut data_slice);
-    assert!(rd.find_path(&["3"]).is_err());
+    let res = rd.find_path(&["3"]);
+    assert!(res.is_err());
 }
 
 #[test]
@@ -1161,13 +1145,13 @@ fn test_find_path_wrong_path() {
 fn test_find_path_imap_nested() {
     // Create nested structure with imap: {1: {2: "value"}}
     let imap = crate::make_imap!{
-        1 => crate::make_imap!{
-            2 => "value"
+        0 => crate::make_imap!{
+            1 => crate::make_list!["foo", "bar", "baz"]
         }
     };
     let buff = rpcvalue_to_chainpack(&imap.into());
     let mut data_slice = &buff[..];
     let mut rd = ChainPackReader::new(&mut data_slice);
-    rd.find_path(&["1", "2"]).unwrap();
-    assert_eq!(rd.read().unwrap(), "value".into());
+    rd.find_path(&["0", "1", "2"]).unwrap();
+    assert_eq!(rd.read().unwrap(), "baz".into());
 }
