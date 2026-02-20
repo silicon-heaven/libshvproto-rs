@@ -395,7 +395,7 @@ impl<R> Reader for JsonReader<'_, R>
         Ok(None)
     }
     fn read_value(&mut self) -> Result<Value, ReadError> {
-        self.skip_white_insignificant()?;
+        self.skip_white_or_insignificant()?;
         let b = self.peek_byte();
         let v = match &b {
             b'0' ..= b'9' | b'+' | b'-' => self.read_number(),
