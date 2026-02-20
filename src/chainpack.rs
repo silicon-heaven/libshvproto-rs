@@ -1,6 +1,6 @@
 #![allow(clippy::cast_possible_truncation, reason = "Lots of casting here")]
 #![allow(clippy::indexing_slicing, reason = "Lots of indexing here")]
-use crate::reader::{ByteReader, ReadError, ReadErrorReason, Reader};
+use crate::reader::{ByteReader, ContainerType, MapKey, ReadError, ReadErrorReason, Reader};
 use crate::rpcvalue::{IMap, Map};
 use crate::writer::{ByteWriter, Writer};
 use crate::{metamap::MetaKey, DateTime, Decimal, MetaMap, RpcValue, Value, WriteResult};
@@ -314,6 +314,7 @@ where
     R: Read,
 {
     byte_reader: ByteReader<'a, R>,
+    dry_run: bool,
 }
 
 impl<'a, R> ChainPackReader<'a, R>
@@ -323,6 +324,7 @@ where
     pub fn new(read: &'a mut R) -> Self {
         ChainPackReader {
             byte_reader: ByteReader::new(read),
+            dry_run: false,
         }
     }
     pub fn position(&self) -> usize {
@@ -399,7 +401,9 @@ where
             let b = self.get_byte()?;
             match &b {
                 0 => break,
-                _ => buff.push(b),
+                _ => if !self.dry_run {
+                    buff.push(b);
+                }
             }
         }
         let s = std::str::from_utf8(&buff);
@@ -416,7 +420,9 @@ where
         let mut buff: Vec<u8> = Vec::new();
         for _ in 0..len {
             let b = self.get_byte()?;
-            buff.push(b);
+            if !self.dry_run {
+                buff.push(b);
+            }
         }
         let s = std::str::from_utf8(&buff);
         match s {
@@ -432,7 +438,9 @@ where
         let mut buff: Vec<u8> = Vec::new();
         for _ in 0..len {
             let b = self.get_byte()?;
-            buff.push(b);
+            if !self.dry_run {
+                buff.push(b);
+            }
         }
         Ok(Value::from(buff))
     }
@@ -445,7 +453,9 @@ where
                 break;
             }
             let val = self.read()?;
-            lst.push(val);
+            if !self.dry_run {
+                lst.push(val);
+            }
         }
         Ok(Value::from(lst))
     }
@@ -467,7 +477,9 @@ where
                 ));
             };
             let val = self.read()?;
-            map.insert(key.to_string(), val);
+            if !self.dry_run {
+                map.insert(key.to_string(), val);
+            }
         }
         Ok(Value::from(map))
     }
@@ -489,7 +501,9 @@ where
                 ));
             };
             let val = self.read()?;
-            map.insert(key, val);
+            if !self.dry_run {
+                map.insert(key, val);
+            }
         }
         Ok(Value::from(map))
     }
@@ -526,6 +540,9 @@ where
         let d = Decimal::new(mantisa, exponent as i8);
         Ok(Value::from(d))
     }
+
+
+
 }
 
 impl<R> Reader for ChainPackReader<'_, R>
@@ -549,10 +566,14 @@ where
             let val = self.read()?;
             match key {
                 Value::Int(i) => {
-                    map.insert(i as i32, val);
+                    if !self.dry_run {
+                        map.insert(i as i32, val);
+                    }
                 }
                 Value::String(s) => {
-                    map.insert(&**s.clone(), val);
+                    if !self.dry_run {
+                        map.insert(&**s.clone(), val);
+                    }
                 }
                 _ => {
                     return Err(self.make_error(
@@ -616,10 +637,129 @@ where
 
         Ok(v)
     }
+
+    fn open_container(&mut self, skip_meta: bool) -> Result<Option<ContainerType>, ReadError> {
+        let b = self.peek_byte();
+        if b == PackingSchema::List as u8 {
+            self.get_byte()?;
+            Ok(Some(ContainerType::List))
+        } else if b == PackingSchema::Map as u8 {
+            self.get_byte()?;
+            Ok(Some(ContainerType::Map))
+        } else if b == PackingSchema::IMap as u8 {
+            self.get_byte()?;
+            Ok(Some(ContainerType::IMap))
+        } else if b == PackingSchema::MetaMap as u8 && !skip_meta {
+            self.get_byte()?;
+            Ok(Some(ContainerType::MetaMap))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn read_next(&mut self) -> Result<Option<RpcValue>, ReadError> {
+        let b = self.peek_byte();
+        if b == PackingSchema::TERM as u8 {
+            self.get_byte()?;
+            Ok(None)
+        } else {
+            Ok(Some(self.read()?))
+        }
+    }
+
+    fn read_next_key(&mut self) -> Result<Option<MapKey>, ReadError> {
+        let k = self.read()?;
+        if k.is_string() {
+            Ok(Some(MapKey::String(k.as_str().to_string())))
+        } else if k.is_int() {
+            Ok(Some(MapKey::Int(k.as_int())))
+        } else {
+            Err(self.make_error( &format!("Invalid Map key '{k}'"), ReadErrorReason::InvalidCharacter, ))
+        }
+    }
+
+    fn skip_next(&mut self) -> Result<Option<()>, ReadError> {
+        self.dry_run = true;
+        let b = self.peek_byte();
+        let res = if b == PackingSchema::TERM as u8 {
+            self.get_byte().map(|_| None)
+        } else {
+            self.read().map(|_| Some(()))
+        };
+        self.dry_run = false;
+        res
+    }
+
+    fn find_path(&mut self, path: &[&str]) -> Result<(), ReadError> {
+        if path.is_empty() {
+            return Ok(());
+        }
+
+        let mut dir_ix = 0;
+        while dir_ix < path.len() {
+            let dir = path[dir_ix];
+            match self.open_container(true)? {
+                Some(ContainerType::List) => {
+                    let mut n = 0;
+                    loop {
+                        // Check if we've reached the end of the list
+                        let peek = self.peek_byte();
+                        if peek == PackingSchema::TERM as u8 {
+                            // No more elements - index not found
+                            return Err(self.make_error(&format!("Invalid List index '{dir}'"), ReadErrorReason::InvalidCharacter, ));
+                        }
+
+                        // Check if current index matches
+                        if format!("{n}") == dir {
+                            dir_ix += 1;
+                            if dir_ix == path.len() {
+                                return Ok(());
+                            }
+                            // Found the element, continue to next path component
+                            break;
+                        }
+
+                        // Skip current element and continue
+                        self.skip_next()?;
+                        n += 1;
+                    }
+                }
+                Some(ContainerType::Map | ContainerType::IMap) => {
+                    let mut found = false;
+                    loop {
+                        match self.read_next_key()? {
+                            Some(MapKey::String(key)) => if key == dir {
+                                dir_ix += 1;
+                                if dir_ix == path.len() {
+                                    return Ok(());
+                                }
+                                found = true;
+                                break;
+                            }
+                            Some(MapKey::Int(key)) => if format!("{key}") == dir {
+                                dir_ix += 1;
+                                if dir_ix == path.len() {
+                                    return Ok(());
+                                }
+                                found = true;
+                                break;
+                            }
+                            None => break,
+                        }
+                    }
+                    if !found {
+                        return Err(self.make_error(&format!("Invalid Map index '{dir}'"), ReadErrorReason::InvalidCharacter, ));
+                    }
+                }
+                _ => return Err(self.make_error("Not container", ReadErrorReason::InvalidCharacter, ))
+            }
+        }
+        Err(self.make_error( "Path not found", ReadErrorReason::InvalidCharacter, ))
+    }
 }
 
 #[cfg(test)]
-fn chainpack_to_rpcvalue(data: &str) -> Result<RpcValue, ReadError> {
+fn hex_chainpack_to_rpcvalue(data: &str) -> Result<RpcValue, ReadError> {
     let buff = hex::decode(data).unwrap();
     let mut data = &buff[..];
     let mut rd = ChainPackReader::new(&mut data);
@@ -627,76 +767,84 @@ fn chainpack_to_rpcvalue(data: &str) -> Result<RpcValue, ReadError> {
 }
 
 #[cfg(test)]
-fn rpcvalue_to_chainpack(value: &RpcValue) -> String {
+fn rpcvalue_to_chainpack(value: &RpcValue) -> Vec<u8> {
     let mut data = Vec::new();
-    let mut wr = ChainPackWriter::new(&mut data);
-    wr.write(value).expect("Write must work");
+    {
+        let mut wr = ChainPackWriter::new(&mut data);
+        wr.write(value).expect("Write must work");
+    }
+    data
+}
+
+#[cfg(test)]
+fn rpcvalue_to_hex_chainpack(value: &RpcValue) -> String {
+    let data = rpcvalue_to_chainpack(value);
     hex::encode(data).to_uppercase()
 }
 
 #[test]
 fn test_int() {
     // uint sizes
-    assert_eq!(chainpack_to_rpcvalue("02").unwrap(), 2_u64.into());
-    assert_eq!(chainpack_to_rpcvalue("8178").unwrap(), 120_u64.into());
-    assert_eq!(chainpack_to_rpcvalue("8181FC").unwrap(), 508_u64.into());
-    assert_eq!(chainpack_to_rpcvalue("81CFFFFA").unwrap(), 1_048_570_u64.into());
-    assert_eq!(chainpack_to_rpcvalue("81E1FFFFE0").unwrap(), 33_554_400_u64.into());
-    assert_eq!(chainpack_to_rpcvalue("82F3138083FD18A37C").unwrap(), 5_489_328_932_823_932_i64.into());
-    assert_eq!(chainpack_to_rpcvalue("82F47FFFFFFFFFFFFFFF").unwrap(), 9_223_372_036_854_775_807_i64.into());
+    assert_eq!(hex_chainpack_to_rpcvalue("02").unwrap(), 2_u64.into());
+    assert_eq!(hex_chainpack_to_rpcvalue("8178").unwrap(), 120_u64.into());
+    assert_eq!(hex_chainpack_to_rpcvalue("8181FC").unwrap(), 508_u64.into());
+    assert_eq!(hex_chainpack_to_rpcvalue("81CFFFFA").unwrap(), 1_048_570_u64.into());
+    assert_eq!(hex_chainpack_to_rpcvalue("81E1FFFFE0").unwrap(), 33_554_400_u64.into());
+    assert_eq!(hex_chainpack_to_rpcvalue("82F3138083FD18A37C").unwrap(), 5_489_328_932_823_932_i64.into());
+    assert_eq!(hex_chainpack_to_rpcvalue("82F47FFFFFFFFFFFFFFF").unwrap(), 9_223_372_036_854_775_807_i64.into());
 
-    assert_eq!(rpcvalue_to_chainpack(&120_u64.into()), "8178");
-    assert_eq!(rpcvalue_to_chainpack(&2_u64.into()), "02");
-    assert_eq!(rpcvalue_to_chainpack(&508_u64.into()), "8181FC");
-    assert_eq!(rpcvalue_to_chainpack(&1_048_570_u64.into()), "81CFFFFA");
-    assert_eq!(rpcvalue_to_chainpack(&33_554_400_u64.into()), "81E1FFFFE0");
-    assert_eq!(rpcvalue_to_chainpack(&5_489_328_932_823_932_i64.into()), "82F3138083FD18A37C");
-    assert_eq!(rpcvalue_to_chainpack(&9_223_372_036_854_775_807_i64.into()), "82F47FFFFFFFFFFFFFFF");
+    assert_eq!(rpcvalue_to_hex_chainpack(&120_u64.into()), "8178");
+    assert_eq!(rpcvalue_to_hex_chainpack(&2_u64.into()), "02");
+    assert_eq!(rpcvalue_to_hex_chainpack(&508_u64.into()), "8181FC");
+    assert_eq!(rpcvalue_to_hex_chainpack(&1_048_570_u64.into()), "81CFFFFA");
+    assert_eq!(rpcvalue_to_hex_chainpack(&33_554_400_u64.into()), "81E1FFFFE0");
+    assert_eq!(rpcvalue_to_hex_chainpack(&5_489_328_932_823_932_i64.into()), "82F3138083FD18A37C");
+    assert_eq!(rpcvalue_to_hex_chainpack(&9_223_372_036_854_775_807_i64.into()), "82F47FFFFFFFFFFFFFFF");
 
     // Negative int
-    assert_eq!(chainpack_to_rpcvalue("82E9FFFFE0").unwrap(), (-33_554_400).into());
-    assert_eq!(rpcvalue_to_chainpack(&(-33_554_400).into()), "82E9FFFFE0");
+    assert_eq!(hex_chainpack_to_rpcvalue("82E9FFFFE0").unwrap(), (-33_554_400).into());
+    assert_eq!(rpcvalue_to_hex_chainpack(&(-33_554_400).into()), "82E9FFFFE0");
 }
 
 #[test]
 fn test_string() {
-    assert_eq!(chainpack_to_rpcvalue("860541484F4A21").unwrap(), "AHOJ!".into());
-    assert_eq!(rpcvalue_to_chainpack(&"AHOJ!".into()), "860541484F4A21");
+    assert_eq!(hex_chainpack_to_rpcvalue("860541484F4A21").unwrap(), "AHOJ!".into());
+    assert_eq!(rpcvalue_to_hex_chainpack(&"AHOJ!".into()), "860541484F4A21");
 
     // Invalid UTF-8 string
-    assert!(chainpack_to_rpcvalue("8602C328").is_err());
+    assert!(hex_chainpack_to_rpcvalue("8602C328").is_err());
 }
 
 #[test]
 fn test_true_false_packing_schema() {
-    assert_eq!(chainpack_to_rpcvalue("FE").unwrap(), true.into());
-    assert_eq!(rpcvalue_to_chainpack(&true.into()), "FE");
+    assert_eq!(hex_chainpack_to_rpcvalue("FE").unwrap(), true.into());
+    assert_eq!(rpcvalue_to_hex_chainpack(&true.into()), "FE");
 
-    assert_eq!(chainpack_to_rpcvalue("FD").unwrap(), false.into());
-    assert_eq!(rpcvalue_to_chainpack(&false.into()), "FD");
+    assert_eq!(hex_chainpack_to_rpcvalue("FD").unwrap(), false.into());
+    assert_eq!(rpcvalue_to_hex_chainpack(&false.into()), "FD");
 }
 
 #[test]
 fn test_cstring() {
-    assert_eq!(chainpack_to_rpcvalue("8E41484F4A2100").unwrap(), "AHOJ!".into());
-    assert_eq!(rpcvalue_to_chainpack(&"AHOJ!".into()), "860541484F4A21");
+    assert_eq!(hex_chainpack_to_rpcvalue("8E41484F4A2100").unwrap(), "AHOJ!".into());
+    assert_eq!(rpcvalue_to_hex_chainpack(&"AHOJ!".into()), "860541484F4A21");
 
     // Invalid UTF-8 string
-    assert!(chainpack_to_rpcvalue("8EC32800").is_err());
+    assert!(hex_chainpack_to_rpcvalue("8EC32800").is_err());
 }
 
 #[test]
 fn test_blob() {
     let blob = vec![170u8; 10];
-    assert_eq!(chainpack_to_rpcvalue("850AAAAAAAAAAAAAAAAAAAAA").unwrap(), blob.clone().into());
-    assert_eq!(rpcvalue_to_chainpack(&blob.into()), "850AAAAAAAAAAAAAAAAAAAAA");
+    assert_eq!(hex_chainpack_to_rpcvalue("850AAAAAAAAAAAAAAAAAAAAA").unwrap(), blob.clone().into());
+    assert_eq!(rpcvalue_to_hex_chainpack(&blob.into()), "850AAAAAAAAAAAAAAAAAAAAA");
 }
 
 #[test]
 fn test_list() {
     let list = crate::make_list!["a", 123, true, crate::make_list![1, 2, 3], RpcValue::null()];
-    assert_eq!(chainpack_to_rpcvalue("8886016182807BFE88414243FF80FF").unwrap(), RpcValue::from(list.clone()));
-    assert_eq!(rpcvalue_to_chainpack(&RpcValue::from(list)), "8886016182807BFE88414243FF80FF");
+    assert_eq!(hex_chainpack_to_rpcvalue("8886016182807BFE88414243FF80FF").unwrap(), RpcValue::from(list.clone()));
+    assert_eq!(rpcvalue_to_hex_chainpack(&RpcValue::from(list)), "8886016182807BFE88414243FF80FF");
 }
 
 #[test]
@@ -706,11 +854,11 @@ fn test_map() {
         "baz" => 3,
         "foo" => vec![11,12,13]
     };
-    assert_eq!(chainpack_to_rpcvalue("89860362617242860362617A438603666F6F884B4C4DFFFF").unwrap(), map.clone().into());
-    assert_eq!(rpcvalue_to_chainpack(&map.into()), "89860362617242860362617A438603666F6F884B4C4DFFFF");
+    assert_eq!(hex_chainpack_to_rpcvalue("89860362617242860362617A438603666F6F884B4C4DFFFF").unwrap(), map.clone().into());
+    assert_eq!(rpcvalue_to_hex_chainpack(&map.into()), "89860362617242860362617A438603666F6F884B4C4DFFFF");
 
     // Invalid key
-    assert_eq!(chainpack_to_rpcvalue("898200").unwrap_err().msg, "ChainPack read error - Invalid Map key '0'");
+    assert_eq!(hex_chainpack_to_rpcvalue("898200").unwrap_err().msg, "ChainPack read error - Invalid Map key '0'");
 }
 
 #[test]
@@ -721,65 +869,65 @@ fn test_imap() {
         333 => 15,
     };
 
-    assert_eq!(chainpack_to_rpcvalue("8A418603666F6F42860362617282814D4FFF").unwrap(), imap.clone().into());
-    assert_eq!(rpcvalue_to_chainpack(&imap.into()), "8A418603666F6F42860362617282814D4FFF");
+    assert_eq!(hex_chainpack_to_rpcvalue("8A418603666F6F42860362617282814D4FFF").unwrap(), imap.clone().into());
+    assert_eq!(rpcvalue_to_hex_chainpack(&imap.into()), "8A418603666F6F42860362617282814D4FFF");
 
     // Invalid key
-    assert_eq!(chainpack_to_rpcvalue("8A8603626172").unwrap_err().msg, "ChainPack read error - Invalid IMap key '\"bar\"'");
+    assert_eq!(hex_chainpack_to_rpcvalue("8A8603626172").unwrap_err().msg, "ChainPack read error - Invalid IMap key '\"bar\"'");
 }
 
 #[test]
 fn test_datetime() {
-    assert_eq!(chainpack_to_rpcvalue("8D04").unwrap(), DateTime::from_epoch_msec_tz(1_517_529_600_001, 0).into());
-    assert_eq!(chainpack_to_rpcvalue("8D8211").unwrap(), DateTime::from_epoch_msec_tz(1_517_529_600_001, 3600).into());
-    assert_eq!(chainpack_to_rpcvalue("8DE63DDA02").unwrap(), DateTime::from_epoch_msec_tz(1_543_708_800_000, 0).into());
-    assert_eq!(chainpack_to_rpcvalue("8DE8A8BFFE").unwrap(), DateTime::from_epoch_msec_tz(1_514_764_800_000, 0).into());
-    assert_eq!(chainpack_to_rpcvalue("8DE6DC0E02").unwrap(), DateTime::from_epoch_msec_tz(1_546_300_800_000, 0).into());
-    assert_eq!(chainpack_to_rpcvalue("8DF00E60DC02").unwrap(), DateTime::from_epoch_msec_tz(1_577_836_800_000, 0).into());
-    assert_eq!(chainpack_to_rpcvalue("8DF015EAF002").unwrap(), DateTime::from_epoch_msec_tz(1_609_459_200_000, 0).into());
-    assert_eq!(chainpack_to_rpcvalue("8DF061258802").unwrap(), DateTime::from_epoch_msec_tz(1_924_992_000_000, 0).into());
-    assert_eq!(chainpack_to_rpcvalue("8DF100AC656602").unwrap(), DateTime::from_epoch_msec_tz(2_240_611_200_000, 0).into());
-    assert_eq!(chainpack_to_rpcvalue("8DF156D74D495F").unwrap(), DateTime::from_epoch_msec_tz(2_246_004_900_000, -36900).into());
-    assert_eq!(chainpack_to_rpcvalue("8DF301533905E2375D").unwrap(), DateTime::from_epoch_msec_tz(2_246_004_900_123, -36900).into());
-    assert_eq!(chainpack_to_rpcvalue("8DF18169CEA7FE").unwrap(), DateTime::from_epoch_msec_tz(0, 0).into());
-    assert_eq!(chainpack_to_rpcvalue("8DEDA8E7F2").unwrap(), DateTime::from_epoch_msec_tz(1_493_790_723_000, 0).into());
-    assert_eq!(chainpack_to_rpcvalue("8DF1961334BEB4").unwrap(), DateTime::from_epoch_msec_tz(1_493_826_723_923, 0).into());
-    assert_eq!(chainpack_to_rpcvalue("8DF28B0DE42CD95F").unwrap(), DateTime::from_epoch_msec_tz(1_493_790_751_123, 36000).into());
-    assert_eq!(chainpack_to_rpcvalue("8DEDA6B572").unwrap(), DateTime::from_epoch_msec_tz(1_493_826_723_000, 0).into());
-    assert_eq!(chainpack_to_rpcvalue("8DF182D3308815").unwrap(), DateTime::from_epoch_msec_tz(1_493_832_123_000, -5400).into());
-    assert_eq!(chainpack_to_rpcvalue("8DF1961334BEB4").unwrap(), DateTime::from_epoch_msec_tz(1_493_826_723_923, 0).into());
+    assert_eq!(hex_chainpack_to_rpcvalue("8D04").unwrap(), DateTime::from_epoch_msec_tz(1_517_529_600_001, 0).into());
+    assert_eq!(hex_chainpack_to_rpcvalue("8D8211").unwrap(), DateTime::from_epoch_msec_tz(1_517_529_600_001, 3600).into());
+    assert_eq!(hex_chainpack_to_rpcvalue("8DE63DDA02").unwrap(), DateTime::from_epoch_msec_tz(1_543_708_800_000, 0).into());
+    assert_eq!(hex_chainpack_to_rpcvalue("8DE8A8BFFE").unwrap(), DateTime::from_epoch_msec_tz(1_514_764_800_000, 0).into());
+    assert_eq!(hex_chainpack_to_rpcvalue("8DE6DC0E02").unwrap(), DateTime::from_epoch_msec_tz(1_546_300_800_000, 0).into());
+    assert_eq!(hex_chainpack_to_rpcvalue("8DF00E60DC02").unwrap(), DateTime::from_epoch_msec_tz(1_577_836_800_000, 0).into());
+    assert_eq!(hex_chainpack_to_rpcvalue("8DF015EAF002").unwrap(), DateTime::from_epoch_msec_tz(1_609_459_200_000, 0).into());
+    assert_eq!(hex_chainpack_to_rpcvalue("8DF061258802").unwrap(), DateTime::from_epoch_msec_tz(1_924_992_000_000, 0).into());
+    assert_eq!(hex_chainpack_to_rpcvalue("8DF100AC656602").unwrap(), DateTime::from_epoch_msec_tz(2_240_611_200_000, 0).into());
+    assert_eq!(hex_chainpack_to_rpcvalue("8DF156D74D495F").unwrap(), DateTime::from_epoch_msec_tz(2_246_004_900_000, -36900).into());
+    assert_eq!(hex_chainpack_to_rpcvalue("8DF301533905E2375D").unwrap(), DateTime::from_epoch_msec_tz(2_246_004_900_123, -36900).into());
+    assert_eq!(hex_chainpack_to_rpcvalue("8DF18169CEA7FE").unwrap(), DateTime::from_epoch_msec_tz(0, 0).into());
+    assert_eq!(hex_chainpack_to_rpcvalue("8DEDA8E7F2").unwrap(), DateTime::from_epoch_msec_tz(1_493_790_723_000, 0).into());
+    assert_eq!(hex_chainpack_to_rpcvalue("8DF1961334BEB4").unwrap(), DateTime::from_epoch_msec_tz(1_493_826_723_923, 0).into());
+    assert_eq!(hex_chainpack_to_rpcvalue("8DF28B0DE42CD95F").unwrap(), DateTime::from_epoch_msec_tz(1_493_790_751_123, 36000).into());
+    assert_eq!(hex_chainpack_to_rpcvalue("8DEDA6B572").unwrap(), DateTime::from_epoch_msec_tz(1_493_826_723_000, 0).into());
+    assert_eq!(hex_chainpack_to_rpcvalue("8DF182D3308815").unwrap(), DateTime::from_epoch_msec_tz(1_493_832_123_000, -5400).into());
+    assert_eq!(hex_chainpack_to_rpcvalue("8DF1961334BEB4").unwrap(), DateTime::from_epoch_msec_tz(1_493_826_723_923, 0).into());
 
-    assert_eq!(rpcvalue_to_chainpack(&DateTime::from_epoch_msec_tz(1_517_529_600_001, 0).into()), "8D04");
-    assert_eq!(rpcvalue_to_chainpack(&DateTime::from_epoch_msec_tz(1_517_529_600_001, 3600).into()), "8D8211");
-    assert_eq!(rpcvalue_to_chainpack(&DateTime::from_epoch_msec_tz(1_543_708_800_000, 0).into()), "8DE63DDA02");
-    assert_eq!(rpcvalue_to_chainpack(&DateTime::from_epoch_msec_tz(1_514_764_800_000, 0).into()), "8DE8A8BFFE");
-    assert_eq!(rpcvalue_to_chainpack(&DateTime::from_epoch_msec_tz(1_546_300_800_000, 0).into()), "8DE6DC0E02");
-    assert_eq!(rpcvalue_to_chainpack(&DateTime::from_epoch_msec_tz(1_577_836_800_000, 0).into()), "8DF00E60DC02");
-    assert_eq!(rpcvalue_to_chainpack(&DateTime::from_epoch_msec_tz(1_609_459_200_000, 0).into()), "8DF015EAF002");
-    assert_eq!(rpcvalue_to_chainpack(&DateTime::from_epoch_msec_tz(1_924_992_000_000, 0).into()), "8DF061258802");
-    assert_eq!(rpcvalue_to_chainpack(&DateTime::from_epoch_msec_tz(2_240_611_200_000, 0).into()), "8DF100AC656602");
-    assert_eq!(rpcvalue_to_chainpack(&DateTime::from_epoch_msec_tz(2_246_004_900_000, -36900).into()), "8DF156D74D495F");
-    assert_eq!(rpcvalue_to_chainpack(&DateTime::from_epoch_msec_tz(2_246_004_900_123, -36900).into()), "8DF301533905E2375D");
-    assert_eq!(rpcvalue_to_chainpack(&DateTime::from_epoch_msec_tz(0, 0).into()), "8DF18169CEA7FE");
-    assert_eq!(rpcvalue_to_chainpack(&DateTime::from_epoch_msec_tz(1_493_790_723_000, 0).into()), "8DEDA8E7F2");
-    assert_eq!(rpcvalue_to_chainpack(&DateTime::from_epoch_msec_tz(1_493_826_723_923, 0).into()), "8DF1961334BEB4");
-    assert_eq!(rpcvalue_to_chainpack(&DateTime::from_epoch_msec_tz(1_493_790_751_123, 36000).into()), "8DF28B0DE42CD95F");
-    assert_eq!(rpcvalue_to_chainpack(&DateTime::from_epoch_msec_tz(1_493_826_723_000, 0).into()), "8DEDA6B572");
-    assert_eq!(rpcvalue_to_chainpack(&DateTime::from_epoch_msec_tz(1_493_832_123_000, -5400).into()), "8DF182D3308815");
-    assert_eq!(rpcvalue_to_chainpack(&DateTime::from_epoch_msec_tz(1_493_826_723_923, 0).into()), "8DF1961334BEB4");
+    assert_eq!(rpcvalue_to_hex_chainpack(&DateTime::from_epoch_msec_tz(1_517_529_600_001, 0).into()), "8D04");
+    assert_eq!(rpcvalue_to_hex_chainpack(&DateTime::from_epoch_msec_tz(1_517_529_600_001, 3600).into()), "8D8211");
+    assert_eq!(rpcvalue_to_hex_chainpack(&DateTime::from_epoch_msec_tz(1_543_708_800_000, 0).into()), "8DE63DDA02");
+    assert_eq!(rpcvalue_to_hex_chainpack(&DateTime::from_epoch_msec_tz(1_514_764_800_000, 0).into()), "8DE8A8BFFE");
+    assert_eq!(rpcvalue_to_hex_chainpack(&DateTime::from_epoch_msec_tz(1_546_300_800_000, 0).into()), "8DE6DC0E02");
+    assert_eq!(rpcvalue_to_hex_chainpack(&DateTime::from_epoch_msec_tz(1_577_836_800_000, 0).into()), "8DF00E60DC02");
+    assert_eq!(rpcvalue_to_hex_chainpack(&DateTime::from_epoch_msec_tz(1_609_459_200_000, 0).into()), "8DF015EAF002");
+    assert_eq!(rpcvalue_to_hex_chainpack(&DateTime::from_epoch_msec_tz(1_924_992_000_000, 0).into()), "8DF061258802");
+    assert_eq!(rpcvalue_to_hex_chainpack(&DateTime::from_epoch_msec_tz(2_240_611_200_000, 0).into()), "8DF100AC656602");
+    assert_eq!(rpcvalue_to_hex_chainpack(&DateTime::from_epoch_msec_tz(2_246_004_900_000, -36900).into()), "8DF156D74D495F");
+    assert_eq!(rpcvalue_to_hex_chainpack(&DateTime::from_epoch_msec_tz(2_246_004_900_123, -36900).into()), "8DF301533905E2375D");
+    assert_eq!(rpcvalue_to_hex_chainpack(&DateTime::from_epoch_msec_tz(0, 0).into()), "8DF18169CEA7FE");
+    assert_eq!(rpcvalue_to_hex_chainpack(&DateTime::from_epoch_msec_tz(1_493_790_723_000, 0).into()), "8DEDA8E7F2");
+    assert_eq!(rpcvalue_to_hex_chainpack(&DateTime::from_epoch_msec_tz(1_493_826_723_923, 0).into()), "8DF1961334BEB4");
+    assert_eq!(rpcvalue_to_hex_chainpack(&DateTime::from_epoch_msec_tz(1_493_790_751_123, 36000).into()), "8DF28B0DE42CD95F");
+    assert_eq!(rpcvalue_to_hex_chainpack(&DateTime::from_epoch_msec_tz(1_493_826_723_000, 0).into()), "8DEDA6B572");
+    assert_eq!(rpcvalue_to_hex_chainpack(&DateTime::from_epoch_msec_tz(1_493_832_123_000, -5400).into()), "8DF182D3308815");
+    assert_eq!(rpcvalue_to_hex_chainpack(&DateTime::from_epoch_msec_tz(1_493_826_723_923, 0).into()), "8DF1961334BEB4");
 }
 
 #[test]
 fn test_double() {
-    assert_eq!(chainpack_to_rpcvalue("830000000000C208B8").unwrap(), RpcValue::from(-9.094_583_978_896_067E-39_f64));
-    assert_eq!(rpcvalue_to_chainpack(&RpcValue::from(-9.094_583_978_896_067E-39_f64)), "830000000000C208B8");
+    assert_eq!(hex_chainpack_to_rpcvalue("830000000000C208B8").unwrap(), RpcValue::from(-9.094_583_978_896_067E-39_f64));
+    assert_eq!(rpcvalue_to_hex_chainpack(&RpcValue::from(-9.094_583_978_896_067E-39_f64)), "830000000000C208B8");
 }
 
 #[test]
 fn test_decimal() {
     let dec = crate::decimal::Decimal::new(0, 0);
-    assert_eq!(chainpack_to_rpcvalue("8C0000").unwrap(), dec.into());
-    assert_eq!(rpcvalue_to_chainpack(&dec.into()), "8C0000");
+    assert_eq!(hex_chainpack_to_rpcvalue("8C0000").unwrap(), dec.into());
+    assert_eq!(rpcvalue_to_hex_chainpack(&dec.into()), "8C0000");
 }
 
 #[test]
@@ -835,3 +983,191 @@ fn test_try_read_meta_missing() {
     assert!(val.is_imap());
 }
 
+#[test]
+fn test_find_path_list() {
+    // Create a list: [10, 20, 30]
+    let list = crate::make_list![10, 20, 30];
+    let buff = rpcvalue_to_chainpack(&list.into());
+
+    // Find index 0
+    let mut data_slice = &buff[..];
+    let mut rd = ChainPackReader::new(&mut data_slice);
+    rd.find_path(&["0"]).unwrap();
+    assert_eq!(rd.read().unwrap(), 10.into());
+
+    // Find index 1
+    let mut data_slice = &buff[..];
+    let mut rd = ChainPackReader::new(&mut data_slice);
+    rd.find_path(&["1"]).unwrap();
+    assert_eq!(rd.read().unwrap(), 20.into());
+
+    // Find index 2
+    let mut data_slice = &buff[..];
+    let mut rd = ChainPackReader::new(&mut data_slice);
+    rd.find_path(&["2"]).unwrap();
+    assert_eq!(rd.read().unwrap(), 30.into());
+
+    // Index out of bounds should not find
+    let mut data_slice = &buff[..];
+    let mut rd = ChainPackReader::new(&mut data_slice);
+    let res = rd.find_path(&["3"]);
+    assert!(res.is_err());
+}
+
+#[test]
+fn test_find_path_map() {
+    // Create a map: {"foo": 100, "bar": 200}
+    let map = crate::make_map!{
+        "foo" => 100,
+        "bar" => 200
+    };
+    let buff = rpcvalue_to_chainpack(&map.into());
+
+    // Find "foo"
+    let mut data_slice = &buff[..];
+    let mut rd = ChainPackReader::new(&mut data_slice);
+    rd.find_path(&["foo"]).unwrap();
+    assert_eq!(rd.read().unwrap(), 100.into());
+
+    // Find "bar"
+    let mut data_slice = &buff[..];
+    let mut rd = ChainPackReader::new(&mut data_slice);
+    rd.find_path(&["bar"]).unwrap();
+    assert_eq!(rd.read().unwrap(), 200.into());
+
+    // Non-existent key should not find
+    let mut data_slice = &buff[..];
+    let mut rd = ChainPackReader::new(&mut data_slice);
+    assert!(rd.find_path(&["baz"]).is_err());
+}
+
+#[test]
+fn test_find_path_imap() {
+    // Create an imap: {1: "one", 2: "two"}
+    let imap = crate::make_imap!{
+        1 => "one",
+        2 => "two"
+    };
+    let buff = rpcvalue_to_chainpack(&imap.into());
+
+    // Find key 1
+    let mut data_slice = &buff[..];
+    let mut rd = ChainPackReader::new(&mut data_slice);
+    rd.find_path(&["1"]).unwrap();
+    assert_eq!(rd.read().unwrap(), "one".into());
+
+    // Find key 2
+    let mut data_slice = &buff[..];
+    let mut rd = ChainPackReader::new(&mut data_slice);
+    rd.find_path(&["2"]).unwrap();
+    assert_eq!(rd.read().unwrap(), "two".into());
+
+    // Non-existent key should not find
+    let mut data_slice = &buff[..];
+    let mut rd = ChainPackReader::new(&mut data_slice);
+    assert!(rd.find_path(&["3"]).is_err());
+}
+
+#[test]
+fn test_find_path_nested_list_in_map() {
+    // Create nested structure: {"items": [10, 20, 30]}
+    let map = crate::make_map!{
+        "items" => vec![10, 20, 30]
+    };
+    let buff = rpcvalue_to_chainpack(&map.into());
+
+    // Find items[1] (should be 20)
+    let mut data_slice = &buff[..];
+    let mut rd = ChainPackReader::new(&mut data_slice);
+    rd.find_path(&["items", "1"]).unwrap();
+    assert_eq!(rd.read().unwrap(), 20.into());
+}
+
+#[test]
+fn test_find_path_nested_map_in_list() {
+    // Create nested structure: [{"name": "Alice"}, {"name": "Bob"}]
+    let list = crate::make_list![
+        crate::make_map!{"name" => "Alice"},
+        crate::make_map!{"name" => "Bob"}
+    ];
+    let buff = rpcvalue_to_chainpack(&list.into());
+
+    // Find list[0].name (should be "Alice")
+    let mut data_slice = &buff[..];
+    let mut rd = ChainPackReader::new(&mut data_slice);
+    rd.find_path(&["0", "name"]).unwrap();
+    assert_eq!(rd.read().unwrap(), "Alice".into());
+
+    // Find list[1].name (should be "Bob")
+    let mut data_slice = &buff[..];
+    let mut rd = ChainPackReader::new(&mut data_slice);
+    rd.find_path(&["1", "name"]).unwrap();
+    assert_eq!(rd.read().unwrap(), "Bob".into());
+}
+
+#[test]
+fn test_find_path_deeply_nested() {
+    // Create deeply nested structure: {"a": {"b": {"c": 42}}}
+    let map = crate::make_map!{
+        "a" => crate::make_map!{
+            "b" => crate::make_map!{
+                "c" => 42
+            }
+        }
+    };
+    let data = rpcvalue_to_hex_chainpack(&map.into());
+    let buff = hex::decode(&data).unwrap();
+
+    // Find a.b.c (should be 42)
+    let mut data_slice = &buff[..];
+    let mut rd = ChainPackReader::new(&mut data_slice);
+    rd.find_path(&["a", "b", "c"]).unwrap();
+    assert_eq!(rd.read().unwrap(), 42.into());
+
+    // Find partial path a.b (should be the map {"c": 42})
+    let mut data_slice = &buff[..];
+    let mut rd = ChainPackReader::new(&mut data_slice);
+    rd.find_path(&["a", "b"]).unwrap();
+    let val = rd.read().unwrap();
+    assert!(val.is_map());
+}
+
+#[test]
+fn test_find_path_empty_path() {
+    // Empty path should return current position (0 at start)
+    let map = crate::make_map!{"foo" => 100};
+    let buff = rpcvalue_to_chainpack(&map.into());
+    let mut data_slice = &buff[..];
+    let mut rd = ChainPackReader::new(&mut data_slice);
+
+    // Empty path means we're already at the target
+    rd.find_path(&[]).unwrap();
+    assert_eq!(rd.position(), 0);
+}
+
+#[test]
+fn test_find_path_wrong_path() {
+    // Try to access map key on a list
+    let list = crate::make_list![10, 20, 30];
+    let buff = rpcvalue_to_chainpack(&list.into());
+    let mut data_slice = &buff[..];
+    let mut rd = ChainPackReader::new(&mut data_slice);
+
+    // Trying to find string key in list should fail
+    assert!(rd.find_path(&["foo"]).is_err());
+}
+
+#[test]
+fn test_find_path_imap_nested() {
+    // Create nested structure with imap: {1: {2: "value"}}
+    let imap = crate::make_imap!{
+        0 => crate::make_imap!{
+            1 => crate::make_list!["foo", "bar", "baz"]
+        }
+    };
+    let buff = rpcvalue_to_chainpack(&imap.into());
+    let mut data_slice = &buff[..];
+    let mut rd = ChainPackReader::new(&mut data_slice);
+    rd.find_path(&["0", "1", "2"]).unwrap();
+    assert_eq!(rd.read().unwrap(), "baz".into());
+}

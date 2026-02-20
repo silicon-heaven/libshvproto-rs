@@ -35,7 +35,7 @@ pub trait TextReader : Reader {
     fn make_error(&self, msg: &str, reason: ReadErrorReason) -> ReadError;
     fn read_string(&mut self) -> Result<Value, ReadError>;
 
-    fn skip_white_insignificant(&mut self) -> Result<(), ReadError> {
+    fn skip_white_or_insignificant(&mut self) -> Result<(), ReadError> {
         loop {
             let b = self.peek_byte();
             if b == 0 {
@@ -280,7 +280,7 @@ pub trait TextReader : Reader {
         let mut lst = Vec::new();
         self.get_byte()?; // eat '['
         loop {
-            self.skip_white_insignificant()?;
+            self.skip_white_or_insignificant()?;
             let b = self.peek_byte();
             if b == b']' {
                 self.get_byte()?;
@@ -296,7 +296,7 @@ pub trait TextReader : Reader {
         let mut map: Map = Map::new();
         self.get_byte()?; // eat '{'
         loop {
-            self.skip_white_insignificant()?;
+            self.skip_white_or_insignificant()?;
             let b = self.peek_byte();
             if b == b'}' {
                 self.get_byte()?;
@@ -314,11 +314,10 @@ pub trait TextReader : Reader {
                 },
                 _ => return Err(self.make_error(&format!("Invalid Map key '{b}'"), ReadErrorReason::InvalidCharacter)),
             };
-            self.skip_white_insignificant()?;
+            self.skip_white_or_insignificant()?;
             let val = self.read()?;
             map.insert(skey.to_string(), val);
         }
         Ok(Value::from(map))
     }
 }
-
