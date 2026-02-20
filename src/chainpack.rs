@@ -1,6 +1,6 @@
 #![allow(clippy::cast_possible_truncation, reason = "Lots of casting here")]
 #![allow(clippy::indexing_slicing, reason = "Lots of indexing here")]
-use crate::reader::{ByteReader, ReadError, ReadErrorReason, Reader};
+use crate::reader::{ByteReader, ContainerType, MapKey, ReadError, ReadErrorReason, Reader};
 use crate::rpcvalue::{IMap, Map};
 use crate::writer::{ByteWriter, Writer};
 use crate::{metamap::MetaKey, DateTime, Decimal, MetaMap, RpcValue, Value, WriteResult};
@@ -541,92 +541,121 @@ where
         Ok(Value::from(d))
     }
 
-    pub fn find_path(&mut self, path: &[&str]) -> Result<usize, ReadError> {
-        const LIST_TAG: u8 = PackingSchema::List as u8;
-        const MAP_TAG: u8 = PackingSchema::Map as u8;
-        const IMAP_TAG: u8 = PackingSchema::IMap as u8;
+    pub fn open_container(&mut self, skip_meta: bool) -> Result<Option<ContainerType>, ReadError> {
+        let b = self.peek_byte();
+        if b == PackingSchema::List as u8 {
+            self.get_byte()?;
+            Ok(Some(ContainerType::List))
+        } else if b == PackingSchema::Map as u8 {
+            self.get_byte()?;
+            Ok(Some(ContainerType::Map))
+        } else if b == PackingSchema::IMap as u8 {
+            self.get_byte()?;
+            Ok(Some(ContainerType::IMap))
+        } else if b == PackingSchema::MetaMap as u8 && !skip_meta {
+            self.get_byte()?;
+            Ok(Some(ContainerType::MetaMap))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub fn read_next(&mut self) -> Result<Option<RpcValue>, ReadError> {
+        let b = self.peek_byte();
+        if b == PackingSchema::TERM as u8 {
+            self.get_byte()?;
+            Ok(None)
+        } else {
+            Ok(Some(self.read()?))
+        }
+    }
+
+    pub fn read_next_key(&mut self) -> Result<Option<MapKey>, ReadError> {
+        let k = self.read()?;
+        if k.is_string() {
+            Ok(Some(MapKey::String(k.as_str().to_string())))
+        } else if k.is_int() {
+            Ok(Some(MapKey::Int(k.as_int())))
+        } else {
+            return Err(self.make_error( &format!("Invalid Map key '{k}'"), ReadErrorReason::InvalidCharacter, ));
+        }
+    }
+
+    pub fn skip_next(&mut self) -> Result<Option<()>, ReadError> {
+        self.dry_run = true;
+        let b = self.peek_byte();
+        let res = if b == PackingSchema::TERM as u8 {
+            self.get_byte().map(|_| None)
+        } else {
+            self.read().map(|_| Some(()))
+        };
+        self.dry_run = false;
+        res
+    }
+
+    pub fn find_path(&mut self, path: &[&str]) -> Result<(), ReadError> {
 
         if path.is_empty() {
-            return Ok(self.position());
+            return Ok(());
         }
 
         let mut dir_ix = 0;
         while dir_ix < path.len() {
             let dir = path[dir_ix];
-            self.try_read_meta()?;
-            let b = self.peek_byte();
-            match b {
-                LIST_TAG => {
-                    self.get_byte()?;
+            match self.open_container(true)? {
+                Some(ContainerType::List) => {
                     let mut n = 0;
                     loop {
-                        let b = self.peek_byte();
-                        if b == PackingSchema::TERM as u8 {
-                            self.get_byte()?;
-                            break;
+                        // Check if we've reached the end of the list
+                        let peek = self.peek_byte();
+                        if peek == PackingSchema::TERM as u8 {
+                            // No more elements - index not found
+                            return Err(self.make_error(&format!("Invalid List index '{dir}'"), ReadErrorReason::InvalidCharacter, ));
                         }
+
+                        // Check if current index matches
                         if format!("{n}") == dir {
                             dir_ix += 1;
                             if dir_ix == path.len() {
-                                return Ok(self.position());
+                                return Ok(());
                             }
+                            // Found the element, continue to next path component
                             break;
                         }
+
+                        // Skip current element and continue
+                        self.skip_next()?;
                         n += 1;
-                        self.read()?;
                     }
                 }
-                MAP_TAG => {
-                    self.get_byte()?;
+                Some(ContainerType::Map) | Some(ContainerType::IMap) => {
+                    let mut found = false;
                     loop {
-                        let b = self.peek_byte();
-                        if b == PackingSchema::TERM as u8 {
-                            self.get_byte()?;
-                            break;
-                        }
-                        let k = self.read()?;
-                        let key = if k.is_string() {
-                            k.as_str()
-                        } else {
-                            return Err(self.make_error( &format!("Invalid Map key '{k}'"), ReadErrorReason::InvalidCharacter, ));
-                        };
-                        if key == dir {
-                            dir_ix += 1;
-                            if dir_ix == path.len() {
-                                return Ok(self.position());
+                        match self.read_next_key()? {
+                            Some(MapKey::String(key)) => if key == dir {
+                                dir_ix += 1;
+                                if dir_ix == path.len() {
+                                    return Ok(());
+                                }
+                                found = true;
+                                break;
                             }
-                            break;
+                            Some(MapKey::Int(key)) => if format!("{}", key) == dir {
+                                dir_ix += 1;
+                                if dir_ix == path.len() {
+                                    return Ok(());
+                                }
+                                found = true;
+                                break;
+                            }
+                            None => break,
                         }
-                        self.read()?;
+                    }
+                    if !found {
+                        return Err(self.make_error(&format!("Invalid Map index '{dir}'"), ReadErrorReason::InvalidCharacter, ));
                     }
                 }
-                IMAP_TAG => {
-                    self.get_byte()?;
-                    loop {
-                        let b = self.peek_byte();
-                        if b == PackingSchema::TERM as u8 {
-                            self.get_byte()?;
-                            break;
-                        }
-                        let k = self.read()?;
-                        let key = if k.is_int() {
-                            k.as_i32()
-                        } else {
-                            return Err(self.make_error( &format!("Invalid IMap key '{k}'"), ReadErrorReason::InvalidCharacter, ));
-                        };
-                        if format!("{key}") == dir {
-                            dir_ix += 1;
-                            if dir_ix == path.len() {
-                                return Ok(self.position());
-                            }
-                            break;
-                        }
-                        self.read()?;
-                    }
-                }
-                _ => {
-                    self.read()?;
-                }
+                _ => return Err(self.make_error(&format!("Not continer"), ReadErrorReason::InvalidCharacter, ))
             }
         }
         Err(self.make_error( "Path not found", ReadErrorReason::InvalidCharacter, ))
@@ -962,26 +991,22 @@ fn test_find_path_list() {
     let mut rd = ChainPackReader::new(&mut data_slice);
 
     // Find index 0
-    let pos = rd.find_path(&["0"]).unwrap();
-    let mut data_slice = &buff[pos..];
+    rd.find_path(&["0"]).unwrap();
+    let mut data_slice = &buff[rd.position()..];
     let mut rd2 = ChainPackReader::new(&mut data_slice);
     assert_eq!(rd2.read().unwrap(), 10.into());
 
     // Find index 1
     let mut data_slice = &buff[..];
     let mut rd = ChainPackReader::new(&mut data_slice);
-    let pos = rd.find_path(&["1"]).unwrap();
-    let mut data_slice = &buff[pos..];
-    let mut rd2 = ChainPackReader::new(&mut data_slice);
-    assert_eq!(rd2.read().unwrap(), 20.into());
+    rd.find_path(&["1"]).unwrap();
+    assert_eq!(rd.read().unwrap(), 20.into());
 
     // Find index 2
     let mut data_slice = &buff[..];
     let mut rd = ChainPackReader::new(&mut data_slice);
-    let pos = rd.find_path(&["2"]).unwrap();
-    let mut data_slice = &buff[pos..];
-    let mut rd2 = ChainPackReader::new(&mut data_slice);
-    assert_eq!(rd2.read().unwrap(), 30.into());
+    rd.find_path(&["2"]).unwrap();
+    assert_eq!(rd.read().unwrap(), 30.into());
 
     // Index out of bounds should not find
     let mut data_slice = &buff[..];
@@ -1001,18 +1026,14 @@ fn test_find_path_map() {
     // Find "foo"
     let mut data_slice = &buff[..];
     let mut rd = ChainPackReader::new(&mut data_slice);
-    let pos = rd.find_path(&["foo"]).unwrap();
-    let mut data_slice = &buff[pos..];
-    let mut rd2 = ChainPackReader::new(&mut data_slice);
-    assert_eq!(rd2.read().unwrap(), 100.into());
+    rd.find_path(&["foo"]).unwrap();
+    assert_eq!(rd.read().unwrap(), 100.into());
 
     // Find "bar"
     let mut data_slice = &buff[..];
     let mut rd = ChainPackReader::new(&mut data_slice);
-    let pos = rd.find_path(&["bar"]).unwrap();
-    let mut data_slice = &buff[pos..];
-    let mut rd2 = ChainPackReader::new(&mut data_slice);
-    assert_eq!(rd2.read().unwrap(), 200.into());
+    rd.find_path(&["bar"]).unwrap();
+    assert_eq!(rd.read().unwrap(), 200.into());
 
     // Non-existent key should not find
     let mut data_slice = &buff[..];
@@ -1032,18 +1053,14 @@ fn test_find_path_imap() {
     // Find key 1
     let mut data_slice = &buff[..];
     let mut rd = ChainPackReader::new(&mut data_slice);
-    let pos = rd.find_path(&["1"]).unwrap();
-    let mut data_slice = &buff[pos..];
-    let mut rd2 = ChainPackReader::new(&mut data_slice);
-    assert_eq!(rd2.read().unwrap(), "one".into());
+    rd.find_path(&["1"]).unwrap();
+    assert_eq!(rd.read().unwrap(), "one".into());
 
     // Find key 2
     let mut data_slice = &buff[..];
     let mut rd = ChainPackReader::new(&mut data_slice);
-    let pos = rd.find_path(&["2"]).unwrap();
-    let mut data_slice = &buff[pos..];
-    let mut rd2 = ChainPackReader::new(&mut data_slice);
-    assert_eq!(rd2.read().unwrap(), "two".into());
+    rd.find_path(&["2"]).unwrap();
+    assert_eq!(rd.read().unwrap(), "two".into());
 
     // Non-existent key should not find
     let mut data_slice = &buff[..];
@@ -1062,10 +1079,8 @@ fn test_find_path_nested_list_in_map() {
     // Find items[1] (should be 20)
     let mut data_slice = &buff[..];
     let mut rd = ChainPackReader::new(&mut data_slice);
-    let pos = rd.find_path(&["items", "1"]).unwrap();
-    let mut data_slice = &buff[pos..];
-    let mut rd2 = ChainPackReader::new(&mut data_slice);
-    assert_eq!(rd2.read().unwrap(), 20.into());
+    rd.find_path(&["items", "1"]).unwrap();
+    assert_eq!(rd.read().unwrap(), 20.into());
 }
 
 #[test]
@@ -1080,18 +1095,14 @@ fn test_find_path_nested_map_in_list() {
     // Find list[0].name (should be "Alice")
     let mut data_slice = &buff[..];
     let mut rd = ChainPackReader::new(&mut data_slice);
-    let pos = rd.find_path(&["0", "name"]).unwrap();
-    let mut data_slice = &buff[pos..];
-    let mut rd2 = ChainPackReader::new(&mut data_slice);
-    assert_eq!(rd2.read().unwrap(), "Alice".into());
+    rd.find_path(&["0", "name"]).unwrap();
+    assert_eq!(rd.read().unwrap(), "Alice".into());
 
     // Find list[1].name (should be "Bob")
     let mut data_slice = &buff[..];
     let mut rd = ChainPackReader::new(&mut data_slice);
-    let pos = rd.find_path(&["1", "name"]).unwrap();
-    let mut data_slice = &buff[pos..];
-    let mut rd2 = ChainPackReader::new(&mut data_slice);
-    assert_eq!(rd2.read().unwrap(), "Bob".into());
+    rd.find_path(&["1", "name"]).unwrap();
+    assert_eq!(rd.read().unwrap(), "Bob".into());
 }
 
 #[test]
@@ -1110,18 +1121,14 @@ fn test_find_path_deeply_nested() {
     // Find a.b.c (should be 42)
     let mut data_slice = &buff[..];
     let mut rd = ChainPackReader::new(&mut data_slice);
-    let pos = rd.find_path(&["a", "b", "c"]).unwrap();
-    let mut data_slice = &buff[pos..];
-    let mut rd2 = ChainPackReader::new(&mut data_slice);
-    assert_eq!(rd2.read().unwrap(), 42.into());
+    rd.find_path(&["a", "b", "c"]).unwrap();
+    assert_eq!(rd.read().unwrap(), 42.into());
 
     // Find partial path a.b (should be the map {"c": 42})
     let mut data_slice = &buff[..];
     let mut rd = ChainPackReader::new(&mut data_slice);
-    let pos = rd.find_path(&["a", "b"]).unwrap();
-    let mut data_slice = &buff[pos..];
-    let mut rd2 = ChainPackReader::new(&mut data_slice);
-    let val = rd2.read().unwrap();
+    rd.find_path(&["a", "b"]).unwrap();
+    let val = rd.read().unwrap();
     assert!(val.is_map());
 }
 
@@ -1134,8 +1141,8 @@ fn test_find_path_empty_path() {
     let mut rd = ChainPackReader::new(&mut data_slice);
 
     // Empty path means we're already at the target
-    let pos = rd.find_path(&[]).unwrap();
-    assert_eq!(pos, 0);
+    rd.find_path(&[]).unwrap();
+    assert_eq!(rd.position(), 0);
 }
 
 #[test]
@@ -1161,8 +1168,6 @@ fn test_find_path_imap_nested() {
     let buff = rpcvalue_to_chainpack(&imap.into());
     let mut data_slice = &buff[..];
     let mut rd = ChainPackReader::new(&mut data_slice);
-    let pos = rd.find_path(&["1", "2"]).unwrap();
-    let mut data_slice = &buff[pos..];
-    let mut rd2 = ChainPackReader::new(&mut data_slice);
-    assert_eq!(rd2.read().unwrap(), "value".into());
+    rd.find_path(&["1", "2"]).unwrap();
+    assert_eq!(rd.read().unwrap(), "value".into());
 }

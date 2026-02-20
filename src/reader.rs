@@ -2,6 +2,7 @@ use std::fmt::{Display, Formatter};
 use std::io::Read;
 use crate::{MetaMap, RpcValue};
 use crate::rpcvalue::Value;
+
 #[derive(Debug)]
 pub enum ReadErrorReason {
     UnexpectedEndOfStream,
@@ -103,6 +104,18 @@ where R: Read
     }
 }
 
+pub enum ContainerType {
+    List,
+    Map,
+    IMap,
+    MetaMap,
+}
+
+pub enum MapKey {
+    Int(i64),
+    String(String),
+}
+
 pub type ReadResult = Result<RpcValue, ReadError>;
 
 pub trait Reader {
@@ -115,4 +128,3 @@ pub trait Reader {
     fn try_read_meta(&mut self) -> Result<Option<MetaMap>, ReadError>;
     fn read_value(&mut self) -> Result<Value, ReadError>;
 }
-
