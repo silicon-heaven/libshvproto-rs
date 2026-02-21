@@ -1,6 +1,8 @@
 #![allow(clippy::print_stderr, clippy::print_stdout, clippy::exit, reason = "Fine for a binary")]
 use clap::Parser;
 use log::LevelFilter;
+#[cfg(not(feature = "cq"))]
+use shvproto::reader::ContainerType;
 use shvproto::reader::ReadErrorReason;
 use shvproto::Reader;
 use shvproto::Writer;
@@ -75,7 +77,7 @@ fn exit_with_result_and_code(result: &ChainPackRpcBlockResult, error: Option<Rea
     println!("{}", result.cpon);
     process::exit(exit_code);
 }
-fn process_chainpack_rpc_block(mut reader: Box<dyn BufRead>) -> ! {
+fn process_chainpack_rpc_block_and_exit(mut reader: Box<dyn BufRead>) -> ! {
     let mut result = ChainPackRpcBlockResult {
         block_length: None,
         frame_length: None,
@@ -145,72 +147,136 @@ fn main() {
         Some(filename) => Box::new(BufReader::new(fs::File::open(filename).expect("Opening files must work"))),
     };
 
-    let read_result = if opts.cpon_input {
-        let mut rd = CponReader::new(&mut reader);
-        rd.read()
-    } else if opts.chainpack_rpc_block {
-        process_chainpack_rpc_block(reader)
-    } else {
-        let mut rd = ChainPackReader::new(&mut reader);
-        rd.read()
-    };
-
-    let input_value = match read_result {
-        Err(e) => {
-            eprintln!("Parse input error: {e:?}");
-            process::exit(CODE_READ_ERROR);
-        }
-        Ok(rv) => rv,
-    };
+    if opts.chainpack_rpc_block {
+        process_chainpack_rpc_block_and_exit(reader)
+    }
 
     #[cfg(feature = "cq")]
-    let output_values = if let Some(filter) = opts.cq_filter {
-        let filter = match jaq_all::compile_with(&filter, jaq_std::defs(), jaq_std::funs(), &[]) {
-            Ok(filter) => filter,
-            Err(error) => {
-                eprintln!("Failed to parse cq filter: {error:?}");
-                process::exit(CODE_READ_ERROR);
-            },
-        };
-
-        let ctx = Ctx::<JustLut<shvproto::RpcValue>>::new(&filter.lut, Vars::new([]));
-        let outputs = filter.id.run((ctx, input_value));
-        outputs.filter_map(|output|
-            match output {
-                Ok(rv) => Some(rv),
-                Err(err) => {
-                    eprintln!("Unexpected error while processing the cq filter: {err:?}");
-                    process::exit(CODE_UNEXPECTED_ERROR)
-                },
-            }).collect::<Vec<_>>()
-    } else {
-        vec![input_value]
-    };
-
-    #[cfg(not(feature = "cq"))]
-    let output_values = vec![input_value];
-
-    let mut writer = BufWriter::new(stdout());
-    for output_value in output_values {
-        let res = if opts.chainpack_output {
-            let mut wr = ChainPackWriter::new(&mut writer);
-            wr.write(&output_value)
+    {
+        let read_result = if opts.cpon_input {
+            let mut rd = CponReader::new(&mut reader);
+            rd.read()
         } else {
-            let mut wr = CponWriter::new(&mut writer);
-            wr.set_no_oneliners(opts.no_oneliners);
-            if let Some(s) = &opts.indent {
-                if s == "\\t" {
-                    wr.set_indent(b"\t");
-                } else {
-                    wr.set_indent(s.as_bytes());
-                }
-            }
-            wr.write(&output_value)
+            let mut rd = ChainPackReader::new(&mut reader);
+            rd.read()
         };
 
-        if let Err(e) = res {
+        let input_value = match read_result {
+            Err(e) => {
+                eprintln!("Parse input error: {e:?}");
+                process::exit(CODE_READ_ERROR);
+            }
+            Ok(rv) => rv,
+        };
+
+        let output_values = if let Some(filter) = opts.cq_filter {
+            let filter = match jaq_all::compile_with(&filter, jaq_std::defs(), jaq_std::funs(), &[]) {
+                Ok(filter) => filter,
+                Err(error) => {
+                    eprintln!("Failed to parse cq filter: {error:?}");
+                    process::exit(CODE_READ_ERROR);
+                },
+            };
+
+            let ctx = Ctx::<JustLut<shvproto::RpcValue>>::new(&filter.lut, Vars::new([]));
+            let outputs = filter.id.run((ctx, input_value));
+            outputs.filter_map(|output|
+                match output {
+                    Ok(rv) => Some(rv),
+                    Err(err) => {
+                        eprintln!("Unexpected error while processing the cq filter: {err:?}");
+                        process::exit(CODE_UNEXPECTED_ERROR)
+                    },
+                }).collect::<Vec<_>>()
+        } else {
+            vec![input_value]
+        };
+
+        let mut writer = BufWriter::new(stdout());
+        for output_value in output_values {
+            let res = if opts.chainpack_output {
+                let mut wr = ChainPackWriter::new(&mut writer);
+                wr.write(&output_value)
+            } else {
+                let mut wr = CponWriter::new(&mut writer);
+                wr.set_no_oneliners(opts.no_oneliners);
+                if let Some(s) = &opts.indent {
+                    if s == "\\t" {
+                        wr.set_indent(b"\t");
+                    } else {
+                        wr.set_indent(s.as_bytes());
+                    }
+                }
+                wr.write(&output_value)
+            };
+
+            if let Err(e) = res {
+                eprintln!("Write output error: {e:?}");
+                process::exit(CODE_WRITE_ERROR);
+            }
+        }
+    }
+    #[cfg(not(feature = "cq"))]
+    {
+        let mut rd: Box<dyn Reader + '_> = if opts.cpon_input {
+            Box::new(CponReader::new(&mut reader))
+        } else {
+            Box::new(ChainPackReader::new(&mut reader))
+        };
+
+        let mut writer = BufWriter::new(stdout());
+        let mut wr: Box<dyn Writer + '_> = if opts.chainpack_output {
+            Box::new(ChainPackWriter::new(&mut writer))
+        } else {
+            Box::new(CponWriter::new(&mut writer))
+        };
+        if let Err(e) = copy_current_value(&mut rd, &mut wr, None, 0) {
             eprintln!("Write output error: {e:?}");
             process::exit(CODE_WRITE_ERROR);
+        }
+
+    }
+}
+
+#[cfg(not(feature = "cq"))]
+fn copy_current_value(rd: &mut Box<dyn Reader + '_>, wr: &mut Box<dyn Writer + '_>, current_container: Option<ContainerType>, indent: usize) -> Result<bool, String> {
+    use shvproto::reader::ReadToken;
+    let new_indent = indent + 1;
+    let read_token = rd.read_token(false).map_err(|e| e.to_string())?;
+    println!("{}{indent}: {:?}", "  ".repeat(indent), read_token);
+    match read_token {
+        ReadToken::ContainerBegin(ContainerType::List) => {
+            wr.write_container_begin(ContainerType::List).map_err(|e| e.to_string())?;
+            loop {
+                if copy_current_value(rd, wr, Some(ContainerType::List), new_indent)? {
+                    break;
+                }
+                println!("{}{indent}: write delimiter", "  ".repeat(indent));
+                wr.write_item_delimiter().map_err(|e| e.to_string())?;
+            }
+            Ok(false)
+        }
+        ReadToken::ContainerBegin(container_type) => {
+            wr.write_container_begin(container_type).map_err(|e| e.to_string())?;
+            loop {
+                if let Some(key) = rd.read_next_key().map_err(|e| e.to_string())? {
+                    wr.write_key(&key).map_err(|e| e.to_string())?;
+                    copy_current_value(rd, wr, Some(container_type), new_indent)?;
+                } else {
+                    break;
+                }
+                wr.write_item_delimiter().map_err(|e| e.to_string())?;
+            }
+            Ok(false)
+        }
+        ReadToken::Item => {
+            let rv = rd.read().map_err(|e| e.to_string())?;
+            wr.write(&rv).map_err(|e| e.to_string())?;
+            Ok(false)
+        }
+        ReadToken::ContainerEnd => {
+            wr.write_container_end(current_container.expect("Expected end of container")).map_err(|e| e.to_string())?;
+            Ok(true)
         }
     }
 }

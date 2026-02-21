@@ -104,11 +104,19 @@ where R: Read
     }
 }
 
+#[derive(Debug, Copy, Clone)]
 pub enum ContainerType {
     List,
     Map,
     IMap,
     MetaMap,
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum ReadToken {
+    ContainerBegin(ContainerType),
+    ContainerEnd,
+    Item,
 }
 
 pub enum MapKey {
@@ -129,7 +137,7 @@ pub trait Reader {
     fn read_value(&mut self) -> Result<Value, ReadError>;
     fn find_path(&mut self, path: &[&str]) -> Result<(), ReadError>;
 
-    fn open_container(&mut self, skip_meta: bool) -> Result<Option<ContainerType>, ReadError>;
+    fn read_token(&mut self, skip_meta: bool) -> Result<ReadToken, ReadError>;
     fn read_next_key(&mut self) -> Result<Option<MapKey>, ReadError>;
     fn read_next(&mut self) -> Result<Option<RpcValue>, ReadError>;
     fn skip_next(&mut self) -> Result<Option<()>, ReadError>;

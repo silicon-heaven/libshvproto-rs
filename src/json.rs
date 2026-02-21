@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 use crate::datetime::{IncludeMilliseconds, ToISOStringOptions};
 use crate::writer::{WriteResult, Writer, ByteWriter};
 use crate::metamap::MetaKey;
-use crate::reader::{Reader, ByteReader, ReadError, ReadErrorReason, ContainerType, MapKey};
+use crate::reader::{ByteReader, ContainerType, MapKey, ReadError, ReadErrorReason, ReadToken, Reader};
 use crate::rpcvalue::{Map};
 use crate::textrdwr::{TextReader, TextWriter};
 
@@ -221,7 +221,26 @@ where W: Write
         }?;
         Ok(self.byte_writer.count() - cnt)
     }
+
+    fn write_key(&mut self, _key: &MapKey) -> WriteResult {
+        todo!("write_key not supported for JSON")
+        //Err(self.by.make_error("write_key not supported for JSON", ReadErrorReason::InvalidCharacter))
+    }
+
+    fn write_container_end(&mut self, _container_type: ContainerType) -> WriteResult {
+        todo!("write_container_end not supported for JSON")
+        //Err(make_error("write_container_end not supported for JSON", ReadErrorReason::InvalidCharacter))
+    }
+
+    fn write_item_delimiter(&mut self) -> WriteResult {
+        self.write_byte(b',')
+    }
+
+    fn write_container_begin(&mut self, _container_type: ContainerType) -> WriteResult {
+        todo!()
+    }
 }
+
 pub struct JsonReader<'a, R>
     where R: Read
 {
@@ -410,7 +429,7 @@ impl<R> Reader for JsonReader<'_, R>
         Ok(v)
     }
 
-    fn open_container(&mut self, _skip_meta: bool) -> Result<Option<ContainerType>, ReadError> {
+    fn read_token(&mut self, _skip_meta: bool) -> Result<ReadToken, ReadError> {
         Err(self.make_error("open_container not supported for JSON", ReadErrorReason::InvalidCharacter))
     }
 

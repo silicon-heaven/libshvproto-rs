@@ -90,7 +90,7 @@ pub trait TextReader : Reader {
         }
         Ok(())
     }
-    fn read_token(&mut self, token: &str) -> Result<(), ReadError> {
+    fn read_text_token(&mut self, token: &str) -> Result<(), ReadError> {
         for c in token.as_bytes() {
             let b = self.get_byte()?;
             if b != *c {
@@ -100,15 +100,15 @@ pub trait TextReader : Reader {
         Ok(())
     }
     fn read_true(&mut self) -> Result<Value, ReadError> {
-        self.read_token("true")?;
+        self.read_text_token("true")?;
         Ok(Value::from(true))
     }
     fn read_false(&mut self) -> Result<Value, ReadError> {
-        self.read_token("false")?;
+        self.read_text_token("false")?;
         Ok(Value::from(false))
     }
     fn read_null(&mut self) -> Result<Value, ReadError> {
-        self.read_token("null")?;
+        self.read_text_token("null")?;
         Ok(Value::from(()))
     }
     fn read_int(&mut self, init_val: i64, no_signum: bool) -> Result<ReadInt, ReadError> {

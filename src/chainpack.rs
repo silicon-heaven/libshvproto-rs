@@ -1,6 +1,6 @@
 #![allow(clippy::cast_possible_truncation, reason = "Lots of casting here")]
 #![allow(clippy::indexing_slicing, reason = "Lots of indexing here")]
-use crate::reader::{ByteReader, ContainerType, MapKey, ReadError, ReadErrorReason, Reader};
+use crate::reader::{ByteReader, ContainerType, MapKey, ReadError, ReadErrorReason, ReadToken, Reader};
 use crate::rpcvalue::{IMap, Map};
 use crate::writer::{ByteWriter, Writer};
 use crate::{metamap::MetaKey, DateTime, Decimal, MetaMap, RpcValue, Value, WriteResult};
@@ -306,6 +306,30 @@ where
             Value::IMap(map) => self.write_imap(map)?,
         };
         Ok(self.byte_writer.count() - cnt)
+    }
+
+    fn write_key(&mut self, key: &MapKey) -> WriteResult {
+        match key {
+            MapKey::Int(i) => self.write_int(*i),
+            MapKey::String(s) => self.write_string(s),
+        }
+    }
+
+    fn write_container_end(&mut self, _container_type: ContainerType) -> WriteResult {
+        self.write_byte(PackingSchema::TERM as u8)
+    }
+
+    fn write_item_delimiter(&mut self) -> WriteResult {
+        Ok(0)
+    }
+
+    fn write_container_begin(&mut self, container_type: ContainerType) -> WriteResult {
+        match container_type {
+            ContainerType::List => self.write_byte(PackingSchema::List as u8),
+            ContainerType::Map => self.write_byte(PackingSchema::Map as u8),
+            ContainerType::IMap => self.write_byte(PackingSchema::IMap as u8),
+            ContainerType::MetaMap => self.write_byte(PackingSchema::MetaMap as u8),
+        }
     }
 }
 
@@ -638,22 +662,25 @@ where
         Ok(v)
     }
 
-    fn open_container(&mut self, skip_meta: bool) -> Result<Option<ContainerType>, ReadError> {
+    fn read_token(&mut self, skip_meta: bool) -> Result<ReadToken, ReadError> {
         let b = self.peek_byte();
         if b == PackingSchema::List as u8 {
             self.get_byte()?;
-            Ok(Some(ContainerType::List))
+            Ok(ReadToken::ContainerBegin(ContainerType::List))
         } else if b == PackingSchema::Map as u8 {
             self.get_byte()?;
-            Ok(Some(ContainerType::Map))
+            Ok(ReadToken::ContainerBegin(ContainerType::Map))
         } else if b == PackingSchema::IMap as u8 {
             self.get_byte()?;
-            Ok(Some(ContainerType::IMap))
+            Ok(ReadToken::ContainerBegin(ContainerType::IMap))
         } else if b == PackingSchema::MetaMap as u8 && !skip_meta {
             self.get_byte()?;
-            Ok(Some(ContainerType::MetaMap))
+            Ok(ReadToken::ContainerBegin(ContainerType::MetaMap))
+        } else if b == PackingSchema::TERM as u8 {
+            self.get_byte()?;
+            Ok(ReadToken::ContainerEnd)
         } else {
-            Ok(None)
+            Ok(ReadToken::Item)
         }
     }
 
@@ -668,6 +695,11 @@ where
     }
 
     fn read_next_key(&mut self) -> Result<Option<MapKey>, ReadError> {
+        let b = self.peek_byte();
+        if b == PackingSchema::TERM as u8 {
+            self.get_byte()?;
+            return Ok(None)
+        }
         let k = self.read()?;
         if k.is_string() {
             Ok(Some(MapKey::String(k.as_str().to_string())))
@@ -698,8 +730,8 @@ where
         let mut dir_ix = 0;
         while dir_ix < path.len() {
             let dir = path[dir_ix];
-            match self.open_container(true)? {
-                Some(ContainerType::List) => {
+            match self.read_token(true)? {
+                ReadToken::ContainerBegin(ContainerType::List) => {
                     let mut n = 0;
                     loop {
                         // Check if we've reached the end of the list
@@ -724,7 +756,7 @@ where
                         n += 1;
                     }
                 }
-                Some(ContainerType::Map | ContainerType::IMap) => {
+                ReadToken::ContainerBegin(ContainerType::Map) | ReadToken::ContainerBegin(ContainerType::IMap) => {
                     let mut found = false;
                     loop {
                         match self.read_next_key()? {

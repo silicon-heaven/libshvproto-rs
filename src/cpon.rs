@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use crate::datetime::{IncludeMilliseconds, ToISOStringOptions};
 use crate::writer::{WriteResult, Writer, ByteWriter};
 use crate::metamap::MetaKey;
-use crate::reader::{Reader, ByteReader, ReadError, ReadErrorReason, ContainerType, MapKey};
+use crate::reader::{ByteReader, ContainerType, MapKey, ReadError, ReadErrorReason, ReadToken, Reader};
 use crate::rpcvalue::{Map};
 use crate::textrdwr::{TextReader};
 
@@ -336,6 +336,34 @@ impl<W> Writer for CponWriter<'_, W>
         }?;
         Ok(self.byte_writer.count() - cnt)
     }
+
+    fn write_key(&mut self, key: &MapKey) -> WriteResult {
+        match key {
+            MapKey::Int(i) => self.write_int(*i),
+            MapKey::String(s) => self.write_string(s),
+        }
+    }
+
+    fn write_item_delimiter(&mut self) -> WriteResult {
+        self.write_byte(b',')
+    }
+
+    fn write_container_end(&mut self, container_type: ContainerType) -> WriteResult {
+        match container_type {
+            ContainerType::List => self.write_byte(b']'),
+            ContainerType::Map | ContainerType::IMap => self.write_byte(b'}'),
+            ContainerType::MetaMap => self.write_byte(b'>'),
+        }
+    }
+
+    fn write_container_begin(&mut self, container_type: ContainerType) -> WriteResult {
+        match container_type {
+            ContainerType::List => self.write_byte(b'['),
+            ContainerType::Map => self.write_byte(b'{'),
+            ContainerType::IMap => self.write_bytes(b"i{"),
+            ContainerType::MetaMap => self.write_byte(b'<'),
+        }
+    }
 }
 
 pub struct CponReader<'a, R>
@@ -453,15 +481,15 @@ impl<'a, R> CponReader<'a, R>
         Err(self.make_error("Invalid DateTime", ReadErrorReason::InvalidCharacter))
     }
     fn read_true(&mut self) -> Result<Value, ReadError> {
-        self.read_token("true")?;
+        self.read_text_token("true")?;
         Ok(Value::from(true))
     }
     fn read_false(&mut self) -> Result<Value, ReadError> {
-        self.read_token("false")?;
+        self.read_text_token("false")?;
         Ok(Value::from(false))
     }
     fn read_null(&mut self) -> Result<Value, ReadError> {
-        self.read_token("null")?;
+        self.read_text_token("null")?;
         Ok(Value::from(()))
     }
 
@@ -565,31 +593,34 @@ impl<R> Reader for CponReader<'_, R>
         Ok(v)
     }
 
-    fn open_container(&mut self, skip_meta: bool) -> Result<Option<ContainerType>, ReadError> {
+    fn read_token(&mut self, skip_meta: bool) -> Result<ReadToken, ReadError> {
         self.skip_white_or_insignificant()?;
         let b = self.peek_byte();
         if b == b'[' {
             self.get_byte()?;
-            Ok(Some(ContainerType::List))
+            Ok(ReadToken::ContainerBegin(ContainerType::List))
         } else if b == b'{' {
             self.get_byte()?;
-            Ok(Some(ContainerType::Map))
+            Ok(ReadToken::ContainerBegin(ContainerType::Map))
         } else if b == b'i' {
             // Check if it's an IMap
             self.get_byte()?;
             let next_b = self.peek_byte();
             if next_b == b'{' {
                 self.get_byte()?;
-                Ok(Some(ContainerType::IMap))
+                Ok(ReadToken::ContainerBegin(ContainerType::IMap))
             } else {
                 // Not an IMap, this is an error - we already consumed 'i'
                 Err(self.make_error("Expected '{' after 'i' for IMap", ReadErrorReason::InvalidCharacter))
             }
         } else if b == b'<' && !skip_meta {
             self.get_byte()?;
-            Ok(Some(ContainerType::MetaMap))
+            Ok(ReadToken::ContainerBegin(ContainerType::MetaMap))
+        } else if b == b'>' || b == b'}' || b == b']' {
+            self.get_byte()?;
+            Ok(ReadToken::ContainerEnd)
         } else {
-            Ok(None)
+            Ok(ReadToken::Item)
         }
     }
 
@@ -609,7 +640,7 @@ impl<R> Reader for CponReader<'_, R>
     fn read_next_key(&mut self) -> Result<Option<MapKey>, ReadError> {
         self.skip_white_or_insignificant()?;
         let b = self.peek_byte();
-        if b == b'}' {
+        if b == b'}' || b == b'>' {
             // End of map
             return Ok(None);
         }
@@ -651,8 +682,8 @@ impl<R> Reader for CponReader<'_, R>
         let mut dir_ix = 0;
         while dir_ix < path.len() {
             let dir = *path.get(dir_ix).expect("Index must be valid here");
-            match self.open_container(true)? {
-                Some(ContainerType::List) => {
+            match self.read_token(true)? {
+                ReadToken::ContainerBegin(ContainerType::List) => {
                     let mut n = 0;
                     loop {
                         // Check if we've reached the end of the list
@@ -678,7 +709,7 @@ impl<R> Reader for CponReader<'_, R>
                         n += 1;
                     }
                 }
-                Some(ContainerType::Map | ContainerType::IMap) => {
+                ReadToken::ContainerBegin(ContainerType::Map) | ReadToken::ContainerBegin(ContainerType::IMap) => {
                     let mut found = false;
                     loop {
                         self.skip_white_or_insignificant()?;
