@@ -128,7 +128,6 @@ pub trait TextReader : Reader {
             let Some(b) = self.peek_byte_opt()? else {
                 break;
             };
-            println!("b: {b:?}");
             let digit = match b {
                 b'+' | b'-' => {
                     if n != 0 {
