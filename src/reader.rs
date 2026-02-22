@@ -50,7 +50,7 @@ where R: Read
         }
     }
 
-    pub(crate) fn peek_byte(&mut self) -> Result<Option<u8>, ReadError> {
+    pub(crate) fn peek_byte_opt(&mut self) -> Result<Option<u8>, ReadError> {
         if let Some(b) = self.peeked {
             return Ok(Some(b));
         }

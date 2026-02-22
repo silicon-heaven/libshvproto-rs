@@ -305,8 +305,8 @@ impl<'a, R> JsonReader<'a, R>
 impl<R> TextReader for JsonReader<'_, R>
 where R: Read
 {
-    fn peek_byte(&mut self) -> Result<Option<u8>, ReadError> {
-        self.byte_reader.peek_byte()
+    fn peek_byte_opt(&mut self) -> Result<Option<u8>, ReadError> {
+        self.byte_reader.peek_byte_opt()
     }
 
     fn get_byte(&mut self) -> Result<u8, ReadError> {
@@ -415,7 +415,7 @@ impl<R> Reader for JsonReader<'_, R>
     }
     fn read_value(&mut self) -> Result<Value, ReadError> {
         self.skip_white_or_insignificant()?;
-        let b = self.peek_some_byte()?;
+        let b = self.peek_byte()?;
         let v = match &b {
             b'0' ..= b'9' | b'+' | b'-' => self.read_number(),
             b'"' => self.read_string(),

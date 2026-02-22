@@ -30,9 +30,9 @@ pub struct ReadInt {
     pub is_overflow: bool,
 }
 pub trait TextReader : Reader {
-    fn peek_byte(&mut self) -> Result<Option<u8>, ReadError>;
-    fn peek_some_byte(&mut self) -> Result<u8, ReadError> {
-        self.peek_byte()?
+    fn peek_byte_opt(&mut self) -> Result<Option<u8>, ReadError>;
+    fn peek_byte(&mut self) -> Result<u8, ReadError> {
+        self.peek_byte_opt()?
             .ok_or_else(||self.make_error("Unexpected end of stream", ReadErrorReason::InvalidCharacter))
     }
     fn get_byte(&mut self) -> Result<u8, ReadError>;
@@ -41,7 +41,7 @@ pub trait TextReader : Reader {
 
     fn skip_white_or_insignificant(&mut self) -> Result<(), ReadError> {
         loop {
-            let b = self.peek_some_byte()?;
+            let b = self.peek_byte()?;
             if b > b' ' {
                 match b {
                     b'/' => {
@@ -125,7 +125,7 @@ pub trait TextReader : Reader {
             Some(res)
         }
         loop {
-            let Some(b) = self.peek_byte()? else {
+            let Some(b) = self.peek_byte_opt()? else {
                 break;
             };
             println!("b: {b:?}");
@@ -200,7 +200,7 @@ pub trait TextReader : Reader {
         let mut is_negative = false;
         let mut decimal_overflow = false;
 
-        let b = self.peek_some_byte()?;
+        let b = self.peek_byte()?;
         if b == b'+' {
             is_negative = false;
             self.get_byte()?;
@@ -220,7 +220,7 @@ pub trait TextReader : Reader {
         enum State { Mantissa, Decimals,  }
         let mut state = State::Mantissa;
         loop {
-            let Some(b) = self.peek_byte()? else {
+            let Some(b) = self.peek_byte_opt()? else {
                 break;
             };
             match b {
@@ -287,7 +287,7 @@ pub trait TextReader : Reader {
         self.get_byte()?; // eat '['
         loop {
             self.skip_white_or_insignificant()?;
-            let b = self.peek_some_byte()?;
+            let b = self.peek_byte()?;
             if b == b']' {
                 self.get_byte()?;
                 break;
@@ -303,7 +303,7 @@ pub trait TextReader : Reader {
         self.get_byte()?; // eat '{'
         loop {
             self.skip_white_or_insignificant()?;
-            let b = self.peek_some_byte()?;
+            let b = self.peek_byte()?;
             if b == b'}' {
                 self.get_byte()?;
                 break;
