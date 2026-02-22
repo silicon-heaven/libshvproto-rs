@@ -50,21 +50,21 @@ where R: Read
         }
     }
 
-    pub(crate) fn peek_byte(&mut self) -> u8 {
+    pub(crate) fn peek_byte(&mut self) -> Result<u8, ReadError> {
         if let Some(b) = self.peeked {
-            return b
+            return Ok(b)
         }
         let mut arr: [u8; 1] = [0];
         let r = self.read.read(&mut arr);
         match r {
             Ok(n) => {
                 if n == 0 {
-                    return 0
+                    return Err(self.make_error("Unexpected end of stream.", ReadErrorReason::UnexpectedEndOfStream))
                 }
                 self.peeked = Some(arr[0]);
-                arr[0]
+                Ok(arr[0])
             }
-            _ => 0
+            Err(e) => return Err(self.make_error(&e.to_string(), ReadErrorReason::InvalidCharacter))
         }
     }
     pub(crate) fn get_byte(&mut self) -> Result<u8, ReadError> {
@@ -113,7 +113,7 @@ pub enum ContainerType {
 }
 
 #[derive(Debug, Copy, Clone)]
-pub enum ReadToken {
+pub enum ReadSchema {
     ContainerBegin(ContainerType),
     ContainerEnd,
     Item,
@@ -122,6 +122,14 @@ pub enum ReadToken {
 pub enum MapKey {
     Int(i64),
     String(String),
+}
+impl MapKey {
+    pub fn eq_str(&self, other: &str) -> bool {
+        match self {
+            MapKey::Int(key) => format!("{key}") == other,
+            MapKey::String(key) => key == other,
+        }
+    }
 }
 
 pub type ReadResult = Result<RpcValue, ReadError>;
@@ -135,10 +143,65 @@ pub trait Reader {
     }
     fn try_read_meta(&mut self) -> Result<Option<MetaMap>, ReadError>;
     fn read_value(&mut self) -> Result<Value, ReadError>;
-    fn find_path(&mut self, path: &[&str]) -> Result<(), ReadError>;
 
-    fn read_token(&mut self, skip_meta: bool) -> Result<ReadToken, ReadError>;
-    fn read_next_key(&mut self) -> Result<Option<MapKey>, ReadError>;
-    fn read_next(&mut self) -> Result<Option<RpcValue>, ReadError>;
-    fn skip_next(&mut self) -> Result<Option<()>, ReadError>;
+    fn read_schema(&mut self) -> Result<ReadSchema, ReadError>;
+    fn is_container_end(&mut self) -> Result<bool, ReadError>;
+    fn read_key(&mut self) -> Result<MapKey, ReadError>;
+    fn skip(&mut self) -> Result<(), ReadError>;
+
+    fn find_path(&mut self, path: &[&str]) -> Result<(), ReadError> {
+        if path.is_empty() {
+            return Ok(());
+        }
+
+        fn make_error(msg: String) -> ReadError {
+            ReadError { msg, pos: 0, line: 0, col: 0, reason: ReadErrorReason::InvalidCharacter }
+        }
+
+        let mut dir_ix = 0;
+        'next_dir: while dir_ix < path.len() {
+            let dir = path[dir_ix];
+            self.try_read_meta()?;
+            let schema = self.read_schema()?;
+            match schema {
+                ReadSchema::ContainerBegin(ContainerType::List) => {
+                    let mut n = 0;
+                    loop {
+                        if self.is_container_end()? {
+                            return Err(make_error(format!("Invalid List index '{dir}'")));
+                        }
+
+                        if format!("{n}") == dir {
+                            dir_ix += 1;
+                            if dir_ix == path.len() {
+                                return Ok(());
+                            }
+                            continue 'next_dir;
+                        }
+
+                        self.skip()?;
+                        n += 1;
+                    }
+                }
+                ReadSchema::ContainerBegin(ContainerType::Map | ContainerType::IMap) => {
+                    loop {
+                        if self.is_container_end()? {
+                            // No more elements - index not found
+                            return Err(make_error(format!("Invalid List index '{dir}'")));
+                        }
+                        if self.read_key()?.eq_str(dir) {
+                            dir_ix += 1;
+                            if dir_ix == path.len() {
+                                return Ok(());
+                            }
+                            continue 'next_dir;
+                        }
+                    }
+                }
+                _ => return Err(make_error("Not container".into()))
+            }
+        }
+        Err(make_error("Path not found".into()))
+    }
+
 }

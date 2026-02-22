@@ -30,17 +30,14 @@ pub struct ReadInt {
     pub is_overflow: bool,
 }
 pub trait TextReader : Reader {
-    fn peek_byte(&mut self) -> u8;
+    fn peek_byte(&mut self) -> Result<u8, ReadError>;
     fn get_byte(&mut self) -> Result<u8, ReadError>;
     fn make_error(&self, msg: &str, reason: ReadErrorReason) -> ReadError;
     fn read_string(&mut self) -> Result<Value, ReadError>;
 
     fn skip_white_or_insignificant(&mut self) -> Result<(), ReadError> {
         loop {
-            let b = self.peek_byte();
-            if b == 0 {
-                break;
-            }
+            let b = self.peek_byte()?;
             if b > b' ' {
                 match b {
                     b'/' => {
@@ -124,7 +121,7 @@ pub trait TextReader : Reader {
             Some(res)
         }
         loop {
-            let b = self.peek_byte();
+            let b = self.peek_byte()?;
             let digit = match b {
                 b'+' | b'-' => {
                     if n != 0 {
@@ -196,7 +193,7 @@ pub trait TextReader : Reader {
         let mut is_negative = false;
         let mut decimal_overflow = false;
 
-        let b = self.peek_byte();
+        let b = self.peek_byte()?;
         if b == b'+' {
             is_negative = false;
             self.get_byte()?;
@@ -216,7 +213,7 @@ pub trait TextReader : Reader {
         enum State { Mantissa, Decimals,  }
         let mut state = State::Mantissa;
         loop {
-            let b = self.peek_byte();
+            let b = self.peek_byte()?;
             match b {
                 b'u' => {
                     is_uint = true;
@@ -281,7 +278,7 @@ pub trait TextReader : Reader {
         self.get_byte()?; // eat '['
         loop {
             self.skip_white_or_insignificant()?;
-            let b = self.peek_byte();
+            let b = self.peek_byte()?;
             if b == b']' {
                 self.get_byte()?;
                 break;
@@ -297,7 +294,7 @@ pub trait TextReader : Reader {
         self.get_byte()?; // eat '{'
         loop {
             self.skip_white_or_insignificant()?;
-            let b = self.peek_byte();
+            let b = self.peek_byte()?;
             if b == b'}' {
                 self.get_byte()?;
                 break;

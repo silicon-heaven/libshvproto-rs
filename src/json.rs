@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 use crate::datetime::{IncludeMilliseconds, ToISOStringOptions};
 use crate::writer::{WriteResult, Writer, ByteWriter};
 use crate::metamap::MetaKey;
-use crate::reader::{ByteReader, ContainerType, MapKey, ReadError, ReadErrorReason, ReadToken, Reader};
+use crate::reader::{ByteReader, ContainerType, MapKey, ReadError, ReadErrorReason, ReadSchema, Reader};
 use crate::rpcvalue::{Map};
 use crate::textrdwr::{TextReader, TextWriter};
 
@@ -305,7 +305,7 @@ impl<'a, R> JsonReader<'a, R>
 impl<R> TextReader for JsonReader<'_, R>
 where R: Read
 {
-    fn peek_byte(&mut self) -> u8 {
+    fn peek_byte(&mut self) -> Result<u8, ReadError> {
         self.byte_reader.peek_byte()
     }
 
@@ -415,7 +415,7 @@ impl<R> Reader for JsonReader<'_, R>
     }
     fn read_value(&mut self) -> Result<Value, ReadError> {
         self.skip_white_or_insignificant()?;
-        let b = self.peek_byte();
+        let b = self.peek_byte()?;
         let v = match &b {
             b'0' ..= b'9' | b'+' | b'-' => self.read_number(),
             b'"' => self.read_string(),
@@ -429,24 +429,20 @@ impl<R> Reader for JsonReader<'_, R>
         Ok(v)
     }
 
-    fn read_token(&mut self, _skip_meta: bool) -> Result<ReadToken, ReadError> {
+    fn read_schema(&mut self) -> Result<ReadSchema, ReadError> {
         Err(self.make_error("open_container not supported for JSON", ReadErrorReason::InvalidCharacter))
     }
 
-    fn read_next_key(&mut self) -> Result<Option<MapKey>, ReadError> {
-        Err(self.make_error("read_next_key not supported for JSON", ReadErrorReason::InvalidCharacter))
+    fn is_container_end(&mut self) -> Result<bool, ReadError> {
+        Err(self.make_error("is_container_end not supported for JSON", ReadErrorReason::InvalidCharacter))
     }
 
-    fn read_next(&mut self) -> Result<Option<RpcValue>, ReadError> {
-        Err(self.make_error("read_next not supported for JSON", ReadErrorReason::InvalidCharacter))
+    fn read_key(&mut self) -> Result<MapKey, ReadError> {
+        Err(self.make_error("read_key not supported for JSON", ReadErrorReason::InvalidCharacter))
     }
 
-    fn skip_next(&mut self) -> Result<Option<()>, ReadError> {
-        Err(self.make_error("skip_next not supported for JSON", ReadErrorReason::InvalidCharacter))
-    }
-
-    fn find_path(&mut self, _path: &[&str]) -> Result<(), ReadError> {
-        Err(self.make_error("find_path not supported for JSON", ReadErrorReason::InvalidCharacter))
+    fn skip(&mut self) -> Result<(), ReadError> {
+        Err(self.make_error("skip not supported for JSON", ReadErrorReason::InvalidCharacter))
     }
 }
 

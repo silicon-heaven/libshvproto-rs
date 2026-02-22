@@ -1,6 +1,6 @@
 #![allow(clippy::cast_possible_truncation, reason = "Lots of casting here")]
 #![allow(clippy::indexing_slicing, reason = "Lots of indexing here")]
-use crate::reader::{ByteReader, ContainerType, MapKey, ReadError, ReadErrorReason, ReadToken, Reader};
+use crate::reader::{ByteReader, ContainerType, MapKey, ReadError, ReadErrorReason, ReadSchema, Reader};
 use crate::rpcvalue::{IMap, Map};
 use crate::writer::{ByteWriter, Writer};
 use crate::{metamap::MetaKey, DateTime, Decimal, MetaMap, RpcValue, Value, WriteResult};
@@ -354,7 +354,7 @@ where
     pub fn position(&self) -> usize {
         self.byte_reader.pos
     }
-    fn peek_byte(&mut self) -> u8 {
+    fn peek_byte(&mut self) -> Result<u8, ReadError> {
         self.byte_reader.peek_byte()
     }
     fn get_byte(&mut self) -> Result<u8, ReadError> {
@@ -471,7 +471,7 @@ where
     fn read_list_data(&mut self) -> Result<Value, ReadError> {
         let mut lst = Vec::new();
         loop {
-            let b = self.peek_byte();
+            let b = self.peek_byte()?;
             if b == PackingSchema::TERM as u8 {
                 self.get_byte()?;
                 break;
@@ -486,7 +486,7 @@ where
     fn read_map_data(&mut self) -> Result<Value, ReadError> {
         let mut map: Map = Map::new();
         loop {
-            let b = self.peek_byte();
+            let b = self.peek_byte()?;
             if b == PackingSchema::TERM as u8 {
                 self.get_byte()?;
                 break;
@@ -510,7 +510,7 @@ where
     fn read_imap_data(&mut self) -> Result<Value, ReadError> {
         let mut map: BTreeMap<i32, RpcValue> = BTreeMap::new();
         loop {
-            let b = self.peek_byte();
+            let b = self.peek_byte()?;
             if b == PackingSchema::TERM as u8 {
                 self.get_byte()?;
                 break;
@@ -565,8 +565,6 @@ where
         Ok(Value::from(d))
     }
 
-
-
 }
 
 impl<R> Reader for ChainPackReader<'_, R>
@@ -574,14 +572,14 @@ where
     R: Read,
 {
     fn try_read_meta(&mut self) -> Result<Option<MetaMap>, ReadError> {
-        let b = self.peek_byte();
+        let b = self.peek_byte()?;
         if b != PackingSchema::MetaMap as u8 {
             return Ok(None);
         }
         self.get_byte()?;
         let mut map = MetaMap::new();
         loop {
-            let b = self.peek_byte();
+            let b = self.peek_byte()?;
             if b == PackingSchema::TERM as u8 {
                 self.get_byte()?;
                 break;
@@ -662,131 +660,46 @@ where
         Ok(v)
     }
 
-    fn read_token(&mut self, skip_meta: bool) -> Result<ReadToken, ReadError> {
-        let b = self.peek_byte();
-        if b == PackingSchema::List as u8 {
-            self.get_byte()?;
-            Ok(ReadToken::ContainerBegin(ContainerType::List))
+    fn is_container_end(&mut self) -> Result<bool, ReadError> {
+        let b = self.peek_byte()?;
+        Ok(b == PackingSchema::TERM as u8)
+    }
+
+    fn read_schema(&mut self) -> Result<ReadSchema, ReadError> {
+        let b = self.peek_byte()?;
+        let schema = if b == PackingSchema::List as u8 {
+            ReadSchema::ContainerBegin(ContainerType::List)
         } else if b == PackingSchema::Map as u8 {
-            self.get_byte()?;
-            Ok(ReadToken::ContainerBegin(ContainerType::Map))
+            ReadSchema::ContainerBegin(ContainerType::Map)
         } else if b == PackingSchema::IMap as u8 {
-            self.get_byte()?;
-            Ok(ReadToken::ContainerBegin(ContainerType::IMap))
-        } else if b == PackingSchema::MetaMap as u8 && !skip_meta {
-            self.get_byte()?;
-            Ok(ReadToken::ContainerBegin(ContainerType::MetaMap))
+            ReadSchema::ContainerBegin(ContainerType::IMap)
+        } else if b == PackingSchema::MetaMap as u8 {
+            ReadSchema::ContainerBegin(ContainerType::MetaMap)
         } else if b == PackingSchema::TERM as u8 {
-            self.get_byte()?;
-            Ok(ReadToken::ContainerEnd)
+            ReadSchema::ContainerEnd
         } else {
-            Ok(ReadToken::Item)
-        }
+            ReadSchema::Item
+        };
+        self.get_byte()?;
+        Ok(schema)
     }
 
-    fn read_next(&mut self) -> Result<Option<RpcValue>, ReadError> {
-        let b = self.peek_byte();
-        if b == PackingSchema::TERM as u8 {
-            self.get_byte()?;
-            Ok(None)
-        } else {
-            Ok(Some(self.read()?))
-        }
-    }
-
-    fn read_next_key(&mut self) -> Result<Option<MapKey>, ReadError> {
-        let b = self.peek_byte();
-        if b == PackingSchema::TERM as u8 {
-            self.get_byte()?;
-            return Ok(None)
-        }
+    fn read_key(&mut self) -> Result<MapKey, ReadError> {
         let k = self.read()?;
         if k.is_string() {
-            Ok(Some(MapKey::String(k.as_str().to_string())))
+            Ok(MapKey::String(k.as_str().to_string()))
         } else if k.is_int() {
-            Ok(Some(MapKey::Int(k.as_int())))
+            Ok(MapKey::Int(k.as_int()))
         } else {
             Err(self.make_error( &format!("Invalid Map key '{k}'"), ReadErrorReason::InvalidCharacter, ))
         }
     }
 
-    fn skip_next(&mut self) -> Result<Option<()>, ReadError> {
+    fn skip(&mut self) -> Result<(), ReadError> {
         self.dry_run = true;
-        let b = self.peek_byte();
-        let res = if b == PackingSchema::TERM as u8 {
-            self.get_byte().map(|_| None)
-        } else {
-            self.read().map(|_| Some(()))
-        };
+        let _ = self.read();
         self.dry_run = false;
-        res
-    }
-
-    fn find_path(&mut self, path: &[&str]) -> Result<(), ReadError> {
-        if path.is_empty() {
-            return Ok(());
-        }
-
-        let mut dir_ix = 0;
-        while dir_ix < path.len() {
-            let dir = path[dir_ix];
-            match self.read_token(true)? {
-                ReadToken::ContainerBegin(ContainerType::List) => {
-                    let mut n = 0;
-                    loop {
-                        // Check if we've reached the end of the list
-                        let peek = self.peek_byte();
-                        if peek == PackingSchema::TERM as u8 {
-                            // No more elements - index not found
-                            return Err(self.make_error(&format!("Invalid List index '{dir}'"), ReadErrorReason::InvalidCharacter, ));
-                        }
-
-                        // Check if current index matches
-                        if format!("{n}") == dir {
-                            dir_ix += 1;
-                            if dir_ix == path.len() {
-                                return Ok(());
-                            }
-                            // Found the element, continue to next path component
-                            break;
-                        }
-
-                        // Skip current element and continue
-                        self.skip_next()?;
-                        n += 1;
-                    }
-                }
-                ReadToken::ContainerBegin(ContainerType::Map | ContainerType::IMap) => {
-                    let mut found = false;
-                    loop {
-                        match self.read_next_key()? {
-                            Some(MapKey::String(key)) => if key == dir {
-                                dir_ix += 1;
-                                if dir_ix == path.len() {
-                                    return Ok(());
-                                }
-                                found = true;
-                                break;
-                            }
-                            Some(MapKey::Int(key)) => if format!("{key}") == dir {
-                                dir_ix += 1;
-                                if dir_ix == path.len() {
-                                    return Ok(());
-                                }
-                                found = true;
-                                break;
-                            }
-                            None => break,
-                        }
-                    }
-                    if !found {
-                        return Err(self.make_error(&format!("Invalid Map index '{dir}'"), ReadErrorReason::InvalidCharacter, ));
-                    }
-                }
-                _ => return Err(self.make_error("Not container", ReadErrorReason::InvalidCharacter, ))
-            }
-        }
-        Err(self.make_error( "Path not found", ReadErrorReason::InvalidCharacter, ))
+        Ok(())
     }
 }
 
@@ -1147,8 +1060,7 @@ fn test_find_path_deeply_nested() {
             }
         }
     };
-    let data = rpcvalue_to_hex_chainpack(&map.into());
-    let buff = hex::decode(&data).unwrap();
+    let buff = rpcvalue_to_chainpack(&map.into());
 
     // Find a.b.c (should be 42)
     let mut data_slice = &buff[..];
