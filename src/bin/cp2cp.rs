@@ -1,7 +1,6 @@
 #![allow(clippy::print_stderr, clippy::print_stdout, clippy::exit, reason = "Fine for a binary")]
 use clap::Parser;
 use log::LevelFilter;
-#[cfg(not(feature = "cq"))]
 use shvproto::reader::ContainerType;
 use shvproto::reader::ReadErrorReason;
 use shvproto::Reader;
@@ -153,73 +152,11 @@ fn main() {
         process_chainpack_rpc_block_and_exit(reader)
     }
 
+    let use_incremental_parser = opts.no_oneliners;
     #[cfg(feature = "cq")]
-    {
-        let read_result = if opts.cpon_input {
-            let mut rd = CponReader::new(&mut reader);
-            rd.read()
-        } else {
-            let mut rd = ChainPackReader::new(&mut reader);
-            rd.read()
-        };
+    let use_incremental_parser = use_incremental_parser && opts.cq_filter.is_none();
 
-        let input_value = match read_result {
-            Err(e) => {
-                eprintln!("Parse input error: {e:?}");
-                process::exit(CODE_READ_ERROR);
-            }
-            Ok(rv) => rv,
-        };
-
-        let output_values = if let Some(filter) = opts.cq_filter {
-            let filter = match jaq_all::compile_with(&filter, jaq_std::defs(), jaq_std::funs(), &[]) {
-                Ok(filter) => filter,
-                Err(error) => {
-                    eprintln!("Failed to parse cq filter: {error:?}");
-                    process::exit(CODE_READ_ERROR);
-                },
-            };
-
-            let ctx = Ctx::<JustLut<shvproto::RpcValue>>::new(&filter.lut, Vars::new([]));
-            let outputs = filter.id.run((ctx, input_value));
-            outputs.filter_map(|output|
-                match output {
-                    Ok(rv) => Some(rv),
-                    Err(err) => {
-                        eprintln!("Unexpected error while processing the cq filter: {err:?}");
-                        process::exit(CODE_UNEXPECTED_ERROR)
-                    },
-                }).collect::<Vec<_>>()
-        } else {
-            vec![input_value]
-        };
-
-        let mut writer = BufWriter::new(stdout());
-        for output_value in output_values {
-            let res = if opts.chainpack_output {
-                let mut wr = ChainPackWriter::new(&mut writer);
-                wr.write(&output_value)
-            } else {
-                let mut wr = CponWriter::new(&mut writer);
-                wr.set_no_oneliners(opts.no_oneliners);
-                if let Some(s) = &opts.indent {
-                    if s == "\\t" {
-                        wr.set_indent(b"\t");
-                    } else {
-                        wr.set_indent(s.as_bytes());
-                    }
-                }
-                wr.write(&output_value)
-            };
-
-            if let Err(e) = res {
-                eprintln!("Write output error: {e:?}");
-                process::exit(CODE_WRITE_ERROR);
-            }
-        }
-    }
-    #[cfg(not(feature = "cq"))]
-    {
+    if use_incremental_parser {
         let mut rd: Box<dyn Reader + '_> = if opts.cpon_input {
             Box::new(CponReader::new(&mut reader))
         } else {
@@ -240,11 +177,78 @@ fn main() {
             eprintln!("Copy value error: {e:?}");
             process::exit(CODE_WRITE_ERROR);
         }
+    } else {
+        {
+            let read_result = if opts.cpon_input {
+                let mut rd = CponReader::new(&mut reader);
+                rd.read()
+            } else {
+                let mut rd = ChainPackReader::new(&mut reader);
+                rd.read()
+            };
 
+            let input_value = match read_result {
+                Err(e) => {
+                    eprintln!("Parse input error: {e:?}");
+                    process::exit(CODE_READ_ERROR);
+                }
+                Ok(rv) => rv,
+            };
+
+            #[cfg(feature = "cq")]
+            let output_values = if let Some(filter) = opts.cq_filter {
+                let filter = match jaq_all::compile_with(&filter, jaq_std::defs(), jaq_std::funs(), &[]) {
+                    Ok(filter) => filter,
+                    Err(error) => {
+                        eprintln!("Failed to parse cq filter: {error:?}");
+                        process::exit(CODE_READ_ERROR);
+                    },
+                };
+
+                let ctx = Ctx::<JustLut<shvproto::RpcValue>>::new(&filter.lut, Vars::new([]));
+                let outputs = filter.id.run((ctx, input_value));
+                outputs.filter_map(|output|
+                    match output {
+                        Ok(rv) => Some(rv),
+                        Err(err) => {
+                            eprintln!("Unexpected error while processing the cq filter: {err:?}");
+                            process::exit(CODE_UNEXPECTED_ERROR)
+                        },
+                    }).collect::<Vec<_>>()
+            } else {
+                vec![input_value]
+            };
+
+            #[cfg(not(feature = "cq"))]
+            let output_values = vec![input_value];
+
+            let mut writer = BufWriter::new(stdout());
+            for output_value in output_values {
+                let res = if opts.chainpack_output {
+                    let mut wr = ChainPackWriter::new(&mut writer);
+                    wr.write(&output_value)
+                } else {
+                    let mut wr = CponWriter::new(&mut writer);
+                    wr.set_no_oneliners(opts.no_oneliners);
+                    if let Some(s) = &opts.indent {
+                        if s == "\\t" {
+                            wr.set_indent(b"\t");
+                        } else {
+                            wr.set_indent(s.as_bytes());
+                        }
+                    }
+                    wr.write(&output_value)
+                };
+
+                if let Err(e) = res {
+                    eprintln!("Write output error: {e:?}");
+                    process::exit(CODE_WRITE_ERROR);
+                }
+            }
+        }
     }
 }
 
-#[cfg(not(feature = "cq"))]
 fn copy_current_value(rd: &mut Box<dyn Reader + '_>, wr: &mut Box<dyn Writer + '_>) -> Result<(), String> {
     use shvproto::reader::ReadSchema;
 
