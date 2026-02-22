@@ -669,19 +669,23 @@ where
     fn read_schema(&mut self) -> Result<ReadSchema, ReadError> {
         let b = self.peek_byte()?;
         let schema = if b == PackingSchema::List as u8 {
+            self.get_byte()?;
             ReadSchema::ContainerBegin(ContainerType::List)
         } else if b == PackingSchema::Map as u8 {
+            self.get_byte()?;
             ReadSchema::ContainerBegin(ContainerType::Map)
         } else if b == PackingSchema::IMap as u8 {
+            self.get_byte()?;
             ReadSchema::ContainerBegin(ContainerType::IMap)
         } else if b == PackingSchema::MetaMap as u8 {
+            self.get_byte()?;
             ReadSchema::ContainerBegin(ContainerType::MetaMap)
         } else if b == PackingSchema::TERM as u8 {
+            self.get_byte()?;
             ReadSchema::ContainerEnd
         } else {
-            ReadSchema::Item
+            ReadSchema::Scalar
         };
-        self.get_byte()?;
         Ok(schema)
     }
 
