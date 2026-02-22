@@ -308,6 +308,7 @@ where
         Ok(self.byte_writer.count() - cnt)
     }
 
+
     fn write_key(&mut self, key: &MapKey) -> WriteResult {
         match key {
             MapKey::Int(i) => self.write_int(*i),
@@ -319,7 +320,7 @@ where
         self.write_byte(PackingSchema::TERM as u8)
     }
 
-    fn write_item_delimiter(&mut self) -> WriteResult {
+    fn write_delimiter(&mut self) -> WriteResult {
         Ok(0)
     }
 
@@ -331,6 +332,11 @@ where
             ContainerType::MetaMap => self.write_byte(PackingSchema::MetaMap as u8),
         }
     }
+
+    fn write_indent(&mut self) -> WriteResult {
+        Ok(0)
+    }
+
 }
 
 pub struct ChainPackReader<'a, R>

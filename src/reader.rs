@@ -117,9 +117,10 @@ pub enum ContainerType {
 pub enum ReadSchema {
     ContainerBegin(ContainerType),
     ContainerEnd,
-    Item,
+    Scalar,
 }
 
+#[derive(Debug)]
 pub enum MapKey {
     Int(i64),
     String(String),

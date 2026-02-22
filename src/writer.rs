@@ -36,9 +36,10 @@ pub trait Writer {
     fn write(&mut self, rv: &RpcValue) -> WriteResult;
     fn write_meta(&mut self, m: &MetaMap) -> WriteResult;
     fn write_value(&mut self, v: &Value) -> WriteResult;
-    // fn write_byte(&mut self, b: u8) -> WriteResult;
+
     fn write_key(&mut self, key: &MapKey) -> WriteResult;
-    fn write_item_delimiter(&mut self) -> WriteResult;
+    fn write_delimiter(&mut self) -> WriteResult;
+    fn write_indent(&mut self) -> WriteResult;
     fn write_container_begin(&mut self, container_type: ContainerType) -> WriteResult;
     fn write_container_end(&mut self, container_type: ContainerType) -> WriteResult;
 }

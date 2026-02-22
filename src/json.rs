@@ -224,21 +224,24 @@ where W: Write
 
     fn write_key(&mut self, _key: &MapKey) -> WriteResult {
         todo!("write_key not supported for JSON")
-        //Err(self.by.make_error("write_key not supported for JSON", ReadErrorReason::InvalidCharacter))
     }
 
     fn write_container_end(&mut self, _container_type: ContainerType) -> WriteResult {
         todo!("write_container_end not supported for JSON")
-        //Err(make_error("write_container_end not supported for JSON", ReadErrorReason::InvalidCharacter))
     }
 
-    fn write_item_delimiter(&mut self) -> WriteResult {
-        self.write_byte(b',')
+    fn write_delimiter(&mut self) -> WriteResult {
+        todo!("write_delimiter not supported for JSON")
     }
 
     fn write_container_begin(&mut self, _container_type: ContainerType) -> WriteResult {
-        todo!()
+        todo!("write_container_begin not supported for JSON")
     }
+
+    fn write_indent(&mut self) -> WriteResult {
+        todo!("write_indent not supported for JSON")
+    }
+
 }
 
 pub struct JsonReader<'a, R>

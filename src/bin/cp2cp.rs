@@ -230,10 +230,14 @@ fn main() {
         let mut wr: Box<dyn Writer + '_> = if opts.chainpack_output {
             Box::new(ChainPackWriter::new(&mut writer))
         } else {
-            Box::new(CponWriter::new(&mut writer))
+            let mut wr = Box::new(CponWriter::new(&mut writer));
+            if let Some(s) = opts.indent {
+                wr.set_indent(s.as_bytes());
+            }
+            wr
         };
-        if let Err(e) = copy_current_value(&mut rd, &mut wr, false, 0) {
-            eprintln!("Write output error: {e:?}");
+        if let Err(e) = copy_current_value(&mut rd, &mut wr) {
+            eprintln!("Copy value error: {e:?}");
             process::exit(CODE_WRITE_ERROR);
         }
 
@@ -241,12 +245,11 @@ fn main() {
 }
 
 #[cfg(not(feature = "cq"))]
-fn copy_current_value(rd: &mut Box<dyn Reader + '_>, wr: &mut Box<dyn Writer + '_>, write_deliniter_before: bool, indent: usize) -> Result<(), String> {
+fn copy_current_value(rd: &mut Box<dyn Reader + '_>, wr: &mut Box<dyn Writer + '_>) -> Result<(), String> {
     use shvproto::reader::ReadSchema;
 
-    let new_indent = indent + 1;
     let read_token = rd.read_schema().map_err(|e| e.to_string())?;
-    // println!("{}{indent}: {:?}", "  ".repeat(indent), read_token);
+    // println!("token: {read_token:?}");
     match read_token {
         ReadSchema::ContainerBegin(ContainerType::List) => {
             wr.write_container_begin(ContainerType::List).map_err(|e| e.to_string())?;
@@ -258,9 +261,10 @@ fn copy_current_value(rd: &mut Box<dyn Reader + '_>, wr: &mut Box<dyn Writer + '
                     break;
                 } else {
                     if !first_item {
-                        wr.write_item_delimiter().map_err(|e| e.to_string())?;
+                        wr.write_delimiter().map_err(|e| e.to_string())?;
                     }
-                    copy_current_value(rd, wr, !first_item, new_indent)?
+                    wr.write_indent().map_err(|e| e.to_string())?;
+                    copy_current_value(rd, wr)?
                 }
                 first_item = false;
             }
@@ -275,19 +279,20 @@ fn copy_current_value(rd: &mut Box<dyn Reader + '_>, wr: &mut Box<dyn Writer + '
                     break;
                 } else {
                     if !first_item {
-                        wr.write_item_delimiter().map_err(|e| e.to_string())?;
+                        wr.write_delimiter().map_err(|e| e.to_string())?;
                     }
                     let key = rd.read_key().map_err(|e| e.to_string())?;
+                    wr.write_indent().map_err(|e| e.to_string())?;
                     wr.write_key(&key).map_err(|e| e.to_string())?;
-                    copy_current_value(rd, wr, false, new_indent)?;
+                    copy_current_value(rd, wr)?;
                 }
                 first_item = false;
             }
             if let ContainerType::MetaMap = container_type {
-                return copy_current_value(rd, wr, write_deliniter_before, indent)
+                return copy_current_value(rd, wr)
             }
         }
-        ReadSchema::Item => {
+        ReadSchema::Scalar => {
             let rv = rd.read().map_err(|e| e.to_string())?;
             wr.write(&rv).map_err(|e| e.to_string())?;
         }

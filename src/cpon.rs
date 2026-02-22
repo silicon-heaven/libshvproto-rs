@@ -259,6 +259,7 @@ impl<'a, W> CponWriter<'a, W>
         Ok(self.byte_writer.count() - cnt)
     }
 }
+
 impl<W> TextWriter for CponWriter<'_, W>
 where W: Write
 {
@@ -338,33 +339,64 @@ impl<W> Writer for CponWriter<'_, W>
     }
 
     fn write_key(&mut self, key: &MapKey) -> WriteResult {
-        match key {
+        let mut n = match key {
             MapKey::Int(i) => self.write_int(*i)?,
             MapKey::String(s) => self.write_string(s)?,
         };
-        self.write_byte(b':')
+        n += self.write_byte(b':')?;
+        Ok(n)
     }
 
-    fn write_item_delimiter(&mut self) -> WriteResult {
-        self.write_byte(b',')
-    }
 
-    fn write_container_end(&mut self, container_type: ContainerType) -> WriteResult {
-        match container_type {
-            ContainerType::List => self.write_byte(b']'),
-            ContainerType::Map | ContainerType::IMap => self.write_byte(b'}'),
-            ContainerType::MetaMap => self.write_byte(b'>'),
+    fn write_delimiter(&mut self) -> WriteResult {
+        let mut n = self.write_byte(b',')?;
+        if !self.indent.is_empty() {
+            n += self.write_byte(b'\n')?;
         }
+        Ok(n)
     }
 
     fn write_container_begin(&mut self, container_type: ContainerType) -> WriteResult {
-        match container_type {
+        self.nest_count += 1;
+        let mut n = match container_type {
             ContainerType::List => self.write_byte(b'['),
             ContainerType::Map => self.write_byte(b'{'),
             ContainerType::IMap => self.write_bytes(b"i{"),
             ContainerType::MetaMap => self.write_byte(b'<'),
+        }?;
+        if !self.indent.is_empty() {
+            n += self.write_byte(b'\n')?;
         }
+        Ok(n)
     }
+
+    fn write_container_end(&mut self, container_type: ContainerType) -> WriteResult {
+        // self.indent_element(false, false)?;
+        self.nest_count -= 1;
+        let mut n = 0;
+        if !self.indent.is_empty() {
+            n += self.write_byte(b'\n')?;
+        }
+        n += self.write_indent()?;
+        n += match container_type {
+            ContainerType::List => self.write_byte(b']'),
+            ContainerType::Map | ContainerType::IMap => self.write_byte(b'}'),
+            ContainerType::MetaMap => self.write_byte(b'>'),
+        }?;
+        Ok(n)
+    }
+
+    fn write_indent(&mut self) -> WriteResult {
+        let mut n = 0;
+        if !self.indent.is_empty() {
+            for _ in 0 .. self.nest_count {
+                n += self.byte_writer.write_bytes(&self.indent)?;
+            }
+        }
+        Ok(n)
+    }
+
+
 }
 
 pub struct CponReader<'a, R>
@@ -622,7 +654,7 @@ impl<R> Reader for CponReader<'_, R>
             self.get_byte()?;
             Ok(ReadSchema::ContainerEnd)
         } else {
-            Ok(ReadSchema::Item)
+            Ok(ReadSchema::Scalar)
         }
     }
 
