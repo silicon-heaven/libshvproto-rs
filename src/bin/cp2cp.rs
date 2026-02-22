@@ -6,6 +6,8 @@ use shvproto::reader::ContainerType;
 use shvproto::reader::ReadErrorReason;
 use shvproto::Reader;
 use shvproto::Writer;
+#[cfg(not(feature = "cq"))]
+use shvproto::reader::ReadToken;
 use shvproto::{ChainPackReader, ChainPackWriter, CponReader, CponWriter};
 use simple_logger::SimpleLogger;
 use std::fmt::Display;
@@ -230,7 +232,7 @@ fn main() {
         } else {
             Box::new(CponWriter::new(&mut writer))
         };
-        if let Err(e) = copy_current_value(&mut rd, &mut wr, false, 0) {
+        if let Err(e) = copy_current_token(&mut rd, &mut wr, false, 0) {
             eprintln!("Write output error: {e:?}");
             process::exit(CODE_WRITE_ERROR);
         }
@@ -239,7 +241,7 @@ fn main() {
 }
 
 #[cfg(not(feature = "cq"))]
-fn copy_current_value(rd: &mut Box<dyn Reader + '_>, wr: &mut Box<dyn Writer + '_>, write_deliniter_before: bool, indent: usize) -> Result<bool, String> {
+fn copy_current_token(rd: &mut Box<dyn Reader + '_>, wr: &mut Box<dyn Writer + '_>, write_deliniter_before: bool, indent: usize) -> Result<ReadToken, String> {
     use shvproto::reader::ReadToken;
     let new_indent = indent + 1;
     let read_token = rd.read_token(false).map_err(|e| e.to_string())?;
@@ -254,14 +256,13 @@ fn copy_current_value(rd: &mut Box<dyn Reader + '_>, wr: &mut Box<dyn Writer + '
             wr.write_container_begin(ContainerType::List).map_err(|e| e.to_string())?;
             let mut first_item = true;
             loop {
-                if !copy_current_value(rd, wr, !first_item, new_indent)? {
+                if let ReadToken::ContainerEnd = copy_current_token(rd, wr, !first_item, new_indent)? {
                     // println!("{}{indent}: list end", "  ".repeat(indent));
                     wr.write_container_end(ContainerType::List).map_err(|e| e.to_string())?;
                     break;
                 }
                 first_item = false;
             }
-            Ok(true)
         }
         ReadToken::ContainerBegin(container_type) => {
             wr.write_container_begin(container_type).map_err(|e| e.to_string())?;
@@ -272,23 +273,25 @@ fn copy_current_value(rd: &mut Box<dyn Reader + '_>, wr: &mut Box<dyn Writer + '
                         wr.write_item_delimiter().map_err(|e| e.to_string())?;
                     }
                     wr.write_key(&key).map_err(|e| e.to_string())?;
-                    copy_current_value(rd, wr, false, new_indent)?;
+                    copy_current_token(rd, wr, false, new_indent)?;
                 } else {
-                    copy_current_value(rd, wr, first_item, new_indent)?;
+                    let ReadToken::ContainerEnd = rd.read_token(false).map_err(|e| e.to_string())? else {
+                        return Err("Expected ContainerEnd".to_string());
+                    };
                     wr.write_container_end(container_type).map_err(|e| e.to_string())?;
                     break;
                 }
                 first_item = false;
             }
-            Ok(true)
+            if let ContainerType::MetaMap = container_type {
+                return copy_current_token(rd, wr, write_deliniter_before, indent)
+            }
         }
         ReadToken::Item => {
             let rv = rd.read().map_err(|e| e.to_string())?;
             wr.write(&rv).map_err(|e| e.to_string())?;
-            Ok(true)
         }
-        ReadToken::ContainerEnd => {
-            Ok(false)
-        }
+        ReadToken::ContainerEnd => { }
     }
+    Ok(read_token)
 }
