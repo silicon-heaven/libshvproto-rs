@@ -339,9 +339,10 @@ impl<W> Writer for CponWriter<'_, W>
 
     fn write_key(&mut self, key: &MapKey) -> WriteResult {
         match key {
-            MapKey::Int(i) => self.write_int(*i),
-            MapKey::String(s) => self.write_string(s),
-        }
+            MapKey::Int(i) => self.write_int(*i)?,
+            MapKey::String(s) => self.write_string(s)?,
+        };
+        self.write_byte(b':')
     }
 
     fn write_item_delimiter(&mut self) -> WriteResult {
