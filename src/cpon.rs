@@ -453,7 +453,7 @@ impl<'a, R> CponReader<'a, R>
         let mut map: BTreeMap<i32, RpcValue> = BTreeMap::new();
         loop {
             self.skip_white_or_insignificant()?;
-            let b = self.peek_byte()?;
+            let b = self.peek_some_byte()?;
             if b == b'}' {
                 self.get_byte()?;
                 break;
@@ -501,7 +501,7 @@ impl<'a, R> CponReader<'a, R>
 impl<R> TextReader for CponReader<'_, R>
 where R: Read
 {
-    fn peek_byte(&mut self) -> Result<u8, ReadError> {
+    fn peek_byte(&mut self) -> Result<Option<u8>, ReadError> {
         self.byte_reader.peek_byte()
     }
     fn get_byte(&mut self) -> Result<u8, ReadError> {
@@ -550,7 +550,7 @@ impl<R> Reader for CponReader<'_, R>
 {
     fn try_read_meta(&mut self) -> Result<Option<MetaMap>, ReadError> {
         self.skip_white_or_insignificant()?;
-        let b = self.peek_byte()?;
+        let b = self.peek_some_byte()?;
         if b != b'<' {
             return Ok(None)
         }
@@ -558,7 +558,7 @@ impl<R> Reader for CponReader<'_, R>
         let mut map = MetaMap::new();
         loop {
             self.skip_white_or_insignificant()?;
-            let b = self.peek_byte()?;
+            let b = self.peek_some_byte()?;
             if b == b'>' {
                 self.get_byte()?;
                 break;
@@ -577,7 +577,7 @@ impl<R> Reader for CponReader<'_, R>
     }
     fn read_value(&mut self) -> Result<Value, ReadError> {
         self.skip_white_or_insignificant()?;
-        let b = self.peek_byte()?;
+        let b = self.peek_some_byte()?;
         let v = match &b {
             b'0' ..= b'9' | b'+' | b'-' => self.read_number(),
             b'"' => self.read_string(),
@@ -597,7 +597,7 @@ impl<R> Reader for CponReader<'_, R>
 
     fn read_schema(&mut self) -> Result<ReadSchema, ReadError> {
         self.skip_white_or_insignificant()?;
-        let b = self.peek_byte()?;
+        let b = self.peek_some_byte()?;
         if b == b'[' {
             self.get_byte()?;
             Ok(ReadSchema::ContainerBegin(ContainerType::List))
@@ -607,7 +607,7 @@ impl<R> Reader for CponReader<'_, R>
         } else if b == b'i' {
             // Check if it's an IMap
             self.get_byte()?;
-            let next_b = self.peek_byte()?;
+            let next_b = self.peek_some_byte()?;
             if next_b == b'{' {
                 self.get_byte()?;
                 Ok(ReadSchema::ContainerBegin(ContainerType::IMap))
@@ -628,7 +628,7 @@ impl<R> Reader for CponReader<'_, R>
 
     fn is_container_end(&mut self) -> Result<bool, ReadError> {
         self.skip_white_or_insignificant()?;
-        let b = self.peek_byte()?;
+        let b = self.peek_some_byte()?;
         Ok(b == b']' || b == b'}' || b == b'>')
     }
 
@@ -641,7 +641,7 @@ impl<R> Reader for CponReader<'_, R>
 
     fn read_key(&mut self) -> Result<MapKey, ReadError> {
         self.skip_white_or_insignificant()?;
-        let b = self.peek_byte()?;
+        let b = self.peek_some_byte()?;
         // Auto-detect key type: string keys start with '"', integer keys with digit or sign
         if b == b'"' {
             // Regular map keys are strings

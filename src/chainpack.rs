@@ -354,8 +354,12 @@ where
     pub fn position(&self) -> usize {
         self.byte_reader.pos
     }
-    fn peek_byte(&mut self) -> Result<u8, ReadError> {
+    fn peek_byte(&mut self) -> Result<Option<u8>, ReadError> {
         self.byte_reader.peek_byte()
+    }
+    fn peek_some_byte(&mut self) -> Result<u8, ReadError> {
+        self.byte_reader.peek_byte()?
+            .ok_or_else(||self.make_error("Unexpected end of stream", ReadErrorReason::UnexpectedEndOfStream))
     }
     fn get_byte(&mut self) -> Result<u8, ReadError> {
         self.byte_reader.get_byte()
@@ -471,7 +475,7 @@ where
     fn read_list_data(&mut self) -> Result<Value, ReadError> {
         let mut lst = Vec::new();
         loop {
-            let b = self.peek_byte()?;
+            let b = self.peek_some_byte()?;
             if b == PackingSchema::TERM as u8 {
                 self.get_byte()?;
                 break;
@@ -486,7 +490,7 @@ where
     fn read_map_data(&mut self) -> Result<Value, ReadError> {
         let mut map: Map = Map::new();
         loop {
-            let b = self.peek_byte()?;
+            let b = self.peek_some_byte()?;
             if b == PackingSchema::TERM as u8 {
                 self.get_byte()?;
                 break;
@@ -510,7 +514,7 @@ where
     fn read_imap_data(&mut self) -> Result<Value, ReadError> {
         let mut map: BTreeMap<i32, RpcValue> = BTreeMap::new();
         loop {
-            let b = self.peek_byte()?;
+            let b = self.peek_some_byte()?;
             if b == PackingSchema::TERM as u8 {
                 self.get_byte()?;
                 break;
@@ -572,14 +576,14 @@ where
     R: Read,
 {
     fn try_read_meta(&mut self) -> Result<Option<MetaMap>, ReadError> {
-        let b = self.peek_byte()?;
+        let b = self.peek_some_byte()?;
         if b != PackingSchema::MetaMap as u8 {
             return Ok(None);
         }
         self.get_byte()?;
         let mut map = MetaMap::new();
         loop {
-            let b = self.peek_byte()?;
+            let b = self.peek_some_byte()?;
             if b == PackingSchema::TERM as u8 {
                 self.get_byte()?;
                 break;
@@ -661,12 +665,12 @@ where
     }
 
     fn is_container_end(&mut self) -> Result<bool, ReadError> {
-        let b = self.peek_byte()?;
+        let b = self.peek_some_byte()?;
         Ok(b == PackingSchema::TERM as u8)
     }
 
     fn read_schema(&mut self) -> Result<ReadSchema, ReadError> {
-        let b = self.peek_byte()?;
+        let b = self.peek_some_byte()?;
         let schema = if b == PackingSchema::List as u8 {
             ReadSchema::ContainerBegin(ContainerType::List)
         } else if b == PackingSchema::Map as u8 {

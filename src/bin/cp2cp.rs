@@ -49,6 +49,8 @@ const CODE_NOT_ENOUGH_DATA: i32 = 2;
 const CODE_WRITE_ERROR: i32 = 4;
 #[cfg(feature = "cq")]
 const CODE_UNEXPECTED_ERROR: i32 = 5;
+
+#[derive(Debug)]
 struct ChainPackRpcBlockResult {
     block_length: Option<usize>,
     frame_length: Option<u64>,

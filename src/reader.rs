@@ -50,21 +50,22 @@ where R: Read
         }
     }
 
-    pub(crate) fn peek_byte(&mut self) -> Result<u8, ReadError> {
+    pub(crate) fn peek_byte(&mut self) -> Result<Option<u8>, ReadError> {
         if let Some(b) = self.peeked {
-            return Ok(b)
+            return Ok(Some(b));
         }
         let mut arr: [u8; 1] = [0];
         let r = self.read.read(&mut arr);
         match r {
             Ok(n) => {
                 if n == 0 {
-                    return Err(self.make_error("Unexpected end of stream.", ReadErrorReason::UnexpectedEndOfStream))
+                    Ok(None)
+                } else {
+                    self.peeked = Some(arr[0]);
+                    Ok(Some(arr[0]))
                 }
-                self.peeked = Some(arr[0]);
-                Ok(arr[0])
             }
-            Err(e) => return Err(self.make_error(&e.to_string(), ReadErrorReason::InvalidCharacter))
+            Err(e) => Err(self.make_error(&e.to_string(), ReadErrorReason::InvalidCharacter))
         }
     }
     pub(crate) fn get_byte(&mut self) -> Result<u8, ReadError> {
