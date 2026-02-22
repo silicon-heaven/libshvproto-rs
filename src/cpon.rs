@@ -710,7 +710,7 @@ impl<R> Reader for CponReader<'_, R>
                         n += 1;
                     }
                 }
-                ReadToken::ContainerBegin(ContainerType::Map) | ReadToken::ContainerBegin(ContainerType::IMap) => {
+                ReadToken::ContainerBegin(ContainerType::Map | ContainerType::IMap) => {
                     let mut found = false;
                     loop {
                         self.skip_white_or_insignificant()?;

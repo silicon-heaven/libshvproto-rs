@@ -756,7 +756,7 @@ where
                         n += 1;
                     }
                 }
-                ReadToken::ContainerBegin(ContainerType::Map) | ReadToken::ContainerBegin(ContainerType::IMap) => {
+                ReadToken::ContainerBegin(ContainerType::Map | ContainerType::IMap) => {
                     let mut found = false;
                     loop {
                         match self.read_next_key()? {
