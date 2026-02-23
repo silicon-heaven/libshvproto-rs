@@ -160,9 +160,7 @@ pub trait Reader {
             ReadError { msg, pos: 0, line: 0, col: 0, reason: ReadErrorReason::InvalidCharacter }
         }
 
-        let mut dir_ix = 0;
-        'next_dir: while dir_ix < path.len() {
-            let dir = *path.get(dir_ix).expect("Valid index");
+        for (dir_ix, &dir) in path.iter().enumerate() {
             self.try_read_meta()?;
             let schema = self.read_schema()?;
             match schema {
@@ -174,13 +172,11 @@ pub trait Reader {
                         }
 
                         if format!("{n}") == dir {
-                            dir_ix += 1;
-                            if dir_ix == path.len() {
+                            if dir_ix == path.len() - 1 {
                                 return Ok(());
                             }
-                            continue 'next_dir;
+                            break;
                         }
-
                         self.skip()?;
                         n += 1;
                     }
@@ -192,11 +188,10 @@ pub trait Reader {
                             return Err(make_error(format!("Invalid List index '{dir}'")));
                         }
                         if self.read_key()?.eq_str(dir) {
-                            dir_ix += 1;
-                            if dir_ix == path.len() {
+                            if dir_ix == path.len() - 1 {
                                 return Ok(());
                             }
-                            continue 'next_dir;
+                            break;
                         }
                     }
                 }

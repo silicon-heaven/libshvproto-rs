@@ -124,10 +124,7 @@ pub trait TextReader : Reader {
             let res = res.checked_add(i64::from(digit))?;
             Some(res)
         }
-        loop {
-            let Some(b) = self.peek_byte_opt()? else {
-                break;
-            };
+        while let Some(b) = self.peek_byte_opt()? {
             let digit = match b {
                 b'+' | b'-' => {
                     if n != 0 {
@@ -218,10 +215,7 @@ pub trait TextReader : Reader {
         #[derive(PartialEq)]
         enum State { Mantissa, Decimals,  }
         let mut state = State::Mantissa;
-        loop {
-            let Some(b) = self.peek_byte_opt()? else {
-                break;
-            };
+        while let Some(b) = self.peek_byte_opt()? {
             match b {
                 b'u' => {
                     is_uint = true;
