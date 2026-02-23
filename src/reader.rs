@@ -162,7 +162,7 @@ pub trait Reader {
 
         let mut dir_ix = 0;
         'next_dir: while dir_ix < path.len() {
-            let dir = path[dir_ix];
+            let dir = *path.get(dir_ix).expect("Valid index");
             self.try_read_meta()?;
             let schema = self.read_schema()?;
             match schema {

@@ -259,16 +259,15 @@ fn copy_current_value(rd: &mut Box<dyn Reader + '_>, wr: &mut Box<dyn Writer + '
             let mut first_item = true;
             loop {
                 if rd.is_container_end().map_err(|e| e.to_string())? {
-                    let _ = rd.read_schema();
+                    let _ = rd.read_schema().map_err(|e| e.to_string())?;
                     wr.write_container_end(ContainerType::List, Some(first_item)).map_err(|e| e.to_string())?;
                     break;
-                } else {
-                    if !first_item {
-                        wr.write_delimiter().map_err(|e| e.to_string())?;
-                    }
-                    wr.write_indent().map_err(|e| e.to_string())?;
-                    copy_current_value(rd, wr)?
                 }
+                if !first_item {
+                    wr.write_delimiter().map_err(|e| e.to_string())?;
+                }
+                wr.write_indent().map_err(|e| e.to_string())?;
+                copy_current_value(rd, wr)?;
                 first_item = false;
             }
         }
@@ -277,21 +276,20 @@ fn copy_current_value(rd: &mut Box<dyn Reader + '_>, wr: &mut Box<dyn Writer + '
             let mut first_item = true;
             loop {
                 if rd.is_container_end().map_err(|e| e.to_string())? {
-                    let _ = rd.read_schema();
+                    let _ = rd.read_schema().map_err(|e| e.to_string())?;
                     wr.write_container_end(container_type, Some(first_item)).map_err(|e| e.to_string())?;
                     break;
-                } else {
-                    if !first_item {
-                        wr.write_delimiter().map_err(|e| e.to_string())?;
-                    }
-                    let key = rd.read_key().map_err(|e| e.to_string())?;
-                    wr.write_indent().map_err(|e| e.to_string())?;
-                    wr.write_key(&key).map_err(|e| e.to_string())?;
-                    copy_current_value(rd, wr)?;
                 }
+                if !first_item {
+                    wr.write_delimiter().map_err(|e| e.to_string())?;
+                }
+                let key = rd.read_key().map_err(|e| e.to_string())?;
+                wr.write_indent().map_err(|e| e.to_string())?;
+                wr.write_key(&key).map_err(|e| e.to_string())?;
+                copy_current_value(rd, wr)?;
                 first_item = false;
             }
-            if let ContainerType::MetaMap = container_type {
+            if matches!(container_type, ContainerType::MetaMap) {
                 return copy_current_value(rd, wr)
             }
         }

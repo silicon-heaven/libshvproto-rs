@@ -708,7 +708,7 @@ where
 
     fn skip(&mut self) -> Result<(), ReadError> {
         self.dry_run = true;
-        let _ = self.read();
+        let _ = self.read()?;
         self.dry_run = false;
         Ok(())
     }

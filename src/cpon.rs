@@ -375,11 +375,10 @@ impl<W> Writer for CponWriter<'_, W>
         self.nest_count -= 1;
         let mut n = 0;
         if !self.indent.is_empty() {
-            if let Some(is_empty) = is_empty {
-                if !is_empty {
+            if let Some(is_empty) = is_empty
+                && !is_empty {
                     n += self.write_byte(b'\n')?;
                 }
-            }
             n += self.write_indent()?;
         }
         n += match container_type {
@@ -670,7 +669,7 @@ impl<R> Reader for CponReader<'_, R>
 
     fn skip(&mut self) -> Result<(), ReadError> {
         self.dry_run = true;
-        let _ = self.read();
+        let _ = self.read()?;
         self.dry_run = false;
         Ok(())
     }
