@@ -316,7 +316,7 @@ where
         }
     }
 
-    fn write_container_end(&mut self, _container_type: ContainerType) -> WriteResult {
+    fn write_container_end(&mut self, _container_type: ContainerType, _is_empty: Option<bool>) -> WriteResult {
         self.write_byte(PackingSchema::TERM as u8)
     }
 

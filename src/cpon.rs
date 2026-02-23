@@ -370,14 +370,18 @@ impl<W> Writer for CponWriter<'_, W>
         Ok(n)
     }
 
-    fn write_container_end(&mut self, container_type: ContainerType) -> WriteResult {
+    fn write_container_end(&mut self, container_type: ContainerType, is_empty: Option<bool>) -> WriteResult {
         // self.indent_element(false, false)?;
         self.nest_count -= 1;
         let mut n = 0;
         if !self.indent.is_empty() {
-            n += self.write_byte(b'\n')?;
+            if let Some(is_empty) = is_empty {
+                if !is_empty {
+                    n += self.write_byte(b'\n')?;
+                }
+            }
+            n += self.write_indent()?;
         }
-        n += self.write_indent()?;
         n += match container_type {
             ContainerType::List => self.write_byte(b']'),
             ContainerType::Map | ContainerType::IMap => self.write_byte(b'}'),

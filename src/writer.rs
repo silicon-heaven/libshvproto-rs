@@ -41,5 +41,5 @@ pub trait Writer {
     fn write_delimiter(&mut self) -> WriteResult;
     fn write_indent(&mut self) -> WriteResult;
     fn write_container_begin(&mut self, container_type: ContainerType) -> WriteResult;
-    fn write_container_end(&mut self, container_type: ContainerType) -> WriteResult;
+    fn write_container_end(&mut self, container_type: ContainerType, is_empty: Option<bool>) -> WriteResult;
 }

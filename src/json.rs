@@ -226,7 +226,7 @@ where W: Write
         todo!("write_key not supported for JSON")
     }
 
-    fn write_container_end(&mut self, _container_type: ContainerType) -> WriteResult {
+    fn write_container_end(&mut self, _container_type: ContainerType, _is_empty: Option<bool>) -> WriteResult {
         todo!("write_container_end not supported for JSON")
     }
 
