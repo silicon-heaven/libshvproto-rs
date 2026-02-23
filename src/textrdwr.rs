@@ -30,17 +30,18 @@ pub struct ReadInt {
     pub is_overflow: bool,
 }
 pub trait TextReader : Reader {
-    fn peek_byte(&mut self) -> u8;
+    fn peek_byte_opt(&mut self) -> Result<Option<u8>, ReadError>;
+    fn peek_byte(&mut self) -> Result<u8, ReadError> {
+        self.peek_byte_opt()?
+            .ok_or_else(||self.make_error("Unexpected end of stream", ReadErrorReason::InvalidCharacter))
+    }
     fn get_byte(&mut self) -> Result<u8, ReadError>;
     fn make_error(&self, msg: &str, reason: ReadErrorReason) -> ReadError;
     fn read_string(&mut self) -> Result<Value, ReadError>;
 
-    fn skip_white_insignificant(&mut self) -> Result<(), ReadError> {
+    fn skip_white_or_insignificant(&mut self) -> Result<(), ReadError> {
         loop {
-            let b = self.peek_byte();
-            if b == 0 {
-                break;
-            }
+            let b = self.peek_byte()?;
             if b > b' ' {
                 match b {
                     b'/' => {
@@ -90,7 +91,7 @@ pub trait TextReader : Reader {
         }
         Ok(())
     }
-    fn read_token(&mut self, token: &str) -> Result<(), ReadError> {
+    fn read_text_token(&mut self, token: &str) -> Result<(), ReadError> {
         for c in token.as_bytes() {
             let b = self.get_byte()?;
             if b != *c {
@@ -100,15 +101,15 @@ pub trait TextReader : Reader {
         Ok(())
     }
     fn read_true(&mut self) -> Result<Value, ReadError> {
-        self.read_token("true")?;
+        self.read_text_token("true")?;
         Ok(Value::from(true))
     }
     fn read_false(&mut self) -> Result<Value, ReadError> {
-        self.read_token("false")?;
+        self.read_text_token("false")?;
         Ok(Value::from(false))
     }
     fn read_null(&mut self) -> Result<Value, ReadError> {
-        self.read_token("null")?;
+        self.read_text_token("null")?;
         Ok(Value::from(()))
     }
     fn read_int(&mut self, init_val: i64, no_signum: bool) -> Result<ReadInt, ReadError> {
@@ -123,8 +124,7 @@ pub trait TextReader : Reader {
             let res = res.checked_add(i64::from(digit))?;
             Some(res)
         }
-        loop {
-            let b = self.peek_byte();
+        while let Some(b) = self.peek_byte_opt()? {
             let digit = match b {
                 b'+' | b'-' => {
                     if n != 0 {
@@ -196,7 +196,7 @@ pub trait TextReader : Reader {
         let mut is_negative = false;
         let mut decimal_overflow = false;
 
-        let b = self.peek_byte();
+        let b = self.peek_byte()?;
         if b == b'+' {
             is_negative = false;
             self.get_byte()?;
@@ -215,8 +215,7 @@ pub trait TextReader : Reader {
         #[derive(PartialEq)]
         enum State { Mantissa, Decimals,  }
         let mut state = State::Mantissa;
-        loop {
-            let b = self.peek_byte();
+        while let Some(b) = self.peek_byte_opt()? {
             match b {
                 b'u' => {
                     is_uint = true;
@@ -280,8 +279,8 @@ pub trait TextReader : Reader {
         let mut lst = Vec::new();
         self.get_byte()?; // eat '['
         loop {
-            self.skip_white_insignificant()?;
-            let b = self.peek_byte();
+            self.skip_white_or_insignificant()?;
+            let b = self.peek_byte()?;
             if b == b']' {
                 self.get_byte()?;
                 break;
@@ -296,8 +295,8 @@ pub trait TextReader : Reader {
         let mut map: Map = Map::new();
         self.get_byte()?; // eat '{'
         loop {
-            self.skip_white_insignificant()?;
-            let b = self.peek_byte();
+            self.skip_white_or_insignificant()?;
+            let b = self.peek_byte()?;
             if b == b'}' {
                 self.get_byte()?;
                 break;
@@ -314,11 +313,10 @@ pub trait TextReader : Reader {
                 },
                 _ => return Err(self.make_error(&format!("Invalid Map key '{b}'"), ReadErrorReason::InvalidCharacter)),
             };
-            self.skip_white_insignificant()?;
+            self.skip_white_or_insignificant()?;
             let val = self.read()?;
             map.insert(skey.to_string(), val);
         }
         Ok(Value::from(map))
     }
 }
-

@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 use crate::datetime::{IncludeMilliseconds, ToISOStringOptions};
 use crate::writer::{WriteResult, Writer, ByteWriter};
 use crate::metamap::MetaKey;
-use crate::reader::{Reader, ByteReader, ReadError, ReadErrorReason};
+use crate::reader::{ByteReader, ContainerType, MapKey, ReadError, ReadErrorReason, ReadSchema, Reader};
 use crate::rpcvalue::{Map};
 use crate::textrdwr::{TextReader, TextWriter};
 
@@ -221,7 +221,29 @@ where W: Write
         }?;
         Ok(self.byte_writer.count() - cnt)
     }
+
+    fn write_key(&mut self, _key: &MapKey) -> WriteResult {
+        todo!("write_key not supported for JSON")
+    }
+
+    fn write_container_end(&mut self, _container_type: ContainerType, _is_empty: Option<bool>) -> WriteResult {
+        todo!("write_container_end not supported for JSON")
+    }
+
+    fn write_delimiter(&mut self) -> WriteResult {
+        todo!("write_delimiter not supported for JSON")
+    }
+
+    fn write_container_begin(&mut self, _container_type: ContainerType) -> WriteResult {
+        todo!("write_container_begin not supported for JSON")
+    }
+
+    fn write_indent(&mut self) -> WriteResult {
+        todo!("write_indent not supported for JSON")
+    }
+
 }
+
 pub struct JsonReader<'a, R>
     where R: Read
 {
@@ -286,8 +308,8 @@ impl<'a, R> JsonReader<'a, R>
 impl<R> TextReader for JsonReader<'_, R>
 where R: Read
 {
-    fn peek_byte(&mut self) -> u8 {
-        self.byte_reader.peek_byte()
+    fn peek_byte_opt(&mut self) -> Result<Option<u8>, ReadError> {
+        self.byte_reader.peek_byte_opt()
     }
 
     fn get_byte(&mut self) -> Result<u8, ReadError> {
@@ -395,8 +417,8 @@ impl<R> Reader for JsonReader<'_, R>
         Ok(None)
     }
     fn read_value(&mut self) -> Result<Value, ReadError> {
-        self.skip_white_insignificant()?;
-        let b = self.peek_byte();
+        self.skip_white_or_insignificant()?;
+        let b = self.peek_byte()?;
         let v = match &b {
             b'0' ..= b'9' | b'+' | b'-' => self.read_number(),
             b'"' => self.read_string(),
@@ -408,6 +430,22 @@ impl<R> Reader for JsonReader<'_, R>
             _ => Err(self.make_error(&format!("Invalid char {}, code: {}", char::from(b), b), ReadErrorReason::InvalidCharacter)),
         }?;
         Ok(v)
+    }
+
+    fn read_schema(&mut self) -> Result<ReadSchema, ReadError> {
+        Err(self.make_error("open_container not supported for JSON", ReadErrorReason::InvalidCharacter))
+    }
+
+    fn is_container_end(&mut self) -> Result<bool, ReadError> {
+        Err(self.make_error("is_container_end not supported for JSON", ReadErrorReason::InvalidCharacter))
+    }
+
+    fn read_key(&mut self) -> Result<MapKey, ReadError> {
+        Err(self.make_error("read_key not supported for JSON", ReadErrorReason::InvalidCharacter))
+    }
+
+    fn skip(&mut self) -> Result<(), ReadError> {
+        Err(self.make_error("skip not supported for JSON", ReadErrorReason::InvalidCharacter))
     }
 }
 

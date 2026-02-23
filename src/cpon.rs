@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use crate::datetime::{IncludeMilliseconds, ToISOStringOptions};
 use crate::writer::{WriteResult, Writer, ByteWriter};
 use crate::metamap::MetaKey;
-use crate::reader::{Reader, ByteReader, ReadError, ReadErrorReason};
+use crate::reader::{ByteReader, ContainerType, MapKey, ReadError, ReadErrorReason, ReadSchema, Reader};
 use crate::rpcvalue::{Map};
 use crate::textrdwr::{TextReader};
 
@@ -259,6 +259,7 @@ impl<'a, W> CponWriter<'a, W>
         Ok(self.byte_writer.count() - cnt)
     }
 }
+
 impl<W> TextWriter for CponWriter<'_, W>
 where W: Write
 {
@@ -336,18 +337,82 @@ impl<W> Writer for CponWriter<'_, W>
         }?;
         Ok(self.byte_writer.count() - cnt)
     }
+
+    fn write_key(&mut self, key: &MapKey) -> WriteResult {
+        let mut n = match key {
+            MapKey::Int(i) => self.write_int(*i)?,
+            MapKey::String(s) => self.write_string(s)?,
+        };
+        n += self.write_byte(b':')?;
+        Ok(n)
+    }
+
+
+    fn write_delimiter(&mut self) -> WriteResult {
+        let mut n = self.write_byte(b',')?;
+        if !self.indent.is_empty() {
+            n += self.write_byte(b'\n')?;
+        }
+        Ok(n)
+    }
+
+    fn write_container_begin(&mut self, container_type: ContainerType) -> WriteResult {
+        self.nest_count += 1;
+        let mut n = match container_type {
+            ContainerType::List => self.write_byte(b'['),
+            ContainerType::Map => self.write_byte(b'{'),
+            ContainerType::IMap => self.write_bytes(b"i{"),
+            ContainerType::MetaMap => self.write_byte(b'<'),
+        }?;
+        if !self.indent.is_empty() {
+            n += self.write_byte(b'\n')?;
+        }
+        Ok(n)
+    }
+
+    fn write_container_end(&mut self, container_type: ContainerType, is_empty: Option<bool>) -> WriteResult {
+        // self.indent_element(false, false)?;
+        self.nest_count -= 1;
+        let mut n = 0;
+        if !self.indent.is_empty() {
+            if let Some(is_empty) = is_empty
+                && !is_empty {
+                    n += self.write_byte(b'\n')?;
+                }
+            n += self.write_indent()?;
+        }
+        n += match container_type {
+            ContainerType::List => self.write_byte(b']'),
+            ContainerType::Map | ContainerType::IMap => self.write_byte(b'}'),
+            ContainerType::MetaMap => self.write_byte(b'>'),
+        }?;
+        Ok(n)
+    }
+
+    fn write_indent(&mut self) -> WriteResult {
+        let mut n = 0;
+        if !self.indent.is_empty() {
+            for _ in 0 .. self.nest_count {
+                n += self.byte_writer.write_bytes(&self.indent)?;
+            }
+        }
+        Ok(n)
+    }
+
+
 }
 
 pub struct CponReader<'a, R>
     where R: Read
 {
     byte_reader: ByteReader<'a, R>,
+    dry_run: bool,
 }
 impl<'a, R> CponReader<'a, R>
     where R: Read
 {
     pub fn new(read: &'a mut R) -> Self {
-        CponReader { byte_reader: ByteReader::new(read) }
+        CponReader { byte_reader: ByteReader::new(read), dry_run: false }
     }
 
     fn decode_hex_byte(&self, b: u8) -> Result<u8, ReadError> {
@@ -422,15 +487,15 @@ impl<'a, R> CponReader<'a, R>
         }
         let mut map: BTreeMap<i32, RpcValue> = BTreeMap::new();
         loop {
-            self.skip_white_insignificant()?;
-            let b = self.peek_byte();
+            self.skip_white_or_insignificant()?;
+            let b = self.peek_byte()?;
             if b == b'}' {
                 self.get_byte()?;
                 break;
             }
             let ReadInt{ value, is_negative, .. } = self.read_int(0, false)?;
             let key = if is_negative { -value } else { value };
-            self.skip_white_insignificant()?;
+            self.skip_white_or_insignificant()?;
             let val = self.read()?;
             #[expect(clippy::cast_possible_truncation, reason = "We hope that the key is small enough to fit")]
             map.insert(key as i32, val);
@@ -453,24 +518,26 @@ impl<'a, R> CponReader<'a, R>
         Err(self.make_error("Invalid DateTime", ReadErrorReason::InvalidCharacter))
     }
     fn read_true(&mut self) -> Result<Value, ReadError> {
-        self.read_token("true")?;
+        self.read_text_token("true")?;
         Ok(Value::from(true))
     }
     fn read_false(&mut self) -> Result<Value, ReadError> {
-        self.read_token("false")?;
+        self.read_text_token("false")?;
         Ok(Value::from(false))
     }
     fn read_null(&mut self) -> Result<Value, ReadError> {
-        self.read_token("null")?;
+        self.read_text_token("null")?;
         Ok(Value::from(()))
     }
+
+
 
 }
 impl<R> TextReader for CponReader<'_, R>
 where R: Read
 {
-    fn peek_byte(&mut self) -> u8 {
-        self.byte_reader.peek_byte()
+    fn peek_byte_opt(&mut self) -> Result<Option<u8>, ReadError> {
+        self.byte_reader.peek_byte_opt()
     }
     fn get_byte(&mut self) -> Result<u8, ReadError> {
         self.byte_reader.get_byte()
@@ -517,22 +584,22 @@ impl<R> Reader for CponReader<'_, R>
     where R: Read
 {
     fn try_read_meta(&mut self) -> Result<Option<MetaMap>, ReadError> {
-        self.skip_white_insignificant()?;
-        let b = self.peek_byte();
+        self.skip_white_or_insignificant()?;
+        let b = self.peek_byte()?;
         if b != b'<' {
             return Ok(None)
         }
         self.get_byte()?;
         let mut map = MetaMap::new();
         loop {
-            self.skip_white_insignificant()?;
-            let b = self.peek_byte();
+            self.skip_white_or_insignificant()?;
+            let b = self.peek_byte()?;
             if b == b'>' {
                 self.get_byte()?;
                 break;
             }
             let key = self.read()?;
-            self.skip_white_insignificant()?;
+            self.skip_white_or_insignificant()?;
             let val = self.read()?;
             if key.is_int() {
                 map.insert(key.as_i32(), val);
@@ -544,8 +611,8 @@ impl<R> Reader for CponReader<'_, R>
         Ok(Some(map))
     }
     fn read_value(&mut self) -> Result<Value, ReadError> {
-        self.skip_white_insignificant()?;
-        let b = self.peek_byte();
+        self.skip_white_or_insignificant()?;
+        let b = self.peek_byte()?;
         let v = match &b {
             b'0' ..= b'9' | b'+' | b'-' => self.read_number(),
             b'"' => self.read_string(),
@@ -561,6 +628,72 @@ impl<R> Reader for CponReader<'_, R>
             _ => Err(self.make_error(&format!("Invalid char {}, code: {}", char::from(b), b), ReadErrorReason::InvalidCharacter)),
         }?;
         Ok(v)
+    }
+
+    fn read_schema(&mut self) -> Result<ReadSchema, ReadError> {
+        self.skip_white_or_insignificant()?;
+        let b = self.peek_byte()?;
+        if b == b'[' {
+            self.get_byte()?;
+            Ok(ReadSchema::ContainerBegin(ContainerType::List))
+        } else if b == b'{' {
+            self.get_byte()?;
+            Ok(ReadSchema::ContainerBegin(ContainerType::Map))
+        } else if b == b'i' {
+            // Check if it's an IMap
+            self.get_byte()?;
+            let next_b = self.peek_byte()?;
+            if next_b == b'{' {
+                self.get_byte()?;
+                Ok(ReadSchema::ContainerBegin(ContainerType::IMap))
+            } else {
+                // Not an IMap, this is an error - we already consumed 'i'
+                Err(self.make_error("Expected '{' after 'i' for IMap", ReadErrorReason::InvalidCharacter))
+            }
+        } else if b == b'<' {
+            self.get_byte()?;
+            Ok(ReadSchema::ContainerBegin(ContainerType::MetaMap))
+        } else if b == b'>' || b == b'}' || b == b']' {
+            self.get_byte()?;
+            Ok(ReadSchema::ContainerEnd)
+        } else {
+            Ok(ReadSchema::Scalar)
+        }
+    }
+
+    fn is_container_end(&mut self) -> Result<bool, ReadError> {
+        self.skip_white_or_insignificant()?;
+        let b = self.peek_byte()?;
+        Ok(b == b']' || b == b'}' || b == b'>')
+    }
+
+    fn skip(&mut self) -> Result<(), ReadError> {
+        self.dry_run = true;
+        let _ = self.read()?;
+        self.dry_run = false;
+        Ok(())
+    }
+
+    fn read_key(&mut self) -> Result<MapKey, ReadError> {
+        self.skip_white_or_insignificant()?;
+        let b = self.peek_byte()?;
+        // Auto-detect key type: string keys start with '"', integer keys with digit or sign
+        if b == b'"' {
+            // Regular map keys are strings
+            let key = self.read_string()?;
+            if let Value::String(s) = key {
+                Ok(MapKey::String((*s).clone()))
+            } else {
+                Err(self.make_error("Expected string key in map", ReadErrorReason::InvalidCharacter))
+            }
+        } else if b.is_ascii_digit() || b == b'+' || b == b'-' {
+            // IMap keys are integers
+            let ReadInt{ value, is_negative, .. } = self.read_int(0, false)?;
+            let key = if is_negative { -value } else { value };
+            Ok(MapKey::Int(key))
+        } else {
+            Err(self.make_error(&format!("Unexpected key start character: {}", char::from(b)), ReadErrorReason::InvalidCharacter))
+        }
     }
 }
 
@@ -709,5 +842,150 @@ mod test
         assert!(RpcValue::from_cpon("1.23456789012345678901234567890123456789012345678901234567890").is_err_and(|err| matches!(err.reason, ReadErrorReason::NumericValueOverflow)));
         assert!(RpcValue::from_cpon("12345678901234567890123456789012345678901234567890123456.7890").is_err_and(|err| matches!(err.reason, ReadErrorReason::NumericValueOverflow)));
         assert!(RpcValue::from_cpon("123456789012345678901234567890123456789012345678901234567890.").is_err_and(|err| matches!(err.reason, ReadErrorReason::NumericValueOverflow)));
+    }
+
+    #[test]
+    fn test_find_path_list() {
+        // Create a list: [10, 20, 30]
+        let cpon = "[10, 20, 30]";
+        let mut cpon_bytes = cpon.as_bytes();
+        let mut rd = CponReader::new(&mut cpon_bytes);
+
+        // Find index 0
+        rd.find_path(&["0"]).unwrap();
+        assert_eq!(rd.read().unwrap(), 10.into());
+
+        // Find index 1
+        let mut cpon_bytes = cpon.as_bytes();
+        let mut rd = CponReader::new(&mut cpon_bytes);
+        rd.find_path(&["1"]).unwrap();
+        assert_eq!(rd.read().unwrap(), 20.into());
+
+        // Find index 2
+        let mut cpon_bytes = cpon.as_bytes();
+        let mut rd = CponReader::new(&mut cpon_bytes);
+        rd.find_path(&["2"]).unwrap();
+        assert_eq!(rd.read().unwrap(), 30.into());
+
+        // Index out of bounds should not find
+        let mut cpon_bytes = cpon.as_bytes();
+        let mut rd = CponReader::new(&mut cpon_bytes);
+        assert!(rd.find_path(&["3"]).is_err());
+    }
+
+    #[test]
+    fn test_find_path_map() {
+        // Create a map: {"foo": 100, "bar": 200}
+        let cpon = r#"{"foo": 100, "bar": 200}"#;
+
+        // Find "foo"
+        let mut cpon_bytes = cpon.as_bytes();
+        let mut rd = CponReader::new(&mut cpon_bytes);
+        rd.find_path(&["foo"]).unwrap();
+        assert_eq!(rd.read().unwrap(), 100.into());
+
+        // Find "bar"
+        let mut cpon_bytes = cpon.as_bytes();
+        let mut rd = CponReader::new(&mut cpon_bytes);
+        rd.find_path(&["bar"]).unwrap();
+        assert_eq!(rd.read().unwrap(), 200.into());
+
+        // Non-existent key should not find
+        let mut cpon_bytes = cpon.as_bytes();
+        let mut rd = CponReader::new(&mut cpon_bytes);
+        assert!(rd.find_path(&["baz"]).is_err());
+    }
+
+    #[test]
+    fn test_find_path_imap() {
+        // Create an imap: {1: "one", 2: "two"}
+        let cpon = r#"i{1: "one", 2: "two"}"#;
+
+        // Find key 1
+        let mut cpon_bytes = cpon.as_bytes();
+        let mut rd = CponReader::new(&mut cpon_bytes);
+        rd.find_path(&["1"]).unwrap();
+        assert_eq!(rd.read().unwrap(), "one".into());
+
+        // Find key 2
+        let mut cpon_bytes = cpon.as_bytes();
+        let mut rd = CponReader::new(&mut cpon_bytes);
+        rd.find_path(&["2"]).unwrap();
+        assert_eq!(rd.read().unwrap(), "two".into());
+
+        // Non-existent key should not find
+        let mut cpon_bytes = cpon.as_bytes();
+        let mut rd = CponReader::new(&mut cpon_bytes);
+        assert!(rd.find_path(&["3"]).is_err());
+    }
+
+    #[test]
+    fn test_find_path_nested_list_in_map() {
+        // Create nested structure: {"items": [10, 20, 30]}
+        let cpon = r#"{"items": [10, 20, 30]}"#;
+
+        // Find items[1] (should be 20)
+        let mut cpon_bytes = cpon.as_bytes();
+        let mut rd = CponReader::new(&mut cpon_bytes);
+        rd.find_path(&["items", "1"]).unwrap();
+        assert_eq!(rd.read().unwrap(), 20.into());
+    }
+
+    #[test]
+    fn test_find_path_nested_map_in_list() {
+        // Create nested structure: [{"name": "Alice"}, {"name": "Bob"}]
+        let cpon = r#"[{"name": "Alice"}, {"name": "Bob"}]"#;
+
+        // Find [1]["name"] (should be "Bob")
+        let mut cpon_bytes = cpon.as_bytes();
+        let mut rd = CponReader::new(&mut cpon_bytes);
+        rd.find_path(&["1", "name"]).unwrap();
+        assert_eq!(rd.read().unwrap(), "Bob".into());
+    }
+
+    #[test]
+    fn test_find_path_empty_path() {
+        let cpon = r#"{"foo": 123}"#;
+        let mut cpon_bytes = cpon.as_bytes();
+        let mut rd = CponReader::new(&mut cpon_bytes);
+
+        // Empty path should succeed and position at the start
+        rd.find_path(&[]).unwrap();
+        let val = rd.read().unwrap();
+        assert!(val.is_map());
+    }
+
+    #[test]
+    fn test_find_path_wrong_path() {
+        let cpon = r#"{"foo": 123}"#;
+        let mut cpon_bytes = cpon.as_bytes();
+        let mut rd = CponReader::new(&mut cpon_bytes);
+
+        // Trying to access as list should fail
+        assert!(rd.find_path(&["0"]).is_err());
+    }
+
+    #[test]
+    fn test_find_path_deeply_nested() {
+        // Create deeply nested structure
+        let cpon = r#"{"a": {"b": {"c": [1, 2, {"d": "found" , }]}}}"#;
+
+        // Find a.b.c[2].d
+        let mut cpon_bytes = cpon.as_bytes();
+        let mut rd = CponReader::new(&mut cpon_bytes);
+        rd.find_path(&["a", "b", "c", "2", "d"]).unwrap();
+        assert_eq!(rd.read().unwrap(), "found".into());
+    }
+
+    #[test]
+    fn test_find_path_imap_nested() {
+        // Create nested structure with imap: i{1: {"key": "value"}}
+        let cpon = r#"i{1: {"key": "value"}}"#;
+
+        // Find 1.key
+        let mut cpon_bytes = cpon.as_bytes();
+        let mut rd = CponReader::new(&mut cpon_bytes);
+        rd.find_path(&["1", "key"]).unwrap();
+        assert_eq!(rd.read().unwrap(), "value".into());
     }
 }
