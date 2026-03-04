@@ -193,6 +193,7 @@ pub trait Reader {
                             }
                             break;
                         }
+                        self.skip()?;
                     }
                 }
                 _ => return Err(make_error("Not container".into()))
