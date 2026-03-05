@@ -1126,3 +1126,49 @@ fn test_find_path_imap_nested() {
     rd.find_path(&["0", "1", "2"]).unwrap();
     assert_eq!(rd.read().unwrap(), "baz".into());
 }
+
+#[test]
+fn test_find_path_chainpack() {
+    let cpon = r#"
+    i{
+      10:2,
+      20:{"timeZone":"Europe/Prague"},
+      30:i{
+        10:i{
+          0:20708,
+          1:141,
+          26:0.,
+          35:5.4
+        },
+        20:{"comment":"", "commissioner":"", "tram_ids":""},
+        30:{
+          ".app:version":<1:5, 8:d"2026-02-19T22:08:33.130Z">"0.18.0",
+          ".broker/currentClient:info":<1:5, 8:d"2026-02-19T22:08:33.057Z">{
+            "clientId":9,
+            "role":"default",
+            "subscriptions":{"**:*:chng":null},
+            "userName":"test"
+          },
+          ".device:name":<1:5, 8:d"2026-02-19T22:08:33.269Z">"BRCg2",
+          ".device:serialNumber":<1:5, 8:d"2026-02-19T22:08:33.329Z">"IDG24027",
+          ".device:version":<1:5, 8:d"2026-02-19T22:08:33.396Z">"M2D1",
+          "fwStable":<1:5, 8:d"2026-02-19T22:08:34.680Z">true,
+          "location":<1:5, 8:d"2026-02-19T22:08:33.521Z">i{
+            0:"CZE",
+            1:"Prague",
+            2:"Kobylisy",
+            3:"Obratiště RTC",
+            4:[0, 42],
+            5:"Europe/Prague"
+          }
+      	}
+      }
+    }
+"#;
+    let rv = RpcValue::from_cpon(cpon).unwrap();
+    let chpk = rv.to_chainpack();
+    let mut data_slice = &chpk[..];
+    let mut rd = ChainPackReader::new(&mut data_slice);
+    rd.find_path(&["30", "30", "location", "4", "1"]).unwrap();
+    assert_eq!(rd.read().unwrap(), 42.into());
+}

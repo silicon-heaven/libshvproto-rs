@@ -21,21 +21,32 @@ use jaq_all::{jaq_core::{Ctx, Vars, data::JustLut}, jaq_std};
 struct Cli {
     #[arg(short, long, help = "Cpon indentation string")]
     indent: Option<String>,
+
     #[arg(short, long, help = "Do not create oneliners in Cpon indented string output")]
     no_oneliners: bool,
+
     #[arg(long = "ip", help = "Cpon input")]
     cpon_input: bool,
+
     #[arg(long = "oc", help = "ChainPack output")]
     chainpack_output: bool,
+
     /// Expect input data in RPC block transport format, https://silicon-heaven.github.io/shv-doc/rpctransportlayer/stream.html
     #[arg(long)]
     chainpack_rpc_block: bool,
+
+    /// Find this path in the input before processing
+    #[arg(long)]
+    find_path: Option<String>,
+
     /// Verbose mode (module, .)
     #[arg(short = 'v', long = "verbose")]
     verbose: Option<String>,
+
     /// File to process
     #[arg(value_name = "FILE")]
     file: Option<PathBuf>,
+
     /// Run cq with this filter.
     #[cfg(feature = "cq")]
     #[arg(long = "cq")]
@@ -150,6 +161,19 @@ fn main() {
 
     if opts.chainpack_rpc_block {
         process_chainpack_rpc_block_and_exit(reader)
+    }
+
+    if let Some(find_path) = opts.find_path {
+        let mut rd: Box<dyn Reader + '_> = if opts.cpon_input {
+            Box::new(CponReader::new(&mut reader))
+        } else {
+            Box::new(ChainPackReader::new(&mut reader))
+        };
+        let path = find_path.split('/').collect::<Vec<_>>();
+        if let Err(e) = rd.find_path(&path) {
+            eprintln!("Path not found: {e:?}");
+            process::exit(CODE_READ_ERROR);
+        }
     }
 
     let cpon_output = !opts.chainpack_output;
