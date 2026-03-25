@@ -431,7 +431,11 @@ impl<'de> serde::Deserialize<'de> for crate::DateTime {
             }
         }
 
-        deserializer.deserialize_newtype_struct("DateTime", DateTimeVisitor)
+        if deserializer.is_human_readable() {
+            deserializer.deserialize_str(DateTimeVisitor)
+        } else {
+            deserializer.deserialize_newtype_struct("DateTime", DateTimeVisitor)
+        }
     }
 }
 
