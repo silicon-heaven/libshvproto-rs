@@ -5,7 +5,7 @@ use jaq_all::jaq_core::{Error, ops};
 use crate::{RpcValue, Value};
 
 pub type ValR = jaq_all::jaq_core::ValR<RpcValue>;
-pub type ValX = jaq_all::jaq_core::ValX<RpcValue>;
+pub type ValX<'a> = jaq_all::jaq_core::ValX<'a, RpcValue>;
 impl Neg for RpcValue {
     type Output = ValR;
     fn neg(self) -> Self::Output {
@@ -245,29 +245,29 @@ impl jaq_all::jaq_core::ValT for RpcValue {
         todo!("{}", fn_name::uninstantiated!());
     }
 
-    fn map_values<I: Iterator<Item = ValX>>(
+    fn map_values<'a, I: Iterator<Item = ValX<'a>>>(
         self,
         _opt: jaq_all::jaq_core::path::Opt,
         _f: impl Fn(Self) -> I,
-    ) -> ValX {
+    ) -> ValX<'a> {
         todo!("{}", fn_name::uninstantiated!());
     }
 
-    fn map_index<I: Iterator<Item = ValX>>(
+    fn map_index<'a, I: Iterator<Item = ValX<'a>>>(
         self,
         _index: &Self,
         _opt: jaq_all::jaq_core::path::Opt,
         _f: impl Fn(Self) -> I,
-    ) -> ValX {
+    ) -> ValX<'a> {
         todo!("{}", fn_name::uninstantiated!());
     }
 
-    fn map_range<I: Iterator<Item = ValX>>(
+    fn map_range<'a, I: Iterator<Item = ValX<'a>>>(
         self,
         _range: jaq_all::jaq_core::val::Range<&Self>,
         _opt: jaq_all::jaq_core::path::Opt,
         _f: impl Fn(Self) -> I,
-    ) -> ValX {
+    ) -> ValX<'a> {
         todo!("{}", fn_name::uninstantiated!());
     }
 
