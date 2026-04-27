@@ -52,6 +52,7 @@ jobs:
           FEATURES+=",specialization"
         fi
         cargo clippy --all-targets --features "${FEATURES}"
+        cargo test --features "${FEATURES}"
         cargo install --path '${{github.workspace}}' --root '${{github.workspace}}/install' --target ${{ matrix.target }} --features "${FEATURES}" --locked
       shell: bash
 
