@@ -195,6 +195,7 @@ pub trait TextReader : Reader {
         let mut is_uint = false;
         let mut is_negative = false;
         let mut decimal_overflow = false;
+        let mut i64_overflow = false;
 
         let b = self.peek_byte()?;
         if b == b'+' {
@@ -207,6 +208,7 @@ pub trait TextReader : Reader {
         }
 
         let ReadInt { value, digit_cnt, is_overflow, .. } = self.read_int(0, false)?;
+        i64_overflow = i64_overflow || is_overflow;
         decimal_overflow = decimal_overflow || is_overflow;
         if digit_cnt == 0 {
             return Err(self.make_error("Number should contain at least one digit.", ReadErrorReason::InvalidCharacter))
@@ -230,9 +232,10 @@ pub trait TextReader : Reader {
                     is_decimal = true;
                     self.get_byte()?;
                     let ReadInt { value, digit_cnt, is_overflow, .. } = self.read_int(mantissa, true)?;
+                    i64_overflow = i64_overflow || is_overflow;
                     decimal_overflow = decimal_overflow || is_overflow;
                     mantissa = value;
-                    if mantissa >= 0x80_0000_0000_0000 || mantissa < -0x80_0000_0000_0000 {
+                    if !(-0x80_0000_0000_0000..0x80_0000_0000_0000).contains(&mantissa) {
                         decimal_overflow = true;
                     }
                     dec_cnt = i64::from(digit_cnt);
@@ -245,6 +248,7 @@ pub trait TextReader : Reader {
                     is_decimal = true;
                     self.get_byte()?;
                     let ReadInt { value, digit_cnt, is_negative, is_overflow } = self.read_int(0, false)?;
+                    i64_overflow = i64_overflow || is_overflow;
                     decimal_overflow = decimal_overflow || is_overflow;
                     exponent = value;
                     if is_negative { exponent = -exponent; }
@@ -259,6 +263,13 @@ pub trait TextReader : Reader {
         let mantissa = if is_negative { -mantissa } else { mantissa };
         if is_decimal {
             if decimal_overflow {
+                if !i64_overflow {
+                    #[expect(clippy::cast_possible_truncation, reason = "We hope that the new exponent is not big enough to truncate")]
+                    let target_exp = (exponent - dec_cnt) as i8;
+                    if let Some(d) = Decimal::try_new_with_precision_reduction(mantissa, target_exp) {
+                        return Ok(Value::from(d));
+                    }
+                }
                 return Err(self.make_error("Not enough precision to read the Decimal", ReadErrorReason::NumericValueOverflow))
             }
             #[expect(clippy::cast_possible_truncation, reason = "We hope that the new exponent is not big enough to truncate")]
