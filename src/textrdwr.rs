@@ -232,7 +232,7 @@ pub trait TextReader : Reader {
                     let ReadInt { value, digit_cnt, is_overflow, .. } = self.read_int(mantissa, true)?;
                     decimal_overflow = decimal_overflow || is_overflow;
                     mantissa = value;
-                    if mantissa >= 0x80_0000_0000_0000 {
+                    if mantissa >= 0x80_0000_0000_0000 || mantissa < -0x80_0000_0000_0000 {
                         decimal_overflow = true;
                     }
                     dec_cnt = i64::from(digit_cnt);
