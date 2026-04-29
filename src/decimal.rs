@@ -11,6 +11,28 @@ impl Decimal {
         n |= i64::from(exponent) & 0xff;
         Decimal(n)
     }
+    pub fn try_new_with_precision_reduction(mantissa: i64, exponent: i8) -> Option<Decimal> {
+        const MANTISSA_MIN: i64 = -(1i64 << 55);
+        const MANTISSA_MAX: i64 = 1i64 << 55;
+
+        let mut m = mantissa;
+        let mut e = i64::from(exponent);
+
+        while !(MANTISSA_MIN..MANTISSA_MAX).contains(&m) {
+            m /= 10;
+            e += 1;
+
+            if e < i64::from(i8::MIN) || e > i64::from(i8::MAX) {
+                return None;
+            }
+        }
+
+        if !(MANTISSA_MIN..MANTISSA_MAX).contains(&m) {
+            return None;
+        }
+
+        Some(Decimal::new(m, e as i8))
+    }
     #[must_use]
     pub fn normalize(self) -> Decimal {
         let (mut mantissa, mut exponent) = self.decode();

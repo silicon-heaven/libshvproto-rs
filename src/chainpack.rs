@@ -576,15 +576,10 @@ where
             ));
         }
 
-        if !(-(1i64 << 55)..(1i64 << 55)).contains(&mantissa) {
-            return Err(self.make_error(
-                &format!("Decimal mantissa {mantissa} overflows 56-bit field"),
-                ReadErrorReason::NumericValueOverflow,
-            ));
-        }
-
-        let d = Decimal::new(mantissa, exponent as i8);
-        Ok(Value::from(d))
+        Decimal::try_new_with_precision_reduction(mantissa, exponent as i8).map_or_else(|| Err(self.make_error(
+                    &format!("Decimal mantissa {mantissa} overflows 56-bit field"),
+                    ReadErrorReason::NumericValueOverflow,
+        )), |d| Ok(Value::from(d)))
     }
 
 }
@@ -899,7 +894,10 @@ fn test_decimal() {
     let dec = crate::decimal::Decimal::new(0, 0);
     assert_eq!(hex_chainpack_to_rpcvalue("8C0000").unwrap(), dec.into());
     assert_eq!(rpcvalue_to_hex_chainpack(&dec.into()), "8C0000");
-    assert_eq!(hex_chainpack_to_rpcvalue("8CF400B201AB082063B54F").unwrap_err().msg, "ChainPack read error - Decimal mantissa 50104379941872565 overflows 56-bit field");
+    let val = hex_chainpack_to_rpcvalue("8CF400B201AB082063B54F").unwrap();
+    let dec_val = val.as_decimal();
+    assert_eq!(dec_val.mantissa(), 5_010_437_994_187_256);
+    assert_eq!(dec_val.exponent(), -14);
     assert_eq!(hex_chainpack_to_rpcvalue("8C4FF400B201AB082063B5").unwrap_err().msg, "ChainPack read error - Decimal exponent 50104379941872565 overflows i8");
 }
 

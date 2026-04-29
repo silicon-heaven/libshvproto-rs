@@ -736,8 +736,8 @@ mod test
         assert_eq!(RpcValue::from_cpon("0.123e3").unwrap().as_decimal(), Decimal::new(123, 0));
         test_cpon_round_trip("1000000.", Decimal::new(1_000_000, 0));
         test_cpon_round_trip("50.03138741402532", Decimal::new(5_003_138_741_402_532, -14));
-        // We do not support such high precision.
-        assert!(RpcValue::from_cpon("36.028797018963968").is_err_and(|err| matches!(err.reason, ReadErrorReason::NumericValueOverflow)));
+        // Precision reduction should handle high precision by cutting digits from the right.
+        assert_eq!(RpcValue::from_cpon("36.028797018963968").unwrap().as_decimal(), Decimal::new(3_602_879_701_896_396, -14));
         assert_eq!(RpcValue::from_cpon(r#""foo""#).unwrap().as_str(), "foo");
         assert_eq!(RpcValue::from_cpon(r#""ěščřžýáí""#).unwrap().as_str(), "ěščřžýáí");
         assert_eq!(RpcValue::from_cpon("b\"foo\tbar\nbaz\"").unwrap().as_blob(), b"foo\tbar\nbaz");
