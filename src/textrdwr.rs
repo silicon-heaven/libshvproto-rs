@@ -37,7 +37,7 @@ pub trait TextReader : Reader {
     }
     fn get_byte(&mut self) -> Result<u8, ReadError>;
     fn make_error(&self, msg: &str, reason: ReadErrorReason) -> ReadError;
-    fn read_string(&mut self) -> Result<Value, ReadError>;
+    fn read_string(&mut self) -> Result<String, ReadError>;
 
     fn skip_white_or_insignificant(&mut self) -> Result<(), ReadError> {
         loop {
@@ -313,20 +313,12 @@ pub trait TextReader : Reader {
                 break;
             }
             let key = self.read_string();
-            let skey = match &key {
-                Ok(b) => {
-                    match b {
-                        Value::String(s) => {
-                            s
-                        },
-                        _ => return Err(self.make_error("Read MetaMap key internal error", ReadErrorReason::InvalidCharacter)),
-                    }
-                },
-                _ => return Err(self.make_error(&format!("Invalid Map key '{b}'"), ReadErrorReason::InvalidCharacter)),
+            let Ok(skey) = key else {
+                return Err(self.make_error(&format!("Invalid Map key '{b}'"), ReadErrorReason::InvalidCharacter));
             };
             self.skip_white_or_insignificant()?;
             let val = self.read()?;
-            map.insert(skey.to_string(), val);
+            map.insert(skey, val);
         }
         Ok(Value::from(map))
     }

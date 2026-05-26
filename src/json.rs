@@ -318,7 +318,7 @@ where R: Read
     fn make_error(&self, msg: &str, reason: ReadErrorReason) -> ReadError {
         self.byte_reader.make_error(&format!("Cpon read error - {msg}"), reason)
     }
-    fn read_string(&mut self) -> Result<Value, ReadError> {
+    fn read_string(&mut self) -> Result<String, ReadError> {
         let mut buff: Vec<u8> = Vec::new();
         self.get_byte()?; // eat "
         loop {
@@ -365,9 +365,9 @@ where R: Read
                 }
             }
         }
-        let s = std::str::from_utf8(&buff);
+        let s = String::from_utf8(buff);
         match s {
-            Ok(s) => Ok(Value::from(s)),
+            Ok(s) => Ok(s),
             Err(e) => Err(self.make_error(&format!("Invalid String, Utf8 error: {e}"), ReadErrorReason::InvalidCharacter)),
         }
     }
@@ -421,7 +421,7 @@ impl<R> Reader for JsonReader<'_, R>
         let b = self.peek_byte()?;
         let v = match &b {
             b'0' ..= b'9' | b'+' | b'-' => self.read_number(),
-            b'"' => self.read_string(),
+            b'"' => self.read_string().map(Value::from),
             b'[' => self.read_list(),
             b'{' => self.read_map(),
             b't' => self.read_true(),
