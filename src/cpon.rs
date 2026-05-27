@@ -505,17 +505,14 @@ impl<'a, R> CponReader<'a, R>
     fn read_datetime(&mut self) -> Result<Value, ReadError> {
         self.get_byte()?; // eat 'd'
         let v = self.read_string()?;
-        if let Value::String(sdata) = v {
-            match DateTime::from_iso_str(&sdata) {
-                Ok(dt) => {
-                    return Ok(Value::from(dt));
-                }
-                Err(err) => {
-                    return Err(self.make_error(&err, ReadErrorReason::InvalidCharacter))
-                }
+        match DateTime::from_iso_str(&v) {
+            Ok(dt) => {
+                Ok(Value::from(dt))
+            }
+            Err(err) => {
+                Err(self.make_error(&err, ReadErrorReason::InvalidCharacter))
             }
         }
-        Err(self.make_error("Invalid DateTime", ReadErrorReason::InvalidCharacter))
     }
     fn read_true(&mut self) -> Result<Value, ReadError> {
         self.read_text_token("true")?;
@@ -545,7 +542,7 @@ where R: Read
     fn make_error(&self, msg: &str, reason: ReadErrorReason) -> ReadError {
         self.byte_reader.make_error(&format!("Cpon read error - {msg}"), reason)
     }
-    fn read_string(&mut self) -> Result<Value, ReadError> {
+    fn read_string(&mut self) -> Result<String, ReadError> {
         let mut buff: Vec<u8> = Vec::new();
         self.get_byte()?; // eat "
         loop {
@@ -572,9 +569,9 @@ where R: Read
                 }
             }
         }
-        let s = std::str::from_utf8(&buff);
+        let s = String::from_utf8(buff);
         match s {
-            Ok(s) => Ok(Value::from(s)),
+            Ok(s) => Ok(s),
             Err(e) => Err(self.make_error(&format!("Invalid String, Utf8 error: {e}"), ReadErrorReason::InvalidCharacter)),
         }
     }
@@ -615,7 +612,7 @@ impl<R> Reader for CponReader<'_, R>
         let b = self.peek_byte()?;
         let v = match &b {
             b'0' ..= b'9' | b'+' | b'-' => self.read_number(),
-            b'"' => self.read_string(),
+            b'"' => self.read_string().map(Value::from),
             b'b' => self.read_blob_esc(),
             b'x' => self.read_blob_hex(),
             b'[' => self.read_list(),
@@ -681,11 +678,7 @@ impl<R> Reader for CponReader<'_, R>
         if b == b'"' {
             // Regular map keys are strings
             let key = self.read_string()?;
-            if let Value::String(s) = key {
-                Ok(MapKey::String((*s).clone()))
-            } else {
-                Err(self.make_error("Expected string key in map", ReadErrorReason::InvalidCharacter))
-            }
+            Ok(MapKey::String(key))
         } else if b.is_ascii_digit() || b == b'+' || b == b'-' {
             // IMap keys are integers
             let ReadInt{ value, is_negative, .. } = self.read_int(0, false)?;
