@@ -303,40 +303,46 @@ where
 }
 
 #[cfg(feature = "specialization")]
-mod with_specialization {
-    use super::{
-        from_vec_rpcvalue_for_rpcvalue,
-        from_map_rpcvalue_for_rpcvalue,
-        from_imap_rpcvalue_for_rpcvalue
+macro_rules! with_specialization {
+    () => {
+        mod with_specialization {
+            use super::{
+                from_vec_rpcvalue_for_rpcvalue,
+                from_map_rpcvalue_for_rpcvalue,
+                from_imap_rpcvalue_for_rpcvalue
+            };
+            use crate::RpcValue;
+            use std::collections::BTreeMap;
+            use super::{List,Map,IMap};
+
+            impl<T: Into<RpcValue>> From<Vec<T>> for RpcValue {
+                default fn from(value: Vec<T>) -> Self {
+                    from_vec_rpcvalue_for_rpcvalue(value)
+                }
+            }
+            impl<T: Into<RpcValue>> From<BTreeMap<String, T>> for RpcValue {
+                default fn from(value: BTreeMap<String, T>) -> Self {
+                    from_map_rpcvalue_for_rpcvalue(value)
+                }
+            }
+            impl<T: Into<RpcValue>> From<BTreeMap<i32, T>> for RpcValue {
+                default fn from(value: BTreeMap<i32, T>) -> Self {
+                    from_imap_rpcvalue_for_rpcvalue(value)
+                }
+            }
+
+            // Specializations of `impl From<Collection<RpcValue>> for RpcValue`
+            // for List, Map and IMap to just move the value instead of iterating
+            // through the collections.
+            impl_from_type_for_rpcvalue!(List);
+            impl_from_type_for_rpcvalue!(Map);
+            impl_from_type_for_rpcvalue!(IMap);
+        }
     };
-    use crate::RpcValue;
-    use std::collections::BTreeMap;
-    use super::{List,Map,IMap};
-
-    impl<T: Into<RpcValue>> From<Vec<T>> for RpcValue {
-        default fn from(value: Vec<T>) -> Self {
-            from_vec_rpcvalue_for_rpcvalue(value)
-        }
-    }
-    impl<T: Into<RpcValue>> From<BTreeMap<String, T>> for RpcValue {
-        default fn from(value: BTreeMap<String, T>) -> Self {
-            from_map_rpcvalue_for_rpcvalue(value)
-        }
-    }
-    impl<T: Into<RpcValue>> From<BTreeMap<i32, T>> for RpcValue {
-        default fn from(value: BTreeMap<i32, T>) -> Self {
-            from_imap_rpcvalue_for_rpcvalue(value)
-        }
-    }
-
-    // Specializations of `impl From<Collection<RpcValue>> for RpcValue`
-    // for List, Map and IMap to just move the value instead of iterating
-    // through the collections.
-    impl_from_type_for_rpcvalue!(List);
-    impl_from_type_for_rpcvalue!(Map);
-    impl_from_type_for_rpcvalue!(IMap);
 }
 
+#[cfg(feature = "specialization")]
+with_specialization!();
 
 #[cfg(not(feature = "specialization"))]
 mod without_specialization {
@@ -512,6 +518,65 @@ impl TryFrom<Value> for Vec<u8> {
         }
     }
 }
+
+macro_rules! count {
+    ($($xs:ident),+) => {
+        [$((stringify!($xs))),+].len()
+    };
+}
+
+macro_rules! impl_try_from_tuple {
+    ($(($T:ident, $var:ident, $idx:expr)),+) => {
+        impl<$($T),+> TryFrom<Value> for ($($T,)+)
+        where
+            $($T: TryFrom<Value, Error = String>),+
+        {
+            type Error = String;
+
+            fn try_from(value: Value) -> Result<Self, Self::Error> {
+                const COUNT: usize = count!($($T),+);
+                let expected_type = || format!("List of size {COUNT}");
+                match value {
+                    Value::List(val) => {
+                        let [$($var),+] = (*val)
+                            .try_into()
+                            .map_err(|orig_value: Vec<RpcValue>| {
+                                format_err_try_from(
+                                    &expected_type(),
+                                    &format!("List of size {}", orig_value.len())
+                                )
+                            })?;
+
+                        Ok((
+                            $($var.value.try_into().map_err(|err| {
+                                format!("Error at tuple index {}: {}", $idx, err)
+                            })?),+,
+                        ))
+                    }
+                    _ => Err(format_err_try_from(&expected_type(), value.type_name())),
+                }
+            }
+        }
+
+        impl<$($T),+> TryFrom<RpcValue> for ($($T,)+)
+        where
+            $($T: TryFrom<Value, Error = String>),+
+        {
+            type Error = String;
+
+            fn try_from(value: RpcValue) -> Result<Self, Self::Error> {
+                value.value.try_into()
+            }
+        }
+    };
+}
+
+impl_try_from_tuple!((Type1, val1, 0));
+impl_try_from_tuple!((Type1, val1, 0), (Type2, val2, 1));
+impl_try_from_tuple!((Type1, val1, 0), (Type2, val2, 1), (Type3, val3, 2));
+impl_try_from_tuple!((Type1, val1, 0), (Type2, val2, 1), (Type3, val3, 2), (Type4, val4, 3));
+impl_try_from_tuple!((Type1, val1, 0), (Type2, val2, 1), (Type3, val3, 2), (Type4, val4, 3), (Type5, val5, 4));
+impl_try_from_tuple!((Type1, val1, 0), (Type2, val2, 1), (Type3, val3, 2), (Type4, val4, 3), (Type5, val5, 4), (Type6, val6, 5));
 
 impl<'a> TryFrom<&'a Value> for &'a [u8] {
     type Error = String;
@@ -1349,5 +1414,27 @@ mod test {
             (2, 2_i32),
         ].into_iter().collect::<BTreeMap<_,_>>();
         assert_eq!(Ok(v.clone()), RpcValue::from(v).try_into());
+
+        // Known-size arrays into tuples
+        assert_eq!(RpcValue::from(make_list![1]).try_into(), Ok((1,)));
+        assert_eq!(RpcValue::from(make_list![1, 2]).try_into(), Ok((1, 2)));
+        assert_eq!(RpcValue::from(make_list![1, 2, 3]).try_into(), Ok((1, 2, 3)));
+        assert_eq!(RpcValue::from(make_list![1, 2, 3, 4]).try_into(), Ok((1, 2, 3, 4)));
+        assert_eq!(RpcValue::from(make_list![1, 2, 3, 4, 5]).try_into(), Ok((1, 2, 3, 4, 5)));
+        assert_eq!(RpcValue::from(make_list![1, 2, 3, 4, 5, 6]).try_into(), Ok((1, 2, 3, 4, 5, 6)));
+
+        // Heteregenous tuples are supported
+        assert_eq!(RpcValue::from(make_list!["some_string", 2, 3, 4, 5, 6]).try_into(), Ok(("some_string".to_string(), 2, 3, 4, 5, 6)));
+        assert_eq!(RpcValue::from(make_list![RpcValue::null(), 2, 3_u32, "some_string", make_list!["some", "list", "elements"], make_map!("my_map" => "my_value")]).try_into(), Ok(((), 2, 3_u32, "some_string".to_string(), make_list!["some", "list", "elements"], make_map!("my_map" => "my_value"))));
+
+        // Mismatched base type
+        assert_eq!(<(i32, i32, i32)>::try_from(RpcValue::null()).unwrap_err(), "Expected type `List of size 3`, got `Null`");
+
+        // Mismatched tuple sizes
+        assert_eq!(<(i32, i32, i32)>::try_from(RpcValue::from(make_list![1])).unwrap_err(), "Expected type `List of size 3`, got `List of size 1`");
+
+        // Mismatched tuple types
+        assert_eq!(<(String, i32, i32)>::try_from(RpcValue::from(make_list![1, 2, 3])).unwrap_err(), "Error at tuple index 0: Expected type `String`, got `Int`");
+        assert_eq!(<(i32, String, i32)>::try_from(RpcValue::from(make_list![1, 2, 3])).unwrap_err(), "Error at tuple index 1: Expected type `String`, got `Int`");
     }
 }
