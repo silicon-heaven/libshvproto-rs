@@ -303,40 +303,46 @@ where
 }
 
 #[cfg(feature = "specialization")]
-mod with_specialization {
-    use super::{
-        from_vec_rpcvalue_for_rpcvalue,
-        from_map_rpcvalue_for_rpcvalue,
-        from_imap_rpcvalue_for_rpcvalue
+macro_rules! with_specialization {
+    () => {
+        mod with_specialization {
+            use super::{
+                from_vec_rpcvalue_for_rpcvalue,
+                from_map_rpcvalue_for_rpcvalue,
+                from_imap_rpcvalue_for_rpcvalue
+            };
+            use crate::RpcValue;
+            use std::collections::BTreeMap;
+            use super::{List,Map,IMap};
+
+            impl<T: Into<RpcValue>> From<Vec<T>> for RpcValue {
+                default fn from(value: Vec<T>) -> Self {
+                    from_vec_rpcvalue_for_rpcvalue(value)
+                }
+            }
+            impl<T: Into<RpcValue>> From<BTreeMap<String, T>> for RpcValue {
+                default fn from(value: BTreeMap<String, T>) -> Self {
+                    from_map_rpcvalue_for_rpcvalue(value)
+                }
+            }
+            impl<T: Into<RpcValue>> From<BTreeMap<i32, T>> for RpcValue {
+                default fn from(value: BTreeMap<i32, T>) -> Self {
+                    from_imap_rpcvalue_for_rpcvalue(value)
+                }
+            }
+
+            // Specializations of `impl From<Collection<RpcValue>> for RpcValue`
+            // for List, Map and IMap to just move the value instead of iterating
+            // through the collections.
+            impl_from_type_for_rpcvalue!(List);
+            impl_from_type_for_rpcvalue!(Map);
+            impl_from_type_for_rpcvalue!(IMap);
+        }
     };
-    use crate::RpcValue;
-    use std::collections::BTreeMap;
-    use super::{List,Map,IMap};
-
-    impl<T: Into<RpcValue>> From<Vec<T>> for RpcValue {
-        default fn from(value: Vec<T>) -> Self {
-            from_vec_rpcvalue_for_rpcvalue(value)
-        }
-    }
-    impl<T: Into<RpcValue>> From<BTreeMap<String, T>> for RpcValue {
-        default fn from(value: BTreeMap<String, T>) -> Self {
-            from_map_rpcvalue_for_rpcvalue(value)
-        }
-    }
-    impl<T: Into<RpcValue>> From<BTreeMap<i32, T>> for RpcValue {
-        default fn from(value: BTreeMap<i32, T>) -> Self {
-            from_imap_rpcvalue_for_rpcvalue(value)
-        }
-    }
-
-    // Specializations of `impl From<Collection<RpcValue>> for RpcValue`
-    // for List, Map and IMap to just move the value instead of iterating
-    // through the collections.
-    impl_from_type_for_rpcvalue!(List);
-    impl_from_type_for_rpcvalue!(Map);
-    impl_from_type_for_rpcvalue!(IMap);
 }
 
+#[cfg(feature = "specialization")]
+with_specialization!();
 
 #[cfg(not(feature = "specialization"))]
 mod without_specialization {
