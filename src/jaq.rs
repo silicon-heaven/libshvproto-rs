@@ -8,63 +8,74 @@ pub type ValR = jaq_all::jaq_core::ValR<RpcValue>;
 pub type ValX<'a> = jaq_all::jaq_core::ValX<'a, RpcValue>;
 impl Neg for RpcValue {
     type Output = ValR;
-    fn neg(self) -> Self::Output {
-        match &self.value {
-            Value::Int(num) => Ok((-num).into()),
-            _ => Err(jaq_all::jaq_core::Error::typ(self, "")),
+    fn neg(mut self) -> Self::Output {
+        match &mut self.value {
+            Value::Int(num) => *num = -*num,
+            _ => return Err(jaq_all::jaq_core::Error::typ(self, "")),
         }
+        Ok(self)
     }
 }
 
 impl Add for RpcValue {
     type Output = ValR;
-    fn add(self, rhs: Self) -> Self::Output {
-        match (&self.value, &rhs.value) {
-            (Value::Int(x), Value::Int(y)) => Ok((x + y).into()),
-            (Value::UInt(x), Value::UInt(y)) => Ok((x + y).into()),
-            _=> Err(Error::math(self, ops::Math::Add, rhs))
+    fn add(mut self, rhs: Self) -> Self::Output {
+        match (&mut self.value, &rhs.value) {
+            (Value::Int(x), Value::Int(y)) => *x += y,
+            (Value::UInt(x), Value::UInt(y)) => *x += y,
+            _=> return Err(Error::math(self, ops::Math::Add, rhs))
         }
+
+        Ok(self)
     }
 }
 
 impl Sub for RpcValue {
     type Output = ValR;
-    fn sub(self, rhs: Self) -> Self::Output {
-        match (&self.value, &rhs.value) {
-            (Value::Int(x), Value::Int(y)) => Ok((x - y).into()),
-            (Value::UInt(x), Value::UInt(y)) => Ok((x - y).into()),
-            _=> Err(Error::math(self, ops::Math::Sub, rhs))
+    fn sub(mut self, rhs: Self) -> Self::Output {
+        match (&mut self.value, &rhs.value) {
+            (Value::Int(x), Value::Int(y)) => *x -= y,
+            (Value::UInt(x), Value::UInt(y)) => *x -= y,
+            _=> return Err(Error::math(self, ops::Math::Sub, rhs))
         }
+
+        Ok(self)
     }
 }
 
 impl Mul for RpcValue {
     type Output = ValR;
-    fn mul(self, rhs: Self) -> Self::Output {
-        match (&self.value, &rhs.value) {
-            (Value::Int(x), Value::Int(y)) => Ok((x * y).into()),
-            _=> Err(Error::math(self, ops::Math::Mul, rhs))
+    fn mul(mut self, rhs: Self) -> Self::Output {
+        match (&mut self.value, &rhs.value) {
+            (Value::Int(x), Value::Int(y)) => *x *= y,
+            _=> return Err(Error::math(self, ops::Math::Mul, rhs))
         }
+
+        Ok(self)
     }
 }
 
 impl Div for RpcValue {
     type Output = ValR;
-    fn div(self, rhs: Self) -> Self::Output {
-        match (&self.value, &rhs.value) {
-            (Value::Int(x), Value::Int(y)) => Ok((x / y).into()),
-            _=> Err(Error::math(self, ops::Math::Div, rhs))
+    fn div(mut self, rhs: Self) -> Self::Output {
+        match (&mut self.value, &rhs.value) {
+            (Value::Int(x), Value::Int(y)) => *x /=y,
+            _=> return Err(Error::math(self, ops::Math::Div, rhs))
         }
+
+        Ok(self)
     }
 }
 
 impl Rem for RpcValue {
     type Output = ValR;
-    fn rem(self, rhs: Self) -> Self::Output {
-        match (&self.value, &rhs.value) {
-            (Value::Int(x), Value::Int(y)) => Ok((x % y).into()),
-            _=> Err(Error::math(self, ops::Math::Rem, rhs))
+    fn rem(mut self, rhs: Self) -> Self::Output {
+        match (&mut self.value, &rhs.value) {
+            (Value::Int(x), Value::Int(y)) => *x %= y,
+            _=> return Err(Error::math(self, ops::Math::Rem, rhs))
         }
+
+        Ok(self)
     }
 }
 
@@ -274,31 +285,33 @@ impl jaq_all::jaq_core::ValT for RpcValue {
         }
     }
 
-    fn map_values<'a, I: Iterator<Item = ValX<'a>>>(self, opt: jaq_all::jaq_core::path::Opt, f: impl Fn(Self) -> I,
+    fn map_values<'a, I: Iterator<Item = ValX<'a>>>(mut self, opt: jaq_all::jaq_core::path::Opt, f: impl Fn(Self) -> I,
     ) -> ValX<'a> {
         match self.value {
             Value::List(lst) => {
-                lst
+                self.value = (*lst)
                     .into_iter()
                     .flat_map(f)
                     .collect::<Result<Vec<_>,_>>()
-                    .map(Into::into)
+                    .map(Into::into)?;
             }
             Value::Map(map) => {
-                map
+                self.value = (*map)
                     .into_iter()
                     .filter_map(|(k, v)| f(v)
                         .next()
-                        .map(|v| Ok((k, v?))))
+                        .map(|v| v.map(|v| (k, v))))
                     .collect::<Result<BTreeMap<_,_>,_>>()
-                    .map(Into::into)
+                    .map(Into::into)?;
             }
-            v => opt.fail(RpcValue { meta: None, value: v }, |v| jaq_all::jaq_core::Exn::from(Error::typ(v, ""))),
+            _ => return opt.fail(self, |v| jaq_all::jaq_core::Exn::from(Error::typ(v, ""))),
         }
+
+        Ok(self)
     }
 
     fn map_index<'a, I: Iterator<Item = ValX<'a>>>(
-        self,
+        mut self,
         index: &Self,
         opt: jaq_all::jaq_core::path::Opt,
         f: impl Fn(Self) -> I,
@@ -307,13 +320,12 @@ impl jaq_all::jaq_core::ValT for RpcValue {
             let range = o.get("start")..o.get("end");
             return self.map_range(range, opt, f);
         }
-        match self.value {
+        match &mut self.value {
             Value::Map(map) => {
-                let mut map = *map;
                 let Value::String(index) = &index.value else {
-                    return opt.fail(RpcValue { meta: None, value: index.value.clone() }, |v| jaq_all::jaq_core::Exn::from(Error::typ(v, "")))
+                    return opt.fail(self, |v| jaq_all::jaq_core::Exn::from(Error::typ(v, "")))
                 };
-                match map.entry(index.to_string()) {
+                match map.as_mut().entry(index.to_string()) {
                     Entry::Occupied(mut e) => {
                         let v = e.get_mut();
                         match f(v.clone()).next().transpose()? {
@@ -327,16 +339,14 @@ impl jaq_all::jaq_core::ValT for RpcValue {
                         }
                     },
                 }
-                Ok(map.into())
             },
             #[expect(clippy::cast_possible_truncation, reason = "For now, we hope that usizes are 64-bit")]
             Value::List(lst) => {
-                let mut lst = *lst;
                 let Value::UInt(index) = &index.value else {
-                    return opt.fail(RpcValue { meta: None, value: index.value.clone() }, |v| jaq_all::jaq_core::Exn::from(Error::typ(v, "")))
+                    return opt.fail(self, |v| jaq_all::jaq_core::Exn::from(Error::typ(v, "")))
                 };
                 let Some(x) = lst.get(*index as usize) else {
-                    return opt.fail(lst.into(), |oof| Exn::from(Error::typ(oof, "")));
+                    return opt.fail(self, |oof| Exn::from(Error::typ(oof, "")));
                 };
 
                 if let Some(y) = f(x.clone()).next().transpose()? {
@@ -345,10 +355,11 @@ impl jaq_all::jaq_core::ValT for RpcValue {
                     lst.remove(*index as usize);
                 }
 
-                Ok(lst.into())
             },
-            v => opt.fail(RpcValue { meta: None, value: v }, |v| jaq_all::jaq_core::Exn::from(Error::typ(v, ""))),
+            _ => return opt.fail(self, |v| jaq_all::jaq_core::Exn::from(Error::typ(v, ""))),
         }
+
+        Ok(self)
     }
 
     fn map_range<'a, I: Iterator<Item = ValX<'a>>>(
@@ -357,7 +368,7 @@ impl jaq_all::jaq_core::ValT for RpcValue {
         opt: jaq_all::jaq_core::path::Opt,
         _f: impl Fn(Self) -> I,
     ) -> ValX<'a> {
-        opt.fail(RpcValue { meta: None, value: self.value }, |v| jaq_all::jaq_core::Exn::from(Error::typ(v, "")))
+        opt.fail(self, |v| jaq_all::jaq_core::Exn::from(Error::typ(v, "")))
     }
 
     fn as_bool(&self) -> bool {
