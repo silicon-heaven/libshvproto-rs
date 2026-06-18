@@ -2,6 +2,7 @@
 mod test {
     use std::collections::BTreeMap;
 
+    use chrono::FixedOffset;
     use shvproto::{RpcValue,FromRpcValue,ToRpcValue};
 
     #[derive(Clone,Debug,PartialEq,FromRpcValue,ToRpcValue)]
@@ -361,5 +362,21 @@ mod test {
             "uptimeDays" => 10,
         }.into();
         let _v: EnumWithNamedFieldsCustomTag = rv.try_into().unwrap();
+    }
+
+    #[test]
+    fn my_struct() {
+        type DateTime = chrono::DateTime<FixedOffset>;
+
+        #[derive(Debug, Clone, PartialEq, FromRpcValue)]
+        enum DbValue {
+            String(String),
+            Blob(Vec<u8>),
+            Int(i64),
+            Double(f64),
+            Bool(bool),
+            DateTime(DateTime),
+            Null,
+        }
     }
 }
