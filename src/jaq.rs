@@ -23,6 +23,7 @@ impl Add for RpcValue {
         match (&mut self.value, &rhs.value) {
             (Value::Int(x), Value::Int(y)) => *x += y,
             (Value::UInt(x), Value::UInt(y)) => *x += y,
+            (Value::UInt(x), Value::Int(y)) => *x = (x.cast_signed() + *y).cast_unsigned(),
             _=> return Err(Error::math(self, ops::Math::Add, rhs))
         }
 
