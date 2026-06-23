@@ -10,6 +10,7 @@ impl Neg for RpcValue {
     type Output = ValR;
     fn neg(mut self) -> Self::Output {
         match &mut self.value {
+            Value::Bool(bool) => *bool = !*bool,
             Value::Int(num) => *num = -*num,
             _ => return Err(jaq_all::jaq_core::Error::typ(self, "")),
         }
@@ -37,6 +38,7 @@ impl Sub for RpcValue {
         match (&mut self.value, &rhs.value) {
             (Value::Int(x), Value::Int(y)) => *x -= y,
             (Value::UInt(x), Value::UInt(y)) => *x -= y,
+            (Value::UInt(x), Value::Int(y)) => *x = (x.cast_signed() - *y).cast_unsigned(),
             _=> return Err(Error::math(self, ops::Math::Sub, rhs))
         }
 
@@ -49,6 +51,8 @@ impl Mul for RpcValue {
     fn mul(mut self, rhs: Self) -> Self::Output {
         match (&mut self.value, &rhs.value) {
             (Value::Int(x), Value::Int(y)) => *x *= y,
+            (Value::UInt(x), Value::UInt(y)) => *x *= y,
+            (Value::UInt(x), Value::Int(y)) => *x = (x.cast_signed() * *y).cast_unsigned(),
             _=> return Err(Error::math(self, ops::Math::Mul, rhs))
         }
 
@@ -61,6 +65,8 @@ impl Div for RpcValue {
     fn div(mut self, rhs: Self) -> Self::Output {
         match (&mut self.value, &rhs.value) {
             (Value::Int(x), Value::Int(y)) => *x /=y,
+            (Value::UInt(x), Value::UInt(y)) => *x /= y,
+            (Value::UInt(x), Value::Int(y)) => *x = (x.cast_signed() / *y).cast_unsigned(),
             _=> return Err(Error::math(self, ops::Math::Div, rhs))
         }
 

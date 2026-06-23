@@ -129,5 +129,46 @@ mod test {
             }
             Ok(())
         }
+
+        #[test]
+        fn arithmetics() -> Result<(), String> {
+            // FIXME: Add a way to specify UInt literals, and then use it here in the tests.
+            for (input, filter, expected_output) in [
+                ("null", "(-false)", r"true"),
+                ("null", "(-true)", r"false"),
+                ("null", "(-1)", r"-1"),
+
+                ("null", "1 + 1", r"2"),
+                ("1", ". + 1", r"2"),
+                ("1u", ". + (-1)", r"0u"),
+                ("-1", ". + .", r"-2"),
+                ("1u", ". + 1", r"2u"),
+                ("1", ". + .", r"2"),
+                ("1u", ". + .", r"2u"),
+
+                ("1u", ". - .", r"0u"),
+                ("1u", ". - 1", r"0u"),
+                ("null", "1 - 1", r"0"),
+                ("1", ". - 1", r"0"),
+
+                ("null", "(10 * 10)", r"100"),
+                ("10u", ". * .", r"100u"),
+                ("10u", ". * 10", r"100u"),
+
+                ("null", "(10 / 10)", r"1"),
+                ("10u", ". / .", r"1u"),
+                ("10u", ". / 10", r"1u"),
+
+                ("null", "(10 % 10)", r"0"),
+                ("null", "(10 % 11)", r"10"),
+                ("null", "(10 % 9)", r"1"),
+            ] {
+                let input = RpcValue::from_cpon(input).expect("valid cpon expected");
+                let expected_output = RpcValue::from_cpon(expected_output).expect("valid cpon expected");
+                let output = run_cq(&input, filter)?;
+                assert_eq!(output, expected_output);
+            }
+            Ok(())
+        }
     }
 }
