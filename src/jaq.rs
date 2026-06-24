@@ -175,10 +175,10 @@ impl jaq_all::jaq_std::ValT for RpcValue {
     }
 
     fn as_f64(&self) -> Option<f64> {
-        if let Value::Double(double) = self.value {
-            Some(double)
-        } else {
-            None
+        match self.value {
+            Value::Double(double) => Some(double),
+            Value::Decimal(decimal) => Some(decimal.to_f64()),
+            _ => None,
         }
     }
 
