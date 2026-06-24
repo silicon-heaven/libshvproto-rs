@@ -226,5 +226,18 @@ mod test {
                 (r#" "asdfasdf" "#, ".[4:7]", r#" "asd" "#),
             ])
         }
+
+        #[test]
+        fn misc() -> Result<(), String> {
+            impl_cq_test([
+                (r#" [1, 2, 3] "#, "reverse", r#" [3, 2, 1] "#),
+                (r#" 12 "#, "round", r#" 12 "#),
+                (r#" 1.2 "#, "round", r#" 1 "#),
+                (r#" 1.25p-2 "#, "round", r#" 1 "#),
+                (r#" "asdf" "#, "explode", r#" [97,115,100,102] "#),
+                (r#" [97,115,100,102] "#, "implode", r#" "asdf" "#),
+                (r#" "   asdf    " "#, "trim", r#" "asdf" "#),
+            ])
+        }
     }
 }
