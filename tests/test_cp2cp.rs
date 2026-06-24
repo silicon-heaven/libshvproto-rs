@@ -170,5 +170,59 @@ mod test {
             }
             Ok(())
         }
+
+        #[test]
+        fn comparisons() -> Result<(), String> {
+            for (input, filter, expected_output) in [
+                ("null", "null == null", r"true"),
+                ("null", "true == true", r"true"),
+                ("null", "{a: false} == {a: false}", r"true"),
+                ("null", "{a: false} == {a: true}", r"false"),
+                ("null", "{a: false} == {b: false}", r"false"),
+
+                ("null", "null < null", r"false"),
+                ("null", "null < 1", r"true"),
+                ("null", "1 > null", r"true"),
+                ("null", "false > 1", r"false"),
+                ("null", "1 < false", r"false"),
+                ("null", "1 < {}", r"true"),
+                ("null", "{} < 1", r"false"),
+                ("1u", ". < {}", r"true"),
+                ("1u", "{} < .", r"false"),
+                ("1.25p-2", ". < {}", r"true"),
+                ("1.25p-2", "{} < .", r"false"),
+                ("1e1", ". < {}", r"true"),
+                ("1e1", "{} < .", r"false"),
+                (r#"d"2017-05-03T15:52:31.123""#, ". < {}", r"true"),
+                (r#"d"2017-05-03T15:52:31.123""#, "{} < .", r"false"),
+                ("null", "\"asdf\" < {}", r"true"),
+                ("null", r#"{} < "asdf" "#, r"false"),
+                (r#"b"""#, ". < {}", r"true"),
+                (r#"b"""#, "{} < .", r"false"),
+                ("null", "[] < {}", r"true"),
+                ("null", "{} < []", r"false"),
+                ("i{}", ". < {}", r"true"),
+                ("i{}", "{} < .", r"false"),
+
+                ("null", "false < true", r"true"),
+                ("null", "1 < 2", r"true"),
+                ("null", r#" "asdf" < "xxxx" "#, r"true"),
+                ("null", "[1] < [1, 1]", r"true"),
+                ("null", "{} < {a: 1}", r"true"),
+
+                // FIXME: No way of creating these values in cq yet.
+                ("1u", ". < (. + (1))", r"true"),
+                (r#"d"2017-05-03T15:52:31.123""#, ". < .", r"false"),
+                ("1e1", ". < .", r"false"),
+                (r#" b"" "#, ". < .", r"false"),
+                ("i{}", ". < .", r"false"),
+            ] {
+                let input = RpcValue::from_cpon(input).expect("valid cpon expected");
+                let expected_output = RpcValue::from_cpon(expected_output).expect("valid cpon expected");
+                let output = run_cq(&input, filter)?;
+                assert_eq!(output, expected_output);
+            }
+            Ok(())
+        }
     }
 }
