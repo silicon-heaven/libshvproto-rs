@@ -110,9 +110,20 @@ mod test {
             Ok(())
         }
 
+        fn impl_cq_test(tests: impl IntoIterator<Item = (&'static str, &'static str, &'static str)>) -> Result<(), String> {
+            for (input, filter, expected_output) in tests {
+                let input = RpcValue::from_cpon(input).expect("valid cpon expected");
+                let expected_output = RpcValue::from_cpon(expected_output).expect("valid cpon expected");
+                let output = run_cq(&input, filter)?;
+                assert_eq!(output, expected_output);
+            }
+
+            Ok(())
+        }
+
         #[test]
         fn key_lookup() -> Result<(), String> {
-            for (input, filter, expected_output) in [
+            impl_cq_test([
                 (r#"null"#, ".[0]", r#"null"#),
                 (r#"null"#, ".foo", r#"null"#),
                 (r#"{"foo": true}"#, ".foo", "true"),
@@ -121,19 +132,13 @@ mod test {
                 (r#"["first_elem", "second_elem"]"#, ".[0]", r#""first_elem""#),
                 (r#"["first_elem", "second_elem"]"#, ".[1]", r#""second_elem""#),
                 // (r#"i{1: "one", 2: "two"}"#, ".asd", "\"two\"")
-            ] {
-                let input = RpcValue::from_cpon(input).expect("valid cpon expected");
-                let expected_output = RpcValue::from_cpon(expected_output).expect("valid cpon expected");
-                let output = run_cq(&input, filter)?;
-                assert_eq!(output, expected_output);
-            }
-            Ok(())
+            ])
         }
 
         #[test]
         fn arithmetics() -> Result<(), String> {
             // FIXME: Add a way to specify UInt literals, and then use it here in the tests.
-            for (input, filter, expected_output) in [
+            impl_cq_test([
                 ("null", "(-false)", r"true"),
                 ("null", "(-true)", r"false"),
                 ("null", "(-1)", r"-1"),
@@ -162,18 +167,12 @@ mod test {
                 ("null", "(10 % 10)", r"0"),
                 ("null", "(10 % 11)", r"10"),
                 ("null", "(10 % 9)", r"1"),
-            ] {
-                let input = RpcValue::from_cpon(input).expect("valid cpon expected");
-                let expected_output = RpcValue::from_cpon(expected_output).expect("valid cpon expected");
-                let output = run_cq(&input, filter)?;
-                assert_eq!(output, expected_output);
-            }
-            Ok(())
+            ])
         }
 
         #[test]
         fn comparisons() -> Result<(), String> {
-            for (input, filter, expected_output) in [
+            impl_cq_test([
                 ("null", "null == null", r"true"),
                 ("null", "true == true", r"true"),
                 ("null", "{a: false} == {a: false}", r"true"),
@@ -216,13 +215,7 @@ mod test {
                 ("1e1", ". < .", r"false"),
                 (r#" b"" "#, ". < .", r"false"),
                 ("i{}", ". < .", r"false"),
-            ] {
-                let input = RpcValue::from_cpon(input).expect("valid cpon expected");
-                let expected_output = RpcValue::from_cpon(expected_output).expect("valid cpon expected");
-                let output = run_cq(&input, filter)?;
-                assert_eq!(output, expected_output);
-            }
-            Ok(())
+            ])
         }
     }
 }
