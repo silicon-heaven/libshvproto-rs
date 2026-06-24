@@ -228,6 +228,14 @@ mod test {
         }
 
         #[test]
+        fn extra_funs() -> Result<(), String> {
+            impl_cq_test([
+                ("null", "typename", r#" "Null" "#),
+                ("1u", "typename", r#" "UInt" "#),
+            ])
+        }
+
+        #[test]
         fn misc() -> Result<(), String> {
             impl_cq_test([
                 (r#" [1, 2, 3] "#, "reverse", r#" [3, 2, 1] "#),

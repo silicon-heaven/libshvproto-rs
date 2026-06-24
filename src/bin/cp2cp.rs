@@ -199,7 +199,7 @@ fn main() {
 
         #[cfg(feature = "cq")]
         let output_values = if let Some(filter) = opts.cq_filter {
-            let filter = match jaq_all::compile_with(&filter, jaq_all::jaq_core::defs().chain(jaq_std::defs()), jaq_all::jaq_core::funs().chain(jaq_std::funs()), &[]) {
+            let filter = match jaq_all::compile_with(&filter, jaq_all::jaq_core::defs().chain(jaq_std::defs()), jaq_all::jaq_core::funs().chain(jaq_std::funs()).chain(shvproto::jaq::funs()), &[]) {
                 Ok(filter) => filter,
                 Err(error) => {
                     eprintln!("Failed to parse cq filter: {error:?}");

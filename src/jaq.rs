@@ -1,6 +1,6 @@
 use std::{cmp::Ordering, collections::{BTreeMap, btree_map::Entry}, ops::{Add, Div, Mul, Neg, Rem, Sub}};
 
-use jaq_all::jaq_core::{Error, Exn, ops};
+use jaq_all::jaq_core::{Error, Exn, Native, RunPtr, data::JustLut, native::Fun, ops};
 
 use crate::{RpcValue, Value};
 
@@ -385,4 +385,16 @@ impl jaq_all::jaq_core::ValT for RpcValue {
     fn into_string(self) -> Self {
         self.to_cpon().into()
     }
+}
+
+pub fn base() -> Box<[jaq_all::jaq_core::native::Filter<RunPtr<JustLut<RpcValue>>>]> {
+    Box::new([
+        ("typename", jaq_all::jaq_core::native::v(0), |(_, val)| {
+            Box::new(core::iter::once(Ok(val.type_name().into())))
+        })
+    ])
+}
+
+pub fn funs() -> impl Iterator<Item = Fun<JustLut<RpcValue>>> {
+    base().into_vec().into_iter().map(|(name, arity, fun)| (name, arity, Native::<JustLut<RpcValue>>::new(fun)))
 }
