@@ -217,5 +217,14 @@ mod test {
                 ("i{}", ". < .", r"false"),
             ])
         }
+
+        #[test]
+        fn slicing() -> Result<(), String> {
+            impl_cq_test([
+                (r#" [1, 2, 3, 4] "#, ".[2:4]", r#" [3, 4] "#),
+
+                (r#" "asdfasdf" "#, ".[4:7]", r#" "asd" "#),
+            ])
+        }
     }
 }
