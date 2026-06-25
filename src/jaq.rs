@@ -271,7 +271,7 @@ impl jaq_all::jaq_core::ValT for RpcValue {
             #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss, reason = "We assume pointer size is 64-bit")]
             (Value::List(list), Value::Int(i)) => Ok((*list).get(*i as usize).cloned().unwrap_or_else(RpcValue::null)),
             (Value::Map(o), Value::String(key)) => Ok(o.get(key.as_str()).cloned().unwrap_or_else(RpcValue::null)),
-            (_s, _) => Err(Error::typ(self, "")),
+            (_s, _) => Err(Error::typ(self, "index")),
         }
     }
 
@@ -321,7 +321,7 @@ impl jaq_all::jaq_core::ValT for RpcValue {
                     .collect::<Result<BTreeMap<_,_>,_>>()
                     .map(Into::into)?;
             }
-            _ => return opt.fail(self, |v| jaq_all::jaq_core::Exn::from(Error::typ(v, ""))),
+            _ => return opt.fail(self, |v| jaq_all::jaq_core::Exn::from(Error::typ(v, "map_values"))),
         }
 
         Ok(self)
@@ -340,7 +340,7 @@ impl jaq_all::jaq_core::ValT for RpcValue {
         match &mut self.value {
             Value::Map(map) => {
                 let Value::String(index) = &index.value else {
-                    return opt.fail(self, |v| jaq_all::jaq_core::Exn::from(Error::typ(v, "")))
+                    return opt.fail(self, |v| jaq_all::jaq_core::Exn::from(Error::typ(v, "map_index")))
                 };
                 match map.as_mut().entry(index.to_string()) {
                     Entry::Occupied(mut e) => {
@@ -360,7 +360,7 @@ impl jaq_all::jaq_core::ValT for RpcValue {
             #[expect(clippy::cast_possible_truncation, reason = "For now, we hope that usizes are 64-bit")]
             Value::List(lst) => {
                 let Value::UInt(index) = &index.value else {
-                    return opt.fail(self, |v| jaq_all::jaq_core::Exn::from(Error::typ(v, "")))
+                    return opt.fail(self, |v| jaq_all::jaq_core::Exn::from(Error::typ(v, "map_index")))
                 };
                 let Some(x) = lst.get(*index as usize) else {
                     return opt.fail(self, |oof| Exn::from(Error::typ(oof, "")));
@@ -373,7 +373,7 @@ impl jaq_all::jaq_core::ValT for RpcValue {
                 }
 
             },
-            _ => return opt.fail(self, |v| jaq_all::jaq_core::Exn::from(Error::typ(v, ""))),
+            _ => return opt.fail(self, |v| jaq_all::jaq_core::Exn::from(Error::typ(v, "map_index"))),
         }
 
         Ok(self)
@@ -385,7 +385,7 @@ impl jaq_all::jaq_core::ValT for RpcValue {
         opt: jaq_all::jaq_core::path::Opt,
         _f: impl Fn(Self) -> I,
     ) -> ValX<'a> {
-        opt.fail(self, |v| jaq_all::jaq_core::Exn::from(Error::typ(v, "")))
+        opt.fail(self, |v| jaq_all::jaq_core::Exn::from(Error::typ(v, "map_range")))
     }
 
     fn as_bool(&self) -> bool {
