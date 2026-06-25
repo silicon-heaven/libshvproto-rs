@@ -20,11 +20,12 @@ impl Neg for RpcValue {
 
 impl Add for RpcValue {
     type Output = ValR;
-    fn add(mut self, rhs: Self) -> Self::Output {
-        match (&mut self.value, &rhs.value) {
-            (Value::Int(x), Value::Int(y)) => *x += y,
-            (Value::UInt(x), Value::UInt(y)) => *x += y,
+    fn add(mut self, mut rhs: Self) -> Self::Output {
+        match (&mut self.value, &mut rhs.value) {
+            (Value::Int(x), Value::Int(y)) => *x += *y,
+            (Value::UInt(x), Value::UInt(y)) => *x += *y,
             (Value::UInt(x), Value::Int(y)) => *x = (x.cast_signed() + *y).cast_unsigned(),
+            (Value::Map(x), Value::Map(y)) => x.append(y),
             _=> return Err(Error::math(self, ops::Math::Add, rhs))
         }
 
