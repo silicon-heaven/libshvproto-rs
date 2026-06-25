@@ -359,17 +359,20 @@ impl jaq_all::jaq_core::ValT for RpcValue {
             },
             #[expect(clippy::cast_possible_truncation, reason = "For now, we hope that usizes are 64-bit")]
             Value::List(lst) => {
-                let Value::UInt(index) = &index.value else {
+                let Value::Int(index) = &index.value else {
                     return opt.fail(self, |v| jaq_all::jaq_core::Exn::from(Error::typ(v, "map_index")))
                 };
-                let Some(x) = lst.get(*index as usize) else {
+                // FIXME: Add support for negative keys.
+                #[expect(clippy::cast_sign_loss, reason = "Indexing is signed, but we epxect insigned keys")]
+                let index = *index as usize;
+                let Some(x) = lst.get_mut(index) else {
                     return opt.fail(self, |oof| Exn::from(Error::typ(oof, "")));
                 };
 
                 if let Some(y) = f(x.clone()).next().transpose()? {
-                    lst.insert(*index as usize, y);
+                    *x = y;
                 } else {
-                    lst.remove(*index as usize);
+                    lst.remove(index);
                 }
 
             },
