@@ -99,7 +99,7 @@ mod test {
                 stdin.write_all(&block).expect("Failed to write to stdin");
             });
             let output = child.wait_with_output().map_err(|err| err.to_string())?;
-            RpcValue::from_chainpack(output.stdout).map_err(|err| err.to_string())
+            RpcValue::from_chainpack(output.stdout).map_err(|err| format!("{}, stderr: {}", err, String::from_utf8_lossy(output.stderr.as_slice())))
         }
 
         #[test]
