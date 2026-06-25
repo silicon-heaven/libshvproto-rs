@@ -255,6 +255,10 @@ mod test {
                 // FIXME: There's no way retrieve multiple RpcValues from cq now.
                 (r#"{"A": 1, "B": 2}"#, ".[]", r#" 1 "#),
                 (r#"i{1:  1,  2:  2}"#, ".[]", r#" 1 "#),
+
+                (r#" [1, 2, 3] "#, "map_values(. * 2)", r#" [2, 4, 6] "#),
+                (r#" {"A": 1, "B": 2} "#, "map_values(. + 1)", r#" {"A": 2, "B": 3} "#),
+                (r#" i{1:  1,  2:  2} "#, "map_values(. = 100)", r#" i{1:  100,  2:  100} "#),
             ])
         }
     }
