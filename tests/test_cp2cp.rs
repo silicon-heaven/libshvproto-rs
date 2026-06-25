@@ -247,6 +247,14 @@ mod test {
                 (r#" "asdf" "#, "explode", r#" [97,115,100,102] "#),
                 (r#" [97,115,100,102] "#, "implode", r#" "asdf" "#),
                 (r#" "   asdf    " "#, "trim", r#" "asdf" "#),
+
+                (r#"[1, 2, 3]"#, "to_entries", r#" [{"key": 0, "value": 1}, {"key": 1, "value": 2}, {"key": 2, "value": 3}] "#),
+                (r#"{"A": 1, "B": 2}"#, "to_entries", r#" [{"key": "A", "value": 1}, {"key": "B", "value": 2}] "#),
+                (r#"i{1:  1,  2:  2}"#, "to_entries", r#" [{"key": 1, "value": 1}, {"key": 2, "value": 2}] "#),
+
+                // FIXME: There's no way retrieve multiple RpcValues from cq now.
+                (r#"{"A": 1, "B": 2}"#, ".[]", r#" 1 "#),
+                (r#"i{1:  1,  2:  2}"#, ".[]", r#" 1 "#),
             ])
         }
     }
