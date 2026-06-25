@@ -383,12 +383,31 @@ impl jaq_all::jaq_core::ValT for RpcValue {
     }
 
     fn map_range<'a, I: Iterator<Item = ValX<'a>>>(
-        self,
-        _range: jaq_all::jaq_core::val::Range<&Self>,
+        mut self,
+        range: jaq_all::jaq_core::val::Range<&Self>,
         opt: jaq_all::jaq_core::path::Opt,
-        _f: impl Fn(Self) -> I,
+        f: impl Fn(Self) -> I,
     ) -> ValX<'a> {
-        opt.fail(self, |v| jaq_all::jaq_core::Exn::from(Error::typ(v, "map_range")))
+        let start = range.start.map_or(0, RpcValue::as_usize);
+        let end = range.end.map_or(0, RpcValue::as_usize);
+        match &mut self.value {
+            Value::List(lst) => {
+                let Some(elems) = lst.get_mut(start..end) else {
+                    return opt.fail(self, |oof| Exn::from(Error::index(oof, crate::make_list!(start, end).into())));
+                };
+
+                for elem in elems {
+                    if let Some(y) = f(elem.clone()).next().transpose()? {
+                        *elem = y;
+                    } else {
+                        return opt.fail(self, |_oof| Exn::from(Error::new("map_range doesn't support removing elements".into())));
+                    }
+                }
+            },
+            _ => return opt.fail(self, |v| jaq_all::jaq_core::Exn::from(Error::typ(v, "map_range"))),
+        }
+
+        Ok(self)
     }
 
     fn as_bool(&self) -> bool {
