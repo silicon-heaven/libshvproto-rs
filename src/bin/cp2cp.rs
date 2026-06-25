@@ -213,7 +213,7 @@ fn main() {
                 match output {
                     Ok(rv) => Some(rv),
                     Err(err) => {
-                        eprintln!("Unexpected error while processing the cq filter: {err:?}");
+                        eprintln!("Unexpected error while processing the cq filter: {}", err.get_err().expect("Exceptions should be Errors, not Halts").into_val().to_cpon());
                         process::exit(CODE_UNEXPECTED_ERROR)
                     },
                 }).collect::<Vec<_>>()
