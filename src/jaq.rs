@@ -312,6 +312,15 @@ impl jaq_all::jaq_core::ValT for RpcValue {
                     .collect::<Result<BTreeMap<_,_>,_>>()
                     .map(Into::into)?;
             }
+            Value::IMap(map) => {
+                self.value = (*map)
+                    .into_iter()
+                    .filter_map(|(k, v)| f(v)
+                        .next()
+                        .map(|v| v.map(|v| (k, v))))
+                    .collect::<Result<BTreeMap<_,_>,_>>()
+                    .map(Into::into)?;
+            }
             _ => return opt.fail(self, |v| jaq_all::jaq_core::Exn::from(Error::typ(v, ""))),
         }
 
