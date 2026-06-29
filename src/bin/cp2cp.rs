@@ -17,7 +17,6 @@ use jaq_all::{jaq_core::{Ctx, Vars, data::JustLut}, jaq_std};
 
 #[derive(Parser, Debug)]
 #[structopt(name = "cp2cp", version = env!("CARGO_PKG_VERSION"), author = env!("CARGO_PKG_AUTHORS"), about = "ChainPack to Cpon and back utility")]
-#[expect(clippy::struct_excessive_bools, reason = "Fine for cli args")]
 struct Cli {
     #[arg(short, long, help = "Cpon indentation string")]
     indent: Option<String>,
@@ -200,7 +199,7 @@ fn main() {
 
         #[cfg(feature = "cq")]
         let output_values = if let Some(filter) = opts.cq_filter {
-            let filter = match jaq_all::compile_with(&filter, jaq_all::jaq_core::defs().chain(jaq_std::defs()), jaq_all::jaq_core::funs().chain(jaq_std::funs()), &[]) {
+            let filter = match jaq_all::compile_with(&filter, jaq_all::jaq_core::defs().chain(jaq_std::defs()), jaq_all::jaq_core::funs().chain(jaq_std::funs()).chain(shvproto::jaq::funs()), &[]) {
                 Ok(filter) => filter,
                 Err(error) => {
                     eprintln!("Failed to parse cq filter: {error:?}");
@@ -214,7 +213,7 @@ fn main() {
                 match output {
                     Ok(rv) => Some(rv),
                     Err(err) => {
-                        eprintln!("Unexpected error while processing the cq filter: {err:?}");
+                        eprintln!("Unexpected error while processing the cq filter: {}", err.get_err().expect("Exceptions should be Errors, not Halts").into_val().to_cpon());
                         process::exit(CODE_UNEXPECTED_ERROR)
                     },
                 }).collect::<Vec<_>>()

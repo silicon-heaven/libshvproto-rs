@@ -1,6 +1,6 @@
-use std::{cmp::Ordering, collections::BTreeMap, ops::{Add, Div, Mul, Neg, Rem, Sub}};
+use std::{cmp::Ordering, collections::{BTreeMap, btree_map::Entry}, ops::{Add, Div, Mul, Neg, Rem, Sub}};
 
-use jaq_all::jaq_core::{Error, ops};
+use jaq_all::jaq_core::{Error, Exn, Native, RunPtr, data::JustLut, native::Fun, ops};
 
 use crate::{RpcValue, Value};
 
@@ -8,63 +8,82 @@ pub type ValR = jaq_all::jaq_core::ValR<RpcValue>;
 pub type ValX<'a> = jaq_all::jaq_core::ValX<'a, RpcValue>;
 impl Neg for RpcValue {
     type Output = ValR;
-    fn neg(self) -> Self::Output {
-        match &self.value {
-            Value::Int(num) => Ok((-num).into()),
-            _ => Err(jaq_all::jaq_core::Error::typ(self, "")),
+    fn neg(mut self) -> Self::Output {
+        match &mut self.value {
+            Value::Bool(bool) => *bool = !*bool,
+            Value::Int(num) => *num = -*num,
+            _ => return Err(jaq_all::jaq_core::Error::typ(self, "")),
         }
+        Ok(self)
     }
 }
 
 impl Add for RpcValue {
     type Output = ValR;
-    fn add(self, rhs: Self) -> Self::Output {
-        match (&self.value, &rhs.value) {
-            (Value::Int(x), Value::Int(y)) => Ok((x + y).into()),
-            (Value::UInt(x), Value::UInt(y)) => Ok((x + y).into()),
-            _=> Err(Error::math(self, ops::Math::Add, rhs))
+    fn add(mut self, mut rhs: Self) -> Self::Output {
+        match (&mut self.value, &mut rhs.value) {
+            (Value::Int(x), Value::Int(y)) => *x += *y,
+            (Value::UInt(x), Value::UInt(y)) => *x += *y,
+            (Value::UInt(x), Value::Int(y)) => *x = (x.cast_signed() + *y).cast_unsigned(),
+            (Value::Map(x), Value::Map(y)) => x.append(y),
+            _=> return Err(Error::math(self, ops::Math::Add, rhs))
         }
+
+        Ok(self)
     }
 }
 
 impl Sub for RpcValue {
     type Output = ValR;
-    fn sub(self, rhs: Self) -> Self::Output {
-        match (&self.value, &rhs.value) {
-            (Value::Int(x), Value::Int(y)) => Ok((x - y).into()),
-            (Value::UInt(x), Value::UInt(y)) => Ok((x - y).into()),
-            _=> Err(Error::math(self, ops::Math::Sub, rhs))
+    fn sub(mut self, rhs: Self) -> Self::Output {
+        match (&mut self.value, &rhs.value) {
+            (Value::Int(x), Value::Int(y)) => *x -= y,
+            (Value::UInt(x), Value::UInt(y)) => *x -= y,
+            (Value::UInt(x), Value::Int(y)) => *x = (x.cast_signed() - *y).cast_unsigned(),
+            _=> return Err(Error::math(self, ops::Math::Sub, rhs))
         }
+
+        Ok(self)
     }
 }
 
 impl Mul for RpcValue {
     type Output = ValR;
-    fn mul(self, rhs: Self) -> Self::Output {
-        match (&self.value, &rhs.value) {
-            (Value::Int(x), Value::Int(y)) => Ok((x * y).into()),
-            _=> Err(Error::math(self, ops::Math::Mul, rhs))
+    fn mul(mut self, rhs: Self) -> Self::Output {
+        match (&mut self.value, &rhs.value) {
+            (Value::Int(x), Value::Int(y)) => *x *= y,
+            (Value::UInt(x), Value::UInt(y)) => *x *= y,
+            (Value::UInt(x), Value::Int(y)) => *x = (x.cast_signed() * *y).cast_unsigned(),
+            _=> return Err(Error::math(self, ops::Math::Mul, rhs))
         }
+
+        Ok(self)
     }
 }
 
 impl Div for RpcValue {
     type Output = ValR;
-    fn div(self, rhs: Self) -> Self::Output {
-        match (&self.value, &rhs.value) {
-            (Value::Int(x), Value::Int(y)) => Ok((x / y).into()),
-            _=> Err(Error::math(self, ops::Math::Div, rhs))
+    fn div(mut self, rhs: Self) -> Self::Output {
+        match (&mut self.value, &rhs.value) {
+            (Value::Int(x), Value::Int(y)) => *x /=y,
+            (Value::UInt(x), Value::UInt(y)) => *x /= y,
+            (Value::UInt(x), Value::Int(y)) => *x = (x.cast_signed() / *y).cast_unsigned(),
+            _=> return Err(Error::math(self, ops::Math::Div, rhs))
         }
+
+        Ok(self)
     }
 }
 
 impl Rem for RpcValue {
     type Output = ValR;
-    fn rem(self, rhs: Self) -> Self::Output {
-        match (&self.value, &rhs.value) {
-            (Value::Int(x), Value::Int(y)) => Ok((x % y).into()),
-            _=> Err(Error::math(self, ops::Math::Rem, rhs))
+    fn rem(mut self, rhs: Self) -> Self::Output {
+        match (&mut self.value, &rhs.value) {
+            (Value::Int(x), Value::Int(y)) => *x %= y,
+            _=> return Err(Error::math(self, ops::Math::Rem, rhs))
         }
+
+        Ok(self)
     }
 }
 
@@ -157,23 +176,38 @@ impl jaq_all::jaq_std::ValT for RpcValue {
     }
 
     fn as_f64(&self) -> Option<f64> {
-        todo!("{}", fn_name::uninstantiated!());
+        match self.value {
+            Value::Double(double) => Some(double),
+            Value::Decimal(decimal) => Some(decimal.to_f64()),
+            _ => None,
+        }
     }
 
     fn is_utf8_str(&self) -> bool {
-        todo!("{}", fn_name::uninstantiated!());
+        self.is_string()
     }
 
     fn as_bytes(&self) -> Option<&[u8]> {
-        todo!("{}", fn_name::uninstantiated!());
+        if let Value::String(str) = &self.value {
+            Some(str.as_bytes())
+        } else {
+            None
+        }
     }
 
-    fn as_sub_str(&self, _sub: &[u8]) -> Self {
-        todo!("{}", fn_name::uninstantiated!());
+    fn as_sub_str(&self, sub: &[u8]) -> Self {
+        if matches!(&self.value, Value::String(_)) {
+            // We do not have any fancy bytes handling, so we will just believe that the sub range
+            // is a substring of self, and create a string out of it.
+            String::from_utf8_lossy(sub).to_string().into()
+        } else {
+            // jaq-json panics here, but I don't really like that, so if self is not a String, let's just give null.
+            RpcValue::null()
+        }
     }
 
-    fn from_utf8_bytes(_b: impl AsRef<[u8]> + Send + 'static) -> Self {
-        todo!("{}", fn_name::uninstantiated!());
+    fn from_utf8_bytes(b: impl AsRef<[u8]> + Send + 'static) -> Self {
+        String::from_utf8_lossy(b.as_ref()).to_string().into()
     }
 }
 
@@ -237,38 +271,143 @@ impl jaq_all::jaq_core::ValT for RpcValue {
             #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss, reason = "We assume pointer size is 64-bit")]
             (Value::List(list), Value::Int(i)) => Ok((*list).get(*i as usize).cloned().unwrap_or_else(RpcValue::null)),
             (Value::Map(o), Value::String(key)) => Ok(o.get(key.as_str()).cloned().unwrap_or_else(RpcValue::null)),
-            (_s, _) => Err(Error::typ(self, "")),
+            (_s, _) => Err(Error::typ(self, "index")),
         }
     }
 
-    fn range(self, _range: jaq_all::jaq_core::val::Range<&Self>) -> ValR {
-        todo!("{}", fn_name::uninstantiated!());
+    fn range(self, range: jaq_all::jaq_core::val::Range<&Self>) -> ValR {
+        let start = range.start.map_or(0, RpcValue::as_usize);
+        let end = range.end.map_or(0, RpcValue::as_usize);
+        match &self.value {
+            Value::String(str) => {
+                let bytes = str.as_bytes();
+                bytes.get(start..end).map(|bytes| String::from_utf8_lossy(bytes).to_string().into()).ok_or_else(|| Error::typ(self, ".."))
+            }
+            Value::List(lst) => {
+                lst
+                    .get(start..end)
+                    .map(|new_range| new_range.to_vec().into())
+                    .ok_or_else(|| Error::typ(self, ".."))
+            }
+            _ => Err(Error::typ(self, "")),
+        }
     }
 
-    fn map_values<'a, I: Iterator<Item = ValX<'a>>>(
-        self,
-        _opt: jaq_all::jaq_core::path::Opt,
-        _f: impl Fn(Self) -> I,
+    fn map_values<'a, I: Iterator<Item = ValX<'a>>>(mut self, opt: jaq_all::jaq_core::path::Opt, f: impl Fn(Self) -> I,
     ) -> ValX<'a> {
-        todo!("{}", fn_name::uninstantiated!());
+        match self.value {
+            Value::List(lst) => {
+                self.value = (*lst)
+                    .into_iter()
+                    .flat_map(f)
+                    .collect::<Result<Vec<_>,_>>()
+                    .map(Into::into)?;
+            }
+            Value::Map(map) => {
+                self.value = (*map)
+                    .into_iter()
+                    .filter_map(|(k, v)| f(v)
+                        .next()
+                        .map(|v| v.map(|v| (k, v))))
+                    .collect::<Result<BTreeMap<_,_>,_>>()
+                    .map(Into::into)?;
+            }
+            Value::IMap(map) => {
+                self.value = (*map)
+                    .into_iter()
+                    .filter_map(|(k, v)| f(v)
+                        .next()
+                        .map(|v| v.map(|v| (k, v))))
+                    .collect::<Result<BTreeMap<_,_>,_>>()
+                    .map(Into::into)?;
+            }
+            _ => return opt.fail(self, |v| jaq_all::jaq_core::Exn::from(Error::typ(v, "map_values"))),
+        }
+
+        Ok(self)
     }
 
     fn map_index<'a, I: Iterator<Item = ValX<'a>>>(
-        self,
-        _index: &Self,
-        _opt: jaq_all::jaq_core::path::Opt,
-        _f: impl Fn(Self) -> I,
+        mut self,
+        index: &Self,
+        opt: jaq_all::jaq_core::path::Opt,
+        f: impl Fn(Self) -> I,
     ) -> ValX<'a> {
-        todo!("{}", fn_name::uninstantiated!());
+        if let (Value::String(..) | Value::List(..), Value::Map(o)) = (&self.value, &index.value) {
+            let range = o.get("start")..o.get("end");
+            return self.map_range(range, opt, f);
+        }
+        match &mut self.value {
+            Value::Map(map) => {
+                let Value::String(index) = &index.value else {
+                    return opt.fail(self, |v| jaq_all::jaq_core::Exn::from(Error::typ(v, "map_index")))
+                };
+                match map.as_mut().entry(index.to_string()) {
+                    Entry::Occupied(mut e) => {
+                        let v = e.get_mut();
+                        match f(v.clone()).next().transpose()? {
+                            Some(y) => e.insert(y),
+                            None => e.remove(),
+                        };
+                    },
+                    Entry::Vacant(e) => {
+                        if let Some(y) = f(RpcValue::null()).next().transpose()? {
+                            e.insert(y);
+                        }
+                    },
+                }
+            },
+            #[expect(clippy::cast_possible_truncation, reason = "For now, we hope that usizes are 64-bit")]
+            Value::List(lst) => {
+                let Value::Int(index) = &index.value else {
+                    return opt.fail(self, |v| jaq_all::jaq_core::Exn::from(Error::typ(v, "map_index")))
+                };
+                // FIXME: Add support for negative keys.
+                #[expect(clippy::cast_sign_loss, reason = "Indexing is signed, but we epxect insigned keys")]
+                let index = *index as usize;
+                let Some(x) = lst.get_mut(index) else {
+                    return opt.fail(self, |oof| Exn::from(Error::typ(oof, "")));
+                };
+
+                if let Some(y) = f(x.clone()).next().transpose()? {
+                    *x = y;
+                } else {
+                    lst.remove(index);
+                }
+
+            },
+            _ => return opt.fail(self, |v| jaq_all::jaq_core::Exn::from(Error::typ(v, "map_index"))),
+        }
+
+        Ok(self)
     }
 
     fn map_range<'a, I: Iterator<Item = ValX<'a>>>(
-        self,
-        _range: jaq_all::jaq_core::val::Range<&Self>,
-        _opt: jaq_all::jaq_core::path::Opt,
-        _f: impl Fn(Self) -> I,
+        mut self,
+        range: jaq_all::jaq_core::val::Range<&Self>,
+        opt: jaq_all::jaq_core::path::Opt,
+        f: impl Fn(Self) -> I,
     ) -> ValX<'a> {
-        todo!("{}", fn_name::uninstantiated!());
+        let start = range.start.map_or(0, RpcValue::as_usize);
+        let end = range.end.map_or(0, RpcValue::as_usize);
+        match &mut self.value {
+            Value::List(lst) => {
+                let Some(elems) = lst.get_mut(start..end) else {
+                    return opt.fail(self, |oof| Exn::from(Error::index(oof, crate::make_list!(start, end).into())));
+                };
+
+                for elem in elems {
+                    if let Some(y) = f(elem.clone()).next().transpose()? {
+                        *elem = y;
+                    } else {
+                        return opt.fail(self, |_oof| Exn::from(Error::new("map_range doesn't support removing elements".into())));
+                    }
+                }
+            },
+            _ => return opt.fail(self, |v| jaq_all::jaq_core::Exn::from(Error::typ(v, "map_range"))),
+        }
+
+        Ok(self)
     }
 
     fn as_bool(&self) -> bool {
@@ -278,4 +417,16 @@ impl jaq_all::jaq_core::ValT for RpcValue {
     fn into_string(self) -> Self {
         self.to_cpon().into()
     }
+}
+
+pub fn base() -> Box<[jaq_all::jaq_core::native::Filter<RunPtr<JustLut<RpcValue>>>]> {
+    Box::new([
+        ("typename", jaq_all::jaq_core::native::v(0), |(_, val)| {
+            Box::new(core::iter::once(Ok(val.type_name().into())))
+        })
+    ])
+}
+
+pub fn funs() -> impl Iterator<Item = Fun<JustLut<RpcValue>>> {
+    base().into_vec().into_iter().map(|(name, arity, fun)| (name, arity, Native::<JustLut<RpcValue>>::new(fun)))
 }

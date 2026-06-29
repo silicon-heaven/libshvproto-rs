@@ -99,7 +99,7 @@ mod test {
                 stdin.write_all(&block).expect("Failed to write to stdin");
             });
             let output = child.wait_with_output().map_err(|err| err.to_string())?;
-            RpcValue::from_chainpack(output.stdout).map_err(|err| err.to_string())
+            RpcValue::from_chainpack(output.stdout).map_err(|err| format!("{}, stderr: {}", err, String::from_utf8_lossy(output.stderr.as_slice())))
         }
 
         #[test]
@@ -110,9 +110,20 @@ mod test {
             Ok(())
         }
 
+        fn impl_cq_test(tests: impl IntoIterator<Item = (&'static str, &'static str, &'static str)>) -> Result<(), String> {
+            for (input, filter, expected_output) in tests {
+                let input = RpcValue::from_cpon(input).expect("valid cpon expected");
+                let expected_output = RpcValue::from_cpon(expected_output).expect("valid cpon expected");
+                let output = run_cq(&input, filter)?;
+                assert_eq!(output, expected_output);
+            }
+
+            Ok(())
+        }
+
         #[test]
         fn key_lookup() -> Result<(), String> {
-            for (input, filter, expected_output) in [
+            impl_cq_test([
                 (r#"null"#, ".[0]", r#"null"#),
                 (r#"null"#, ".foo", r#"null"#),
                 (r#"{"foo": true}"#, ".foo", "true"),
@@ -121,13 +132,144 @@ mod test {
                 (r#"["first_elem", "second_elem"]"#, ".[0]", r#""first_elem""#),
                 (r#"["first_elem", "second_elem"]"#, ".[1]", r#""second_elem""#),
                 // (r#"i{1: "one", 2: "two"}"#, ".asd", "\"two\"")
-            ] {
-                let input = RpcValue::from_cpon(input).expect("valid cpon expected");
-                let expected_output = RpcValue::from_cpon(expected_output).expect("valid cpon expected");
-                let output = run_cq(&input, filter)?;
-                assert_eq!(output, expected_output);
-            }
-            Ok(())
+            ])
+        }
+
+        #[test]
+        fn arithmetics() -> Result<(), String> {
+            // FIXME: Add a way to specify UInt literals, and then use it here in the tests.
+            impl_cq_test([
+                ("null", "(-false)", r"true"),
+                ("null", "(-true)", r"false"),
+                ("null", "(-1)", r"-1"),
+
+                ("null", "1 + 1", r"2"),
+                ("1", ". + 1", r"2"),
+                ("1u", ". + (-1)", r"0u"),
+                ("-1", ". + .", r"-2"),
+                ("1u", ". + 1", r"2u"),
+                ("1", ". + .", r"2"),
+                ("1u", ". + .", r"2u"),
+
+                ("1u", ". - .", r"0u"),
+                ("1u", ". - 1", r"0u"),
+                ("null", "1 - 1", r"0"),
+                ("1", ". - 1", r"0"),
+
+                ("null", "(10 * 10)", r"100"),
+                ("10u", ". * .", r"100u"),
+                ("10u", ". * 10", r"100u"),
+
+                ("null", "(10 / 10)", r"1"),
+                ("10u", ". / .", r"1u"),
+                ("10u", ". / 10", r"1u"),
+
+                ("null", "(10 % 10)", r"0"),
+                ("null", "(10 % 11)", r"10"),
+                ("null", "(10 % 9)", r"1"),
+
+                ("null", r#"{A: 1} + {B: 2}"#, r#"{"A":1,"B":2}"#),
+            ])
+        }
+
+        #[test]
+        fn comparisons() -> Result<(), String> {
+            impl_cq_test([
+                ("null", "null == null", r"true"),
+                ("null", "true == true", r"true"),
+                ("null", "{a: false} == {a: false}", r"true"),
+                ("null", "{a: false} == {a: true}", r"false"),
+                ("null", "{a: false} == {b: false}", r"false"),
+
+                ("null", "null < null", r"false"),
+                ("null", "null < 1", r"true"),
+                ("null", "1 > null", r"true"),
+                ("null", "false > 1", r"false"),
+                ("null", "1 < false", r"false"),
+                ("null", "1 < {}", r"true"),
+                ("null", "{} < 1", r"false"),
+                ("1u", ". < {}", r"true"),
+                ("1u", "{} < .", r"false"),
+                ("1.25p-2", ". < {}", r"true"),
+                ("1.25p-2", "{} < .", r"false"),
+                ("1e1", ". < {}", r"true"),
+                ("1e1", "{} < .", r"false"),
+                (r#"d"2017-05-03T15:52:31.123""#, ". < {}", r"true"),
+                (r#"d"2017-05-03T15:52:31.123""#, "{} < .", r"false"),
+                ("null", "\"asdf\" < {}", r"true"),
+                ("null", r#"{} < "asdf" "#, r"false"),
+                (r#"b"""#, ". < {}", r"true"),
+                (r#"b"""#, "{} < .", r"false"),
+                ("null", "[] < {}", r"true"),
+                ("null", "{} < []", r"false"),
+                ("i{}", ". < {}", r"true"),
+                ("i{}", "{} < .", r"false"),
+
+                ("null", "false < true", r"true"),
+                ("null", "1 < 2", r"true"),
+                ("null", r#" "asdf" < "xxxx" "#, r"true"),
+                ("null", "[1] < [1, 1]", r"true"),
+                ("null", "{} < {a: 1}", r"true"),
+
+                // FIXME: No way of creating these values in cq yet.
+                ("1u", ". < (. + (1))", r"true"),
+                (r#"d"2017-05-03T15:52:31.123""#, ". < .", r"false"),
+                ("1e1", ". < .", r"false"),
+                (r#" b"" "#, ". < .", r"false"),
+                ("i{}", ". < .", r"false"),
+            ])
+        }
+
+        #[test]
+        fn slicing() -> Result<(), String> {
+            impl_cq_test([
+                (r#" [1, 2, 3, 4] "#, ".[2:4]", r#" [3, 4] "#),
+
+                (r#" "asdfasdf" "#, ".[4:7]", r#" "asd" "#),
+            ])
+        }
+
+        #[test]
+        fn extra_funs() -> Result<(), String> {
+            impl_cq_test([
+                ("null", "typename", r#" "Null" "#),
+                ("1u", "typename", r#" "UInt" "#),
+            ])
+        }
+
+        #[test]
+        fn misc() -> Result<(), String> {
+            impl_cq_test([
+                (r#" [1, 2, 3] "#, "reverse", r#" [3, 2, 1] "#),
+                (r#" 12 "#, "round", r#" 12 "#),
+                (r#" 1.2 "#, "round", r#" 1 "#),
+                (r#" 1.25p-2 "#, "round", r#" 1 "#),
+                (r#" "asdf" "#, "explode", r#" [97,115,100,102] "#),
+                (r#" [97,115,100,102] "#, "implode", r#" "asdf" "#),
+                (r#" "   asdf    " "#, "trim", r#" "asdf" "#),
+
+                (r#"[1, 2, 3]"#, "to_entries", r#" [{"key": 0, "value": 1}, {"key": 1, "value": 2}, {"key": 2, "value": 3}] "#),
+                (r#"{"A": 1, "B": 2}"#, "to_entries", r#" [{"key": "A", "value": 1}, {"key": "B", "value": 2}] "#),
+                (r#"i{1:  1,  2:  2}"#, "to_entries", r#" [{"key": 1, "value": 1}, {"key": 2, "value": 2}] "#),
+
+                // FIXME: There's no way retrieve multiple RpcValues from cq now.
+                (r#"{"A": 1, "B": 2}"#, ".[]", r#" 1 "#),
+                (r#"i{1:  1,  2:  2}"#, ".[]", r#" 1 "#),
+
+                (r#" [1, 2, 3] "#, "map_values(. * 2)", r#" [2, 4, 6] "#),
+                (r#" {"A": 1, "B": 2} "#, "map_values(. + 1)", r#" {"A": 2, "B": 3} "#),
+                (r#" i{1:  1,  2:  2} "#, "map_values(. = 100)", r#" i{1:  100,  2:  100} "#),
+
+                (r#" {"A": 1, "B": 2} "#, r#".["A"] |= 100"#, r#" {"A": 100, "B": 2} "#),
+                (r#" [1, 2, 3] "#, ".[1] |= . + 100", r#" [1, 102, 3] "#),
+                (r#" [1, 2, 3] "#, ".[1:3] |= . + 100", r#" [1, 102, 103] "#),
+                (r#" [1, 2, 3] "#, ".[1] |= empty", r#" [1, 3] "#),
+
+                (r#" true "#, "if . then [] else {} end", r#" [] "#),
+                (r#" false "#, "if . then [] else {} end", r#" {} "#),
+
+                (r#" {"A": 1, "B": 2} "#, r#" "\(.)" "#, r#" "{\"A\":1,\"B\":2}" "#),
+            ])
         }
     }
 }
