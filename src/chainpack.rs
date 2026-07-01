@@ -83,15 +83,13 @@ where
     }
     /// number of bytes needed to encode bit_len
     fn bytes_needed(bit_len: u32) -> u32 {
-        let cnt;
         if bit_len == 0 {
-            cnt = 1;
+            1
         } else if bit_len <= 28 {
-            cnt = (bit_len - 1) / 7 + 1;
+            (bit_len - 1) / 7 + 1
         } else {
-            cnt = (bit_len - 1) / 8 + 2;
+            (bit_len - 1) / 8 + 2
         }
-        cnt
     }
     /// return max bit length >= bit_len, which can be encoded by same number of bytes
     fn expand_bit_len(bit_len: u32) -> u32 {
