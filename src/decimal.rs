@@ -69,30 +69,29 @@ impl Decimal {
         let mut s = mantissa.to_string();
 
         let n = s.len() as i8;
-        let dec_places = -exponent;
-        if dec_places > 0 && dec_places < n {
-            // insert decimal point
-            let dot_ix = n - dec_places;
+        if exponent < 0 && n + exponent > 0 {
+            // Decimal point falls inside the digits: 123.45
+            let dot_ix = n + exponent;
             s.insert(dot_ix as usize, '.');
         }
-        else if dec_places > 0 && dec_places <= 3 {
-            // prepend 0.00000..
-            let extra_0_cnt = dec_places - n;
+        else if (-3..0).contains(&exponent) {
+            // Small fraction needing leading zeros: 0.005
+            let extra_0_cnt = -(exponent + n);
             s = "0.".to_string()
                 + &*"0".repeat(extra_0_cnt as usize)
                 + &*s;
         }
-        else if dec_places < 0 && n + exponent <= 9 {
-            // append ..000000.
+        else if exponent > 0 && n <= 9 - exponent {
+            // Positive exponent fits as integer with trailing zeros: 123000.
             s += &*"0".repeat(exponent as usize);
             s.push('.');
         }
-        else if dec_places == 0 {
-            // just append decimal point
+        else if exponent == 0 {
+            // Exact integer, trailing dot: 42.
             s.push('.');
         }
         else {
-            // exponential notation
+            // Exponential notation for extreme values: 1.23e100
             s.push('e');
             s += &*exponent.to_string();
         }
@@ -318,5 +317,11 @@ mod tests {
 
         assert!(zero < huge);
         assert!(huge > zero);
+    }
+
+    #[test]
+    fn decimal_to_cpon_string() {
+        assert_eq!(Decimal::new(0, 127).to_cpon_string(), "0e127");
+        assert_eq!(Decimal::new(0, -128).to_cpon_string(), "0e-128");
     }
 }

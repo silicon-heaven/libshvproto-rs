@@ -129,7 +129,7 @@ fn process_chainpack_rpc_block_and_exit(mut reader: Box<dyn BufRead>) -> ! {
         }
     }
 }
-fn main() {
+fn main() -> Result<(), String> {
     // Parse command line arguments
     let mut opts = Cli::parse();
 
@@ -145,7 +145,7 @@ fn main() {
             logger = logger.with_module_level(&module_name, LevelFilter::Trace);
         }
     }
-    logger.init().expect("Logger must work");
+    logger.init().map_err(|err| err.to_string())?;
 
     if opts.chainpack_rpc_block {
         opts.indent = None;
@@ -155,7 +155,7 @@ fn main() {
 
     let mut reader: Box<dyn BufRead> = match opts.file {
         None => Box::new(BufReader::new(io::stdin())),
-        Some(filename) => Box::new(BufReader::new(fs::File::open(filename).expect("Opening files must work"))),
+        Some(filename) => Box::new(BufReader::new(fs::File::open(filename).map_err(|err| err.to_string())?)),
     };
 
     if opts.chainpack_rpc_block {
@@ -269,6 +269,8 @@ fn main() {
             process::exit(CODE_WRITE_ERROR);
         }
     }
+
+    Ok(())
 }
 
 fn copy_current_value(rd: &mut Box<dyn Reader + '_>, wr: &mut Box<dyn Writer + '_>) -> Result<(), String> {

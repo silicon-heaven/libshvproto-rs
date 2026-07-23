@@ -3,6 +3,7 @@ use std::fmt;
 
 use crate::chainpack::ChainPackReader;
 use crate::chainpack::ChainPackWriter;
+use crate::datetime::datetime_overflow;
 use crate::{decimal, JsonReader, JsonWriter};
 use crate::metamap::MetaMap;
 use crate::reader::Reader;
@@ -213,15 +214,27 @@ impl From<datetime::DateTime> for Value {
     }
 }
 
-impl From<&chrono::NaiveDateTime> for Value {
-    fn from(val: &chrono::NaiveDateTime) -> Self {
-        Value::DateTime(DateTime::from_naive_datetime(val))
+impl TryFrom<&chrono::NaiveDateTime> for Value {
+    type Error = String;
+
+    fn try_from(value: &chrono::NaiveDateTime) -> Result<Self, Self::Error> {
+        DateTime::from_naive_datetime(value).map(Value::DateTime).ok_or_else(datetime_overflow)
     }
 }
 
-impl<Tz: chrono::TimeZone> From<&chrono::DateTime<Tz>> for Value {
-    fn from(item: &chrono::DateTime<Tz>) -> Self {
-        Value::DateTime(datetime::DateTime::from_datetime(item))
+impl TryFrom<chrono::NaiveDateTime> for Value {
+    type Error = String;
+
+    fn try_from(value: chrono::NaiveDateTime) -> Result<Self, Self::Error> {
+        Value::try_from(&value)
+    }
+}
+
+impl<Tz: chrono::TimeZone> TryFrom<&chrono::DateTime<Tz>> for Value {
+    type Error = String;
+
+    fn try_from(value: &chrono::DateTime<Tz>) -> Result<Self, Self::Error> {
+        datetime::DateTime::from_datetime(value).map(Value::DateTime).ok_or_else(datetime_overflow)
     }
 }
 
@@ -252,30 +265,35 @@ impl_from_type_for_rpcvalue!(u64);
 impl_from_type_for_rpcvalue!(f64);
 impl_from_type_for_rpcvalue!(Decimal);
 impl_from_type_for_rpcvalue!(DateTime);
-impl_from_type_for_rpcvalue!(&chrono::NaiveDateTime);
 
-impl From<chrono::NaiveDateTime> for RpcValue {
-    fn from(value: chrono::NaiveDateTime) -> Self {
-        RpcValue {
+impl TryFrom<chrono::NaiveDateTime> for RpcValue {
+    type Error = String;
+
+    fn try_from(value: chrono::NaiveDateTime) -> Result<Self, Self::Error> {
+        value.try_into().map(|value| RpcValue {
             meta: None,
-            value: (&value).into(),
-        }
+            value,
+        })
     }
 }
-impl<Tz: chrono::TimeZone> From<&chrono::DateTime<Tz>> for RpcValue {
-    fn from(value: &chrono::DateTime<Tz>) -> Self {
-        RpcValue {
+impl<Tz: chrono::TimeZone> TryFrom<&chrono::DateTime<Tz>> for RpcValue {
+    type Error = String;
+
+    fn try_from(value: &chrono::DateTime<Tz>) -> Result<Self, Self::Error> {
+        value.try_into().map(|value| RpcValue {
             meta: None,
-            value: value.into(),
-        }
+            value,
+        })
     }
 }
-impl<Tz: chrono::TimeZone> From<chrono::DateTime<Tz>> for RpcValue {
-    fn from(value: chrono::DateTime<Tz>) -> Self {
-        RpcValue {
+impl<Tz: chrono::TimeZone> TryFrom<chrono::DateTime<Tz>> for RpcValue {
+    type Error = String;
+
+    fn try_from(value: chrono::DateTime<Tz>) -> Result<Self, Self::Error> {
+        Value::try_from(&value).map(|value| RpcValue {
             meta: None,
-            value: (&value).into(),
-        }
+            value,
+        })
     }
 }
 impl From<Vec<u8>> for RpcValue {
@@ -1101,7 +1119,7 @@ impl RpcValue {
     pub fn as_datetime(&self) -> datetime::DateTime {
         match &self.value {
             Value::DateTime(d) => *d,
-            _ => datetime::DateTime::from_epoch_msec(0),
+            _ => datetime::DateTime::from_epoch_msec(0).expect("DateTime(0) mustn't overflow"),
         }
     }
     pub fn to_datetime(&self) -> Option<datetime::DateTime> {
@@ -1294,7 +1312,7 @@ mod test {
         assert_eq!(rrv.try_into(), Ok(12.3));
         assert_eq!(rv.try_into(), Ok(12.3));
 
-        let dt = DateTime::now();
+        let dt = DateTime::now().unwrap();
         let rv = RpcValue::from(dt);
         assert_eq!(rv.as_datetime(), dt);
         let rrv = &rv;
@@ -1309,14 +1327,14 @@ mod test {
         assert_eq!(rv.try_into(), Ok(dc));
 
         let dt = chrono::offset::Utc::now();
-        let rv = RpcValue::from(dt);
+        let rv = RpcValue::try_from(dt).unwrap();
         assert_eq!(rv.as_datetime().epoch_msec(), dt.timestamp_millis());
         let rrv = &rv;
-        assert_eq!(rrv.try_into(), Ok(DateTime::from_datetime(&dt)));
-        assert_eq!(rv.try_into(), Ok(DateTime::from_datetime(&dt)));
+        assert_eq!(rrv.try_into(), Ok(DateTime::from_datetime(&dt).unwrap()));
+        assert_eq!(rv.try_into(), Ok(DateTime::from_datetime(&dt).unwrap()));
 
         let dt = chrono::offset::Local::now();
-        let rv = RpcValue::from(dt);
+        let rv = RpcValue::try_from(dt).unwrap();
         assert_eq!(
             rv.as_datetime().epoch_msec() + i64::from(rv.as_datetime().utc_offset()) * 1000,
             dt.timestamp_millis() + i64::from(dt.offset().fix().local_minus_utc()) * 1000

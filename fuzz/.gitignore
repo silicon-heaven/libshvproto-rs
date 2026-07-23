@@ -1,0 +1,5 @@
+target
+afl-out/
+corpus
+artifacts
+coverage

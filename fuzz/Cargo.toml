@@ -1,0 +1,43 @@
+[package]
+name = "shvproto-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+afl = "*"
+
+[dependencies.shvproto]
+path = ".."
+
+[[bin]]
+name = "libfuzzer_from_chainpack"
+path = "src/libfuzzer_from_chainpack.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "libfuzzer_from_cpon"
+path = "src/libfuzzer_from_cpon.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "afl_from_chainpack"
+path = "src/afl_from_chainpack.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "afl_from_cpon"
+path = "src/afl_from_cpon.rs"
+test = false
+doc = false
+bench = false
