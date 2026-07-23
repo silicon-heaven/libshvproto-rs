@@ -414,7 +414,7 @@ where
     }
     fn read_int_data(&mut self) -> Result<i64, ReadError> {
         let (num, bitlen) = self.read_uint_data_helper()?;
-        let sign_bit_mask = (1_u64) << (bitlen - 1);
+        let sign_bit_mask = (1_u64).checked_shl(u32::from(bitlen) - 1).ok_or_else(|| self.make_error("Int value is too big", ReadErrorReason::NumericValueOverflow))?;
         let neg = (num & sign_bit_mask) != 0;
         let mut snum = num.cast_signed();
         if neg {
@@ -1184,4 +1184,9 @@ fn test_find_path_chainpack() {
     let mut rd = ChainPackReader::new(&mut data_slice);
     rd.find_path(&["30", "30", "location", "4", "1"]).unwrap();
     assert_eq!(rd.read().unwrap(), 42.into());
+}
+
+#[test]
+fn test_fuzz_cases() {
+    let _res = RpcValue::from_chainpack([140_u8, 249, 249, 139, 93, 249, 249, 249, 71, 1, 133, 39, 127, 0, 65]);
 }
