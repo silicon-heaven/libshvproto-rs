@@ -550,7 +550,7 @@ where
             d >>= 7;
         }
         if has_not_msec {
-            d *= 1000;
+            d = d.checked_mul(1000).ok_or_else(|| self.make_error(&datetime_overflow(), ReadErrorReason::NumericValueOverflow))?;
         }
         d += SHV_EPOCH_MSEC;
         let dt = DateTime::from_epoch_msec_tz(d, (i32::from(offset) * 15) * 60).ok_or_else(|| self.make_error(&datetime_overflow(), ReadErrorReason::NumericValueOverflow))?;
@@ -1192,7 +1192,8 @@ fn test_fuzz_cases() {
     for data in &[
         vec![140_u8, 249, 249, 139, 93, 249, 249, 249, 71, 1, 133, 39, 127, 0, 65],
         vec![141, 244, 244, 244, 0, 141, 0, 0, 141, 0],
-        vec![141, 244, 255, 255, 255, 255, 126, 255, 136, 126]
+        vec![141, 244, 255, 255, 255, 255, 126, 255, 136, 126],
+        vec![137, 140, 0, 128, 127],
     ] {
         let _res = RpcValue::from_chainpack(data);
     }
