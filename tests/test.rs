@@ -170,7 +170,7 @@ mod test {
         test_case(AllVariants::UInt(465));
         test_case(AllVariants::Double(123.0));
         test_case(AllVariants::Bool(true));
-        test_case(AllVariants::DateTime(shvproto::DateTime::now()));
+        test_case(AllVariants::DateTime(shvproto::DateTime::now().unwrap()));
         test_case(AllVariants::Decimal(shvproto::Decimal::new(1234, 2)));
         test_case(AllVariants::String("Some string".to_owned()));
         test_case(AllVariants::Blob(vec![1, 2, 3]));
