@@ -497,18 +497,16 @@ where
                 self.get_byte()?;
                 break;
             }
-            let k = self.read()?;
-            let key = if k.is_string() {
-                k.as_str()
-            } else {
+            if b != PackingSchema::String as u8 {
                 return Err(self.make_error(
-                    &format!("Invalid Map key '{k}'"),
+                    &format!("Invalid Map key type '{b}'"),
                     ReadErrorReason::InvalidCharacter,
                 ));
-            };
+            }
+            let key = self.read()?;
             let val = self.read()?;
             if !self.dry_run {
-                map.insert(key.to_string(), val);
+                map.insert(key.as_str().to_owned(), val);
             }
         }
         Ok(Value::from(map))
@@ -521,18 +519,16 @@ where
                 self.get_byte()?;
                 break;
             }
-            let k = self.read()?;
-            let key = if k.is_int() {
-                k.as_i32()
-            } else {
+            if !((64_u32..128).contains(&u32::from(b)) || b == PackingSchema::Int as u8) {
                 return Err(self.make_error(
-                    &format!("Invalid IMap key '{k}'"),
+                    &format!("Invalid IMap key type '{b}'"),
                     ReadErrorReason::InvalidCharacter,
                 ));
-            };
+            }
+            let key = self.read()?;
             let val = self.read()?;
             if !self.dry_run {
-                map.insert(key, val);
+                map.insert(key.as_i32(), val);
             }
         }
         Ok(Value::from(map))
@@ -823,7 +819,7 @@ fn test_map() {
     assert_eq!(rpcvalue_to_hex_chainpack(&map.into()), "89860362617242860362617A438603666F6F884B4C4DFFFF");
 
     // Invalid key
-    assert_eq!(hex_chainpack_to_rpcvalue("898200").unwrap_err().msg, "ChainPack read error - Invalid Map key '0'");
+    assert_eq!(hex_chainpack_to_rpcvalue("898200").unwrap_err().msg, "ChainPack read error - Invalid Map key type '130'");
 }
 
 #[test]
@@ -838,7 +834,7 @@ fn test_imap() {
     assert_eq!(rpcvalue_to_hex_chainpack(&imap.into()), "8A418603666F6F42860362617282814D4FFF");
 
     // Invalid key
-    assert_eq!(hex_chainpack_to_rpcvalue("8A8603626172").unwrap_err().msg, "ChainPack read error - Invalid IMap key '\"bar\"'");
+    assert_eq!(hex_chainpack_to_rpcvalue("8A8603626172").unwrap_err().msg, "ChainPack read error - Invalid IMap key type '134'");
 }
 
 #[test]
