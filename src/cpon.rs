@@ -749,9 +749,9 @@ mod test
         assert!(RpcValue::from_cpon("i{").is_err());
 
         let ndt = NaiveDateTime::new(NaiveDate::from_ymd_opt(2022, 1, 2).unwrap(), NaiveTime::from_hms_milli_opt(12, 59, 6, 0).unwrap());
-        assert_eq!(RpcValue::from_cpon(r#"d"2022-01-02T12:59:06Z""#).unwrap().as_datetime(), DateTime::from_naive_datetime(&ndt));
+        assert_eq!(RpcValue::from_cpon(r#"d"2022-01-02T12:59:06Z""#).unwrap().as_datetime(), DateTime::from_naive_datetime(&ndt).unwrap());
         let dt = chrono::DateTime::<Utc>::from_naive_utc_and_offset(ndt, Utc);
-        assert_eq!(RpcValue::from_cpon(r#"d"2022-01-02T12:59:06Z""#).unwrap().as_datetime(), DateTime::from_datetime(&dt));
+        assert_eq!(RpcValue::from_cpon(r#"d"2022-01-02T12:59:06Z""#).unwrap().as_datetime(), DateTime::from_datetime(&dt).unwrap());
 
 
         #[expect(clippy::too_many_arguments, reason = "Allow in tests")]
@@ -769,17 +769,17 @@ mod test
 
         let dt_str = r#"d"2021-11-08T01:02:03+05""#;
         let dt = dt_from_ymd_hms_milli_tz_offset(2021, 11, 8, 1, 2, 3, 0, 5 * HOUR);
-        assert_eq!(RpcValue::from_cpon(dt_str).unwrap().as_datetime(), DateTime::from_datetime(&dt));
+        assert_eq!(RpcValue::from_cpon(dt_str).unwrap().as_datetime(), DateTime::from_datetime(&dt).unwrap());
         assert_eq!(RpcValue::from_cpon(dt_str).unwrap().to_cpon(), dt_str.to_string());
 
         let dt_str = r#"d"2021-11-08T01:02:03-0815""#;
         let dt = dt_from_ymd_hms_milli_tz_offset(2021, 11, 8, 1, 2, 3, 0, -8 * HOUR - 15 * MINUTE);
-        assert_eq!(RpcValue::from_cpon(dt_str).unwrap().as_datetime(), DateTime::from_datetime(&dt));
+        assert_eq!(RpcValue::from_cpon(dt_str).unwrap().as_datetime(), DateTime::from_datetime(&dt).unwrap());
         assert_eq!(RpcValue::from_cpon(dt_str).unwrap().to_cpon(), dt_str.to_string());
 
         let dt_str = r#"d"2021-11-08T01:02:03.456-0815""#;
         let dt = dt_from_ymd_hms_milli_tz_offset(2021, 11, 8, 1, 2, 3, 456, -8 * HOUR - 15 * MINUTE);
-        assert_eq!(RpcValue::from_cpon(dt_str).unwrap().as_datetime(), DateTime::from_datetime(&dt));
+        assert_eq!(RpcValue::from_cpon(dt_str).unwrap().as_datetime(), DateTime::from_datetime(&dt).unwrap());
         assert_eq!(RpcValue::from_cpon(dt_str).unwrap().to_cpon(), dt_str.to_string());
 
         let lst1 = vec![RpcValue::from(123), RpcValue::from("foo")];

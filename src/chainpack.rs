@@ -1,5 +1,6 @@
 #![allow(clippy::cast_possible_truncation, reason = "Lots of casting here")]
 #![allow(clippy::indexing_slicing, reason = "Lots of indexing here")]
+use crate::datetime::datetime_overflow;
 use crate::reader::{ByteReader, ContainerType, MapKey, ReadError, ReadErrorReason, ReadSchema, Reader};
 use crate::rpcvalue::{IMap, Map};
 use crate::writer::{ByteWriter, Writer};
@@ -552,7 +553,7 @@ where
             d *= 1000;
         }
         d += SHV_EPOCH_MSEC;
-        let dt = DateTime::from_epoch_msec_tz(d, (i32::from(offset) * 15) * 60);
+        let dt = DateTime::from_epoch_msec_tz(d, (i32::from(offset) * 15) * 60).ok_or_else(|| self.make_error(&datetime_overflow(), ReadErrorReason::NumericValueOverflow))?;
         Ok(Value::from(dt))
     }
     fn read_double_data(&mut self) -> Result<Value, ReadError> {
@@ -1189,4 +1190,5 @@ fn test_find_path_chainpack() {
 #[test]
 fn test_fuzz_cases() {
     let _res = RpcValue::from_chainpack([140_u8, 249, 249, 139, 93, 249, 249, 249, 71, 1, 133, 39, 127, 0, 65]);
+    let _res = RpcValue::from_chainpack([141, 244, 244, 244, 0, 141, 0, 0, 141, 0]);
 }
