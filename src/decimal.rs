@@ -82,7 +82,7 @@ impl Decimal {
                 + &*"0".repeat(extra_0_cnt as usize)
                 + &*s;
         }
-        else if dec_places < 0 && n + exponent <= 9 {
+        else if dec_places < 0 && n <= 9 - exponent  {
             // append ..000000.
             s += &*"0".repeat(exponent as usize);
             s.push('.');
@@ -318,5 +318,10 @@ mod tests {
 
         assert!(zero < huge);
         assert!(huge > zero);
+    }
+
+    #[test]
+    fn decimal_to_cpon_string() {
+        assert_eq!(Decimal::new(0, 127).to_cpon_string(), "0e127");
     }
 }
