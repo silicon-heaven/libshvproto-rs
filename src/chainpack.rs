@@ -1189,6 +1189,11 @@ fn test_find_path_chainpack() {
 
 #[test]
 fn test_fuzz_cases() {
-    let _res = RpcValue::from_chainpack([140_u8, 249, 249, 139, 93, 249, 249, 249, 71, 1, 133, 39, 127, 0, 65]);
-    let _res = RpcValue::from_chainpack([141, 244, 244, 244, 0, 141, 0, 0, 141, 0]);
+    for data in &[
+        vec![140_u8, 249, 249, 139, 93, 249, 249, 249, 71, 1, 133, 39, 127, 0, 65],
+        vec![141, 244, 244, 244, 0, 141, 0, 0, 141, 0],
+        vec![141, 244, 255, 255, 255, 255, 126, 255, 136, 126]
+    ] {
+        let _res = RpcValue::from_chainpack(data);
+    }
 }
