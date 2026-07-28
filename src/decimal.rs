@@ -2,6 +2,7 @@
 /// mantisa: 56, exponent: 8;
 /// I'm storing whole Decimal in one i64 to keep size_of RpcValue == 24
 #[derive(Debug, Copy, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct Decimal(i64);
 
 impl Decimal {

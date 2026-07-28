@@ -788,7 +788,7 @@ impl serde::Serialize for crate::DateTime {
 mod tests {
     use std::collections::BTreeMap;
 
-    use crate::serde::{Blob, IMap};
+    use crate::{Decimal, serde::{Blob, IMap}};
 
     #[derive(Debug, serde::Serialize)]
     #[serde(untagged)]
@@ -825,6 +825,7 @@ mod tests {
         date_time: crate::DateTime,
         list: Vec<i32>,
         blob: Blob,
+        decimal: Decimal,
         untagged: UntaggedEnum,
         internally_tagged: InternallyTaggedEnum,
         internally_tagged_extra_content: InternallyTaggedExtraContentEnum,
@@ -846,6 +847,7 @@ mod tests {
             date_time,
             list: [10, 20, 30].into(),
             blob: blob.into(),
+            decimal: Decimal::new(0, 0),
             untagged: UntaggedEnum::Color { r: 100, g: 200, b: 250 },
             internally_tagged: InternallyTaggedEnum::Color { r: 100, g: 200, b: 250 },
             internally_tagged_extra_content: InternallyTaggedExtraContentEnum::Color { r: 100, g: 200, b: 250 },
