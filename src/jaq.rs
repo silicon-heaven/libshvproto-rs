@@ -2,7 +2,7 @@ use std::{cmp::Ordering, collections::{BTreeMap, btree_map::Entry}, ops::{Add, D
 
 use jaq_all::jaq_core::{Error, Exn, Native, RunPtr, data::JustLut, native::Fun, ops};
 
-use crate::{RpcValue, Value};
+use crate::{DateTime, List, Map, RpcValue, Value};
 
 pub type ValR = jaq_all::jaq_core::ValR<RpcValue>;
 pub type ValX<'a> = jaq_all::jaq_core::ValX<'a, RpcValue>;
@@ -417,6 +417,55 @@ pub fn base() -> Box<[jaq_all::jaq_core::native::Filter<RunPtr<JustLut<RpcValue>
     Box::new([
         ("typename", jaq_all::jaq_core::native::v(0), |(_, val)| {
             Box::new(core::iter::once(Ok(val.type_name().into())))
+        }),
+        ("uint", jaq_all::jaq_core::native::v(1), |(mut ctx, _)| {
+            let arg = ctx.pop_var();
+            let uint = u64::try_from(&arg).map_err(|_err| jaq_all::jaq_core::Exn::from(Error::typ(arg, "UInt")));
+            Box::new(core::iter::once(uint.map(Into::into)))
+        }),
+        ("datetime", jaq_all::jaq_core::native::v(1), |(mut ctx, _)| {
+            let arg = ctx.pop_var();
+            let arg_str = String::try_from(&arg).map_err(|_err| jaq_all::jaq_core::Exn::from(Error::typ(arg, "DateTime")));
+            let datetime = arg_str.and_then(|str| DateTime::from_iso_str(str.as_str()).map_err(|_err| jaq_all::jaq_core::Exn::from(Error::typ(str.into(), "DateTime"))));
+            Box::new(core::iter::once(datetime.map(Into::into)))
+        }),
+        ("decimal", jaq_all::jaq_core::native::v(1), |(mut ctx, _)| {
+            let arg = ctx.pop_var();
+            let arg_str = String::try_from(&arg).map_err(|_err| jaq_all::jaq_core::Exn::from(Error::typ(arg, "Decimal")));
+            let datetime = arg_str.and_then(|str| RpcValue::from_cpon(str.as_str()).map_err(|_err| jaq_all::jaq_core::Exn::from(Error::typ(str.into(), "Decimal"))));
+            Box::new(core::iter::once(datetime))
+        }),
+        ("blob", jaq_all::jaq_core::native::v(1), |(mut ctx, _)| {
+            let arg = ctx.pop_var();
+            let Ok(arg_list) = List::try_from(&arg) else {
+                return Box::new(core::iter::once(Err(jaq_all::jaq_core::Exn::from(Error::typ(arg, "Blob")))));
+            };
+            let Ok(arg_list_of_ints) = arg_list
+                .into_iter()
+                .map(|val| {
+                    let int = i64::try_from(val).map_err(|_err| ())?;
+                    u8::try_from(int).map_err(|_err| ())
+                })
+            .collect::<Result<Vec<_>, _>>() else {
+                return Box::new(core::iter::once(Err(jaq_all::jaq_core::Exn::from(Error::typ(arg, "Bob")))));
+            };
+            Box::new(core::iter::once(Ok(arg_list_of_ints.into())))
+        }),
+        ("imap", jaq_all::jaq_core::native::v(1), |(mut ctx, _)| {
+            let arg = ctx.pop_var();
+            let Ok(arg_map) = Map::try_from(&arg) else {
+                return Box::new(core::iter::once(Err(jaq_all::jaq_core::Exn::from(Error::typ(arg, "IMap")))));
+            };
+            let Ok(arg_map_with_int_keys) = arg_map
+                .into_iter()
+                .map(|(k, v)| {
+                    let k_int: i32 = k.parse().map_err(|_err| ())?;
+                    Ok((k_int, v))
+                })
+            .collect::<Result<BTreeMap<_, _>, ()>>() else {
+                return Box::new(core::iter::once(Err(jaq_all::jaq_core::Exn::from(Error::typ(arg, "IMap")))));
+            };
+            Box::new(core::iter::once(Ok(arg_map_with_int_keys.into())))
         })
     ])
 }
