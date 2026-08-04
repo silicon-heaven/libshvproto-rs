@@ -260,6 +260,70 @@ impl<'a, W> CponWriter<'a, W>
     }
 }
 
+pub fn format_double(val: f64) -> String {
+    if val.is_nan() {
+        return "NaN".to_string();
+    }
+    if val.is_infinite() {
+        return if val.is_sign_negative() {
+            "-inf".to_string()
+        } else {
+            "inf".to_string()
+        };
+    }
+
+    let bits = val.to_bits();
+    let sign = if (bits >> 63) != 0 { "-" } else { "" };
+    let exp_bits = ((bits >> 52) & 0x7FF) as i32;
+    let frac_bits = bits & 0x000F_FFFF_FFFF_FFFF;
+
+    // Handle zero
+    if exp_bits == 0 && frac_bits == 0 {
+        return format!("{sign}0x0p+0");
+    }
+
+    // Subnormal numbers (exp_bits == 0, frac_bits != 0)
+    // Normalize subnormals so the leading significant digit is 1
+    if exp_bits == 0 {
+        let leading_zeros = frac_bits.leading_zeros() - 12; // 52-bit fraction space
+        let shift = leading_zeros + 1;
+        let normalized_frac = (frac_bits << shift) & 0x000F_FFFF_FFFF_FFFF;
+        let exp = -1022 - shift.cast_signed();
+
+        let exp_str = if exp >= 0 {
+            format!("+{exp}")
+        } else {
+            format!("{exp}")
+        };
+
+        let frac_hex = format!("{normalized_frac:013x}");
+        let trimmed = frac_hex.trim_end_matches('0');
+
+        return if trimmed.is_empty() {
+            format!("{sign}0x1p{exp_str}")
+        } else {
+            format!("{sign}0x1.{trimmed}p{exp_str}")
+        };
+    }
+
+    // Normal numbers
+    let exp = exp_bits - 1023;
+    let exp_str = if exp >= 0 {
+        format!("+{exp}")
+    } else {
+        format!("{exp}")
+    };
+
+    let frac_hex = format!("{frac_bits:013x}");
+    let trimmed = frac_hex.trim_end_matches('0');
+
+    if trimmed.is_empty() {
+        format!("{sign}0x1p{exp_str}")
+    } else {
+        format!("{sign}0x1.{trimmed}p{exp_str}")
+    }
+}
+
 impl<W> TextWriter for CponWriter<'_, W>
 where W: Write
 {
@@ -272,6 +336,11 @@ where W: Write
     }
     fn write_bytes(&mut self, b: &[u8]) -> WriteResult {
         self.byte_writer.write_bytes(b)
+    }
+    fn write_double(&mut self, n: f64) -> WriteResult {
+        let s = format_double(n);
+        let cnt = self.write_bytes(s.as_bytes())?;
+        Ok(self.write_count() - cnt)
     }
 }
 
@@ -808,6 +877,26 @@ mod test
         mm2.insert(1, RpcValue::from(123));
         mm2.insert(2, RpcValue::from("baz"));
         assert_eq!(mm1, mm2);
+    }
+    #[test]
+    fn test_write_double() {
+        for (val, expected) in [
+            (1.25_f64, "0x1.4p+0"),
+            (12.0, "0x1.8p+3"),
+            (0.1, "0x1.999999999999ap-4"),
+            (0.0, "0x0p+0"),
+            (-0.0, "-0x0p+0"),
+            (-0.0625, "-0x1p-4"),
+            (1.0, "0x1p+0"),
+            (f64::MIN_POSITIVE, "0x1p-1022"),
+            (f64::MAX, "0x1.fffffffffffffp+1023"),
+            (f64::from_bits(1), "0x1p-1074"),
+        ] {
+            assert_eq!(RpcValue::from(val).to_cpon(), expected);
+        }
+        assert_eq!(RpcValue::from(f64::NAN).to_cpon(), "NaN");
+        assert_eq!(RpcValue::from(f64::INFINITY).to_cpon(), "inf");
+        assert_eq!(RpcValue::from(f64::NEG_INFINITY).to_cpon(), "-inf");
     }
     #[test]
     fn test_read_too_long_numbers() {
