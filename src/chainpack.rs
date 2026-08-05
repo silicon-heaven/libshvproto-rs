@@ -1,5 +1,6 @@
 #![allow(clippy::cast_possible_truncation, reason = "Lots of casting here")]
 #![allow(clippy::indexing_slicing, reason = "Lots of indexing here")]
+use crate::datetime::datetime_overflow;
 use crate::reader::{ByteReader, ContainerType, MapKey, ReadError, ReadErrorReason, ReadSchema, Reader};
 use crate::rpcvalue::{IMap, Map};
 use crate::writer::{ByteWriter, Writer};
@@ -414,7 +415,7 @@ where
     }
     fn read_int_data(&mut self) -> Result<i64, ReadError> {
         let (num, bitlen) = self.read_uint_data_helper()?;
-        let sign_bit_mask = (1_u64) << (bitlen - 1);
+        let sign_bit_mask = (1_u64).checked_shl(u32::from(bitlen) - 1).ok_or_else(|| self.make_error("Int value is too big", ReadErrorReason::NumericValueOverflow))?;
         let neg = (num & sign_bit_mask) != 0;
         let mut snum = num.cast_signed();
         if neg {
@@ -496,18 +497,16 @@ where
                 self.get_byte()?;
                 break;
             }
-            let k = self.read()?;
-            let key = if k.is_string() {
-                k.as_str()
-            } else {
+            if b != PackingSchema::String as u8 {
                 return Err(self.make_error(
-                    &format!("Invalid Map key '{k}'"),
+                    &format!("Invalid Map key type '{b}'"),
                     ReadErrorReason::InvalidCharacter,
                 ));
-            };
+            }
+            let key = self.read()?;
             let val = self.read()?;
             if !self.dry_run {
-                map.insert(key.to_string(), val);
+                map.insert(key.as_str().to_owned(), val);
             }
         }
         Ok(Value::from(map))
@@ -520,18 +519,16 @@ where
                 self.get_byte()?;
                 break;
             }
-            let k = self.read()?;
-            let key = if k.is_int() {
-                k.as_i32()
-            } else {
+            if !((64_u32..128).contains(&u32::from(b)) || b == PackingSchema::Int as u8) {
                 return Err(self.make_error(
-                    &format!("Invalid IMap key '{k}'"),
+                    &format!("Invalid IMap key type '{b}'"),
                     ReadErrorReason::InvalidCharacter,
                 ));
-            };
+            }
+            let key = self.read()?;
             let val = self.read()?;
             if !self.dry_run {
-                map.insert(key, val);
+                map.insert(key.as_i32(), val);
             }
         }
         Ok(Value::from(map))
@@ -549,10 +546,10 @@ where
             d >>= 7;
         }
         if has_not_msec {
-            d *= 1000;
+            d = d.checked_mul(1000).ok_or_else(|| self.make_error(&datetime_overflow(), ReadErrorReason::NumericValueOverflow))?;
         }
         d += SHV_EPOCH_MSEC;
-        let dt = DateTime::from_epoch_msec_tz(d, (i32::from(offset) * 15) * 60);
+        let dt = DateTime::from_epoch_msec_tz(d, (i32::from(offset) * 15) * 60).ok_or_else(|| self.make_error(&datetime_overflow(), ReadErrorReason::NumericValueOverflow))?;
         Ok(Value::from(dt))
     }
     fn read_double_data(&mut self) -> Result<Value, ReadError> {
@@ -822,7 +819,7 @@ fn test_map() {
     assert_eq!(rpcvalue_to_hex_chainpack(&map.into()), "89860362617242860362617A438603666F6F884B4C4DFFFF");
 
     // Invalid key
-    assert_eq!(hex_chainpack_to_rpcvalue("898200").unwrap_err().msg, "ChainPack read error - Invalid Map key '0'");
+    assert_eq!(hex_chainpack_to_rpcvalue("898200").unwrap_err().msg, "ChainPack read error - Invalid Map key type '130'");
 }
 
 #[test]
@@ -837,7 +834,7 @@ fn test_imap() {
     assert_eq!(rpcvalue_to_hex_chainpack(&imap.into()), "8A418603666F6F42860362617282814D4FFF");
 
     // Invalid key
-    assert_eq!(hex_chainpack_to_rpcvalue("8A8603626172").unwrap_err().msg, "ChainPack read error - Invalid IMap key '\"bar\"'");
+    assert_eq!(hex_chainpack_to_rpcvalue("8A8603626172").unwrap_err().msg, "ChainPack read error - Invalid IMap key type '134'");
 }
 
 #[test]
@@ -1184,4 +1181,16 @@ fn test_find_path_chainpack() {
     let mut rd = ChainPackReader::new(&mut data_slice);
     rd.find_path(&["30", "30", "location", "4", "1"]).unwrap();
     assert_eq!(rd.read().unwrap(), 42.into());
+}
+
+#[test]
+fn test_fuzz_cases() {
+    for data in &[
+        vec![140_u8, 249, 249, 139, 93, 249, 249, 249, 71, 1, 133, 39, 127, 0, 65],
+        vec![141, 244, 244, 244, 0, 141, 0, 0, 141, 0],
+        vec![141, 244, 255, 255, 255, 255, 126, 255, 136, 126],
+        vec![137, 140, 0, 128, 127],
+    ] {
+        let _res = RpcValue::from_chainpack(data);
+    }
 }

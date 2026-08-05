@@ -566,7 +566,7 @@ mod test
             ("2021-11-08T01:02:03.456-0815", dt_from_ymd_hms_milli_tz_offset(2021, 11, 8, 1, 2, 3, 456, -8 * HOUR - 15 * MINUTE)),
         ] {
             let json = make_json_dt(dt_str);
-            test_json_round_trip(&json, dt);
+            test_json_round_trip(&json, RpcValue::try_from(dt).unwrap());
         }
     }
     #[test]
