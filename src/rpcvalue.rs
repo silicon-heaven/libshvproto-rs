@@ -635,6 +635,35 @@ macro_rules! impl_try_from_tuple {
                 }
             }
         }
+
+        impl<'a, $($T),+> TryFrom<&'a RpcValue> for ($($T,)+)
+        where
+            $($T: TryFrom<&'a RpcValue, Error = String>),+
+        {
+            type Error = String;
+
+            fn try_from(value: &'a RpcValue) -> Result<Self, Self::Error> {
+                const COUNT: usize = count!($($T),+);
+                let expected_type = || format!("List of size {COUNT}");
+                match &value.value {
+                    Value::List(val) => {
+                        let val = val.as_slice();
+                        let [$($var),+] = val else {
+                            return Err(format_err_try_from(
+                                &expected_type(),
+                                &format!("List of size {}", val.len()),
+                            ));
+                        };
+                        Ok((
+                            $($var.try_into().map_err(|err| {
+                                format!("Error at tuple index {}: {}", $idx, err)
+                            })?),+,
+                        ))
+                    }
+                    _ => Err(format_err_try_from(&expected_type(), value.type_name())),
+                }
+            }
+        }
     };
 }
 
@@ -1526,5 +1555,12 @@ mod test {
         assert_eq!(<(i32, CustomType)>::try_from(RpcValue::from(make_list!(1, make_map!{"x" => "asdf"}))), Ok((1, CustomType {x: "asdf".into()})));
         assert_eq!(<(i32, Option<CustomType>)>::try_from(RpcValue::from(make_list!(1, make_map!{"x" => "asdf"}))), Ok((1, Some(CustomType {x: "asdf".into()}))));
         assert_eq!(<(i32, Option<CustomType>)>::try_from(RpcValue::from(make_list!(1, RpcValue::null()))), Ok((1, None)));
+
+        // Parsing from references into references
+        let some_value = RpcValue::from(make_list!["asdf", "asdfasdf"]);
+        assert_eq!((&some_value).try_into(), Ok(("asdf", "asdfasdf")));
+        // Mix of references and owned values
+        let parsed: Result<(String, &str), _> = (&some_value).try_into();
+        assert_eq!(parsed, Ok((String::from("asdf"), "asdfasdf")));
     }
 }
