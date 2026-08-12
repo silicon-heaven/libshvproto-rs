@@ -537,6 +537,66 @@ impl TryFrom<Value> for Vec<u8> {
     }
 }
 
+impl<T> TryFrom<RpcValue> for Option<T>
+where
+    T: TryFrom<RpcValue, Error = String>
+{
+    type Error = String;
+
+    fn try_from(value: RpcValue) -> Result<Self, Self::Error> {
+        if value.is_null() {
+            return Ok(None);
+        }
+
+        Ok(Some(value.try_into()?))
+    }
+}
+
+impl<T> TryFrom<Value> for Option<T>
+where
+    T: TryFrom<Value, Error = String>
+{
+    type Error = String;
+
+    fn try_from(value: Value) -> Result<Self, Self::Error> {
+        if value == Value::Null {
+            return Ok(None);
+        }
+
+        Ok(Some(value.try_into()?))
+    }
+}
+
+impl<'a, T> TryFrom<&'a RpcValue> for Option<T>
+where
+    for <'b> T: TryFrom<&'b RpcValue, Error = String>
+{
+    type Error = String;
+
+    fn try_from(value: &'a RpcValue) -> Result<Self, Self::Error> {
+        if value.is_null() {
+            return Ok(None);
+        }
+
+        Ok(Some(value.try_into()?))
+    }
+}
+
+impl<'a, T> TryFrom<&'a Value> for Option<T>
+where
+    for <'b> T: TryFrom<&'b Value, Error = String>
+{
+    type Error = String;
+
+    fn try_from(value: &'a Value) -> Result<Self, Self::Error> {
+        if *value == Value::Null {
+            return Ok(None);
+        }
+
+        Ok(Some(value.try_into()?))
+    }
+}
+
 macro_rules! count {
     ($($xs:ident),+) => {
         [$((stringify!($xs))),+].len()
@@ -1444,6 +1504,13 @@ mod test {
         // Heteregenous tuples are supported
         assert_eq!(RpcValue::from(make_list!["some_string", 2, 3, 4, 5, 6]).try_into(), Ok(("some_string".to_string(), 2, 3, 4, 5, 6)));
         assert_eq!(RpcValue::from(make_list![RpcValue::null(), 2, 3_u32, "some_string", make_list!["some", "list", "elements"], make_map!("my_map" => "my_value")]).try_into(), Ok(((), 2, 3_u32, "some_string".to_string(), make_list!["some", "list", "elements"], make_map!("my_map" => "my_value"))));
+
+        // Optional tuple elements
+        assert_eq!(<(Option<i32>, i32, i32)>::try_from(RpcValue::from(make_list![RpcValue::null(), 2, 3])), Ok((None, 2, 3)));
+        assert_eq!(<(Option<i32>, Option<i32>, i32)>::try_from(RpcValue::from(make_list![RpcValue::null(), 2, 3])), Ok((None, Some(2), 3)));
+        assert_eq!(<(Option<i32>, Option<i32>, Option<i32>)>::try_from(RpcValue::from(make_list![1, 2, 3])), Ok((Some(1), Some(2), Some(3))));
+        assert_eq!(<(i32, Option<i32>, i32)>::try_from(RpcValue::from(make_list![1, 2, 3])), Ok((1, Some(2), 3)));
+        assert_eq!(<(Option<i32>, i32, i32)>::try_from(RpcValue::from(make_list![1, RpcValue::null(), 3])).unwrap_err(), "Error at tuple index 1: Expected type `Int or UInt`, got `Null`");
 
         // Mismatched base type
         assert_eq!(<(i32, i32, i32)>::try_from(RpcValue::null()).unwrap_err(), "Expected type `List of size 3`, got `Null`");
