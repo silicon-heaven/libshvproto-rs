@@ -605,16 +605,16 @@ macro_rules! count {
 
 macro_rules! impl_try_from_tuple {
     ($(($T:ident, $var:ident, $idx:expr)),+) => {
-        impl<$($T),+> TryFrom<Value> for ($($T,)+)
+        impl<$($T),+> TryFrom<RpcValue> for ($($T,)+)
         where
-            $($T: TryFrom<Value, Error = String>),+
+            $($T: TryFrom<RpcValue, Error = String>),+
         {
             type Error = String;
 
-            fn try_from(value: Value) -> Result<Self, Self::Error> {
+            fn try_from(value: RpcValue) -> Result<Self, Self::Error> {
                 const COUNT: usize = count!($($T),+);
                 let expected_type = || format!("List of size {COUNT}");
-                match value {
+                match value.value {
                     Value::List(val) => {
                         let [$($var),+] = (*val)
                             .try_into()
@@ -626,24 +626,13 @@ macro_rules! impl_try_from_tuple {
                             })?;
 
                         Ok((
-                            $($var.value.try_into().map_err(|err| {
+                            $($var.try_into().map_err(|err| {
                                 format!("Error at tuple index {}: {}", $idx, err)
                             })?),+,
                         ))
                     }
                     _ => Err(format_err_try_from(&expected_type(), value.type_name())),
                 }
-            }
-        }
-
-        impl<$($T),+> TryFrom<RpcValue> for ($($T,)+)
-        where
-            $($T: TryFrom<Value, Error = String>),+
-        {
-            type Error = String;
-
-            fn try_from(value: RpcValue) -> Result<Self, Self::Error> {
-                value.value.try_into()
             }
         }
     };
