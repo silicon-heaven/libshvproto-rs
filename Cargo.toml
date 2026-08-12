@@ -20,8 +20,6 @@ jaq-all = { version = "0.3.0", optional = true }
 
 [dev-dependencies]
 assert_cmd = "2.0"
-# https://github.com/rust-lang/cargo/issues/2911#issuecomment-749580481
-shvproto = { path = ".", features = ["cp2cp"] }
 
 [features]
 cp2cp = ["dep:simple_logger"]
