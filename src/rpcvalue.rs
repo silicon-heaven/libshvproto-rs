@@ -1306,9 +1306,11 @@ mod test {
     use std::mem::size_of;
 
     use chrono::Offset;
+    use libshvproto_macros::{FromRpcValue, ToRpcValue};
 
     use crate::metamap::MetaMap;
-    use crate::rpcvalue::{IMap, Map, RpcValue, Value};
+    use crate::rpcvalue::{IMap, Map, Value};
+    use crate::RpcValue;
     use crate::DateTime;
     use crate::Decimal;
 
@@ -1510,5 +1512,19 @@ mod test {
         // Mismatched tuple types
         assert_eq!(<(String, i32, i32)>::try_from(RpcValue::from(make_list![1, 2, 3])).unwrap_err(), "Error at tuple index 0: Expected type `String`, got `Int`");
         assert_eq!(<(i32, String, i32)>::try_from(RpcValue::from(make_list![1, 2, 3])).unwrap_err(), "Error at tuple index 1: Expected type `String`, got `Int`");
+
+        // Needed for ToRpcValue/FromRpcValue
+        mod shvproto {
+            pub use crate::*;
+        }
+
+        #[derive(Debug, ToRpcValue, FromRpcValue, PartialEq)]
+        struct CustomType {
+            x: String,
+        }
+
+        assert_eq!(<(i32, CustomType)>::try_from(RpcValue::from(make_list!(1, make_map!{"x" => "asdf"}))), Ok((1, CustomType {x: "asdf".into()})));
+        assert_eq!(<(i32, Option<CustomType>)>::try_from(RpcValue::from(make_list!(1, make_map!{"x" => "asdf"}))), Ok((1, Some(CustomType {x: "asdf".into()}))));
+        assert_eq!(<(i32, Option<CustomType>)>::try_from(RpcValue::from(make_list!(1, RpcValue::null()))), Ok((1, None)));
     }
 }
