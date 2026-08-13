@@ -4,9 +4,7 @@ use std::cmp::Ordering;
 use std::fmt;
 use chrono::{FixedOffset, NaiveDate, NaiveDateTime, NaiveTime, Offset, TimeZone};
 
-pub fn datetime_overflow() -> String {
-    String::from("DateTime overflow")
-}
+pub const DATETIME_OVERFLOW: &str = "DateTime overflow";
 
 /// msec: 57, tz: 7;
 /// tz is stored as signed count of quarters of hour (15 min)
@@ -43,23 +41,23 @@ impl DateTime {
         self.0
     }
 
-    pub fn now() -> Option<DateTime> {
+    pub fn try_now() -> Option<DateTime> {
         let dt = chrono::offset::Local::now();
         let msec = dt.naive_utc().and_utc().timestamp_millis();
         let offset = dt.offset().local_minus_utc() / 60 / 15;
-        DateTime::from_epoch_msec_tz(msec, offset)
+        DateTime::try_from_epoch_msec_tz(msec, offset)
     }
 
-    pub fn from_datetime<Tz: chrono::TimeZone>(dt: &chrono::DateTime<Tz>) -> Option<DateTime> {
+    pub fn try_from_datetime<Tz: chrono::TimeZone>(dt: &chrono::DateTime<Tz>) -> Option<DateTime> {
         let msec = dt.naive_utc().and_utc().timestamp_millis();
         let offset = dt.offset().fix().local_minus_utc();
-        DateTime::from_epoch_msec_tz(msec, offset)
+        DateTime::try_from_epoch_msec_tz(msec, offset)
     }
-    pub fn from_naive_datetime(dt: &chrono::NaiveDateTime) -> Option<DateTime> {
+    pub fn try_from_naive_datetime(dt: &chrono::NaiveDateTime) -> Option<DateTime> {
         let msec = dt.and_utc().timestamp_millis();
-        DateTime::from_epoch_msec(msec)
+        DateTime::try_from_epoch_msec(msec)
     }
-    pub fn from_epoch_msec_tz(epoch_msec: i64, utc_offset_sec: i32) -> Option<DateTime> {
+    pub fn try_from_epoch_msec_tz(epoch_msec: i64, utc_offset_sec: i32) -> Option<DateTime> {
         let mut msec = epoch_msec;
         // offset in quarters of hour
         msec = msec.checked_mul(TZ_MASK + 1)?;
@@ -67,8 +65,8 @@ impl DateTime {
         msec |= offset & TZ_MASK;
         Some(DateTime(msec))
     }
-    pub fn from_epoch_msec(epoch_msec: i64) -> Option<DateTime> {
-        Self::from_epoch_msec_tz(epoch_msec, 0)
+    pub fn try_from_epoch_msec(epoch_msec: i64) -> Option<DateTime> {
+        Self::try_from_epoch_msec_tz(epoch_msec, 0)
     }
     pub fn from_iso_str(iso_str: &str) -> Result<DateTime, String> {
         const BASE_LEN: usize = 19;
@@ -184,7 +182,7 @@ impl DateTime {
         let chrono_dt = tz.from_local_datetime(&naive_datetime).single().ok_or_else(invalid_datetime)?;
         let epoch_msec = chrono_dt.timestamp_millis();
 
-        let dt = DateTime::from_epoch_msec_tz(epoch_msec, offset_seconds).ok_or_else(datetime_overflow)?;
+        let dt = DateTime::try_from_epoch_msec_tz(epoch_msec, offset_seconds).ok_or_else(|| DATETIME_OVERFLOW.to_string())?;
         Ok(dt)
     }
 
@@ -251,29 +249,65 @@ impl DateTime {
     }
 
     #[must_use]
-    pub fn add_days(self, days: i64) -> Option<Self> {
+    pub fn checked_add_days(self, days: i64) -> Option<Self> {
         let (msec, offset) = self.epoc_msec_utc_offset();
-        Self::from_epoch_msec_tz(msec + (days * 24 * 60 * 60 * 1000), offset)
+        Self::try_from_epoch_msec_tz(msec + (days * 24 * 60 * 60 * 1000), offset)
     }
     #[must_use]
-    pub fn add_hours(self, hours: i64) -> Option<Self> {
+    pub fn checked_add_hours(self, hours: i64) -> Option<Self> {
         let (msec, offset) = self.epoc_msec_utc_offset();
-        Self::from_epoch_msec_tz(msec + (hours * 60 * 60 * 1000), offset)
+        Self::try_from_epoch_msec_tz(msec + (hours * 60 * 60 * 1000), offset)
     }
     #[must_use]
-    pub fn add_minutes(self, minutes: i64) -> Option<Self> {
+    pub fn checked_add_minutes(self, minutes: i64) -> Option<Self> {
         let (msec, offset) = self.epoc_msec_utc_offset();
-        Self::from_epoch_msec_tz(msec + (minutes * 60 * 1000), offset)
+        Self::try_from_epoch_msec_tz(msec + (minutes * 60 * 1000), offset)
     }
     #[must_use]
-    pub fn add_seconds(self, seconds: i64) -> Option<Self> {
+    pub fn checked_add_seconds(self, seconds: i64) -> Option<Self> {
         let (msec, offset) = self.epoc_msec_utc_offset();
-        Self::from_epoch_msec_tz(msec + (seconds * 1000), offset)
+        Self::try_from_epoch_msec_tz(msec + (seconds * 1000), offset)
     }
     #[must_use]
-    pub fn add_millis(self, millis: i64) -> Option<Self> {
+    pub fn checked_add_millis(self, millis: i64) -> Option<Self> {
         let (msec, offset) = self.epoc_msec_utc_offset();
-        Self::from_epoch_msec_tz(msec + millis, offset)
+        Self::try_from_epoch_msec_tz(msec + millis, offset)
+    }
+
+    pub fn now() -> DateTime {
+        Self::try_now().expect(DATETIME_OVERFLOW)
+    }
+    pub fn from_datetime<Tz: chrono::TimeZone>(dt: &chrono::DateTime<Tz>) -> DateTime {
+        Self::try_from_datetime(dt).expect(DATETIME_OVERFLOW)
+    }
+    pub fn from_naive_datetime(dt: &chrono::NaiveDateTime) -> DateTime {
+        Self::try_from_naive_datetime(dt).expect(DATETIME_OVERFLOW)
+    }
+    pub fn from_epoch_msec_tz(epoch_msec: i64, utc_offset_sec: i32) -> DateTime {
+        Self::try_from_epoch_msec_tz(epoch_msec, utc_offset_sec).expect(DATETIME_OVERFLOW)
+    }
+    pub fn from_epoch_msec(epoch_msec: i64) -> DateTime {
+        Self::try_from_epoch_msec(epoch_msec).expect(DATETIME_OVERFLOW)
+    }
+    #[must_use]
+    pub fn add_days(self, days: i64) -> Self {
+        self.checked_add_days(days).expect(DATETIME_OVERFLOW)
+    }
+    #[must_use]
+    pub fn add_hours(self, hours: i64) -> Self {
+        self.checked_add_hours(hours).expect(DATETIME_OVERFLOW)
+    }
+    #[must_use]
+    pub fn add_minutes(self, minutes: i64) -> Self {
+        self.checked_add_minutes(minutes).expect(DATETIME_OVERFLOW)
+    }
+    #[must_use]
+    pub fn add_seconds(self, seconds: i64) -> Self {
+        self.checked_add_seconds(seconds).expect(DATETIME_OVERFLOW)
+    }
+    #[must_use]
+    pub fn add_millis(self, millis: i64) -> Self {
+        self.checked_add_millis(millis).expect(DATETIME_OVERFLOW)
     }
 }
 
@@ -303,7 +337,7 @@ impl TryFrom<NaiveDateTime> for DateTime {
     type Error = String;
 
     fn try_from(value: NaiveDateTime) -> Result<Self, Self::Error> {
-        DateTime::from_naive_datetime(&value).ok_or_else(|| String::from("DateTime overflow"))
+        DateTime::try_from_naive_datetime(&value).ok_or_else(|| String::from("DateTime overflow"))
     }
 }
 
@@ -317,11 +351,11 @@ mod test {
     #[test]
     fn from_iso_str_parses_timezone_forms() {
         for (input, expected) in [
-            ("2021-11-08T01:02:03", DateTime::from_epoch_msec_tz(1_636_333_323_000, 0)),
-            ("2021-11-08T01:02:03Z", DateTime::from_epoch_msec_tz(1_636_333_323_000, 0)),
-            ("2021-11-08T01:02:03+05", DateTime::from_epoch_msec_tz(1_636_315_323_000, 5 * HOUR)),
-            ("2021-11-08T01:02:03+05:30", DateTime::from_epoch_msec_tz(1_636_313_523_000, 5 * HOUR + 30 * MINUTE)),
-            ("2021-11-08T01:02:03-0815", DateTime::from_epoch_msec_tz(1_636_363_023_000, -8 * HOUR - 15 * MINUTE)),
+            ("2021-11-08T01:02:03", DateTime::try_from_epoch_msec_tz(1_636_333_323_000, 0)),
+            ("2021-11-08T01:02:03Z", DateTime::try_from_epoch_msec_tz(1_636_333_323_000, 0)),
+            ("2021-11-08T01:02:03+05", DateTime::try_from_epoch_msec_tz(1_636_315_323_000, 5 * HOUR)),
+            ("2021-11-08T01:02:03+05:30", DateTime::try_from_epoch_msec_tz(1_636_313_523_000, 5 * HOUR + 30 * MINUTE)),
+            ("2021-11-08T01:02:03-0815", DateTime::try_from_epoch_msec_tz(1_636_363_023_000, -8 * HOUR - 15 * MINUTE)),
         ] {
             assert_eq!(DateTime::from_iso_str(input), Ok(expected.unwrap()));
         }
@@ -330,10 +364,10 @@ mod test {
     #[test]
     fn from_iso_str_parses_fractional_milliseconds() {
         for (input, expected) in [
-            ("2021-11-08T01:02:03.1Z", DateTime::from_epoch_msec_tz(1_636_333_323_100, 0)),
-            ("2021-11-08T01:02:03.12Z", DateTime::from_epoch_msec_tz(1_636_333_323_120, 0)),
-            ("2021-11-08T01:02:03.123Z", DateTime::from_epoch_msec_tz(1_636_333_323_123, 0)),
-            ("2021-11-08T01:02:03.1234Z", DateTime::from_epoch_msec_tz(1_636_333_323_123, 0)),
+            ("2021-11-08T01:02:03.1Z", DateTime::try_from_epoch_msec_tz(1_636_333_323_100, 0)),
+            ("2021-11-08T01:02:03.12Z", DateTime::try_from_epoch_msec_tz(1_636_333_323_120, 0)),
+            ("2021-11-08T01:02:03.123Z", DateTime::try_from_epoch_msec_tz(1_636_333_323_123, 0)),
+            ("2021-11-08T01:02:03.1234Z", DateTime::try_from_epoch_msec_tz(1_636_333_323_123, 0)),
         ] {
             assert_eq!(DateTime::from_iso_str(input), Ok(expected.unwrap()));
         }
