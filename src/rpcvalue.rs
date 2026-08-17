@@ -1069,10 +1069,7 @@ where
 macro_rules! is_xxx {
     ($name:ident, $variant:pat) => {
         pub fn $name(&self) -> bool {
-            match &self.value {
-                $variant => true,
-                _ => false,
-            }
+            matches!(self.value, $variant)
         }
     };
 }
