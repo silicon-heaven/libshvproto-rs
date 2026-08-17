@@ -275,97 +275,45 @@ where
     }
 }
 
-#[cfg(feature = "specialization")]
-macro_rules! with_specialization {
-    () => {
-        mod with_specialization {
-            use super::{
-                from_vec_rpcvalue_for_value,
-                from_map_rpcvalue_for_value,
-                from_imap_rpcvalue_for_value
-            };
-            use crate::RpcValue;
-            use crate::Value;
-            use std::collections::BTreeMap;
-
-            impl<T: Into<RpcValue>> From<Vec<T>> for Value {
-                default fn from(value: Vec<T>) -> Self {
-                    from_vec_rpcvalue_for_value(value)
-                }
+macro_rules! impl_container_conversions {
+    ($($fn_specifier:ident)?) => {
+        impl<T: Into<RpcValue>> From<Vec<T>> for Value {
+            $($fn_specifier)? fn from(value: Vec<T>) -> Self {
+                Value::List(Box::new(
+                        value
+                        .into_iter()
+                        .map(Into::into)
+                        .collect::<Vec<_>>()))
             }
-            impl<T: Into<RpcValue>> From<BTreeMap<String, T>> for Value {
-                default fn from(value: BTreeMap<String, T>) -> Self {
-                    from_map_rpcvalue_for_value(value)
-                }
+        }
+        impl<T: Into<RpcValue>> From<BTreeMap<String, T>> for Value {
+            $($fn_specifier)? fn from(value: BTreeMap<String, T>) -> Self {
+                Value::Map(Box::new(
+                        value
+                        .into_iter()
+                        .map(|(k, v)| (k, v.into()))
+                        .collect::<BTreeMap<_,_>>()
+                ))
             }
-            impl<T: Into<RpcValue>> From<BTreeMap<i32, T>> for Value {
-                default fn from(value: BTreeMap<i32, T>) -> Self {
-                    from_imap_rpcvalue_for_value(value)
-                }
+        }
+        impl<T: Into<RpcValue>> From<BTreeMap<i32, T>> for Value {
+            $($fn_specifier)? fn from(value: BTreeMap<i32, T>) -> Self {
+                Value::IMap(Box::new(
+                        value
+                        .into_iter()
+                        .map(|(k, v)| (k, v.into()))
+                        .collect::<BTreeMap<_,_>>()
+                ))
             }
         }
     };
 }
 
 #[cfg(feature = "specialization")]
-with_specialization!();
+impl_container_conversions!(default);
 
 #[cfg(not(feature = "specialization"))]
-mod without_specialization {
-    use super::{
-        from_vec_rpcvalue_for_value,
-        from_map_rpcvalue_for_value,
-        from_imap_rpcvalue_for_value}
-    ;
-    use crate::RpcValue;
-    use crate::Value;
-    use std::collections::BTreeMap;
-
-    impl<T: Into<RpcValue>> From<Vec<T>> for Value {
-        fn from(value: Vec<T>) -> Self {
-            from_vec_rpcvalue_for_value(value)
-        }
-    }
-
-    impl<T: Into<RpcValue>> From<BTreeMap<String, T>> for Value {
-        fn from(value: BTreeMap<String, T>) -> Self {
-            from_map_rpcvalue_for_value(value)
-        }
-    }
-
-    impl<T: Into<RpcValue>> From<BTreeMap<i32, T>> for Value {
-        fn from(value: BTreeMap<i32, T>) -> Self {
-            from_imap_rpcvalue_for_value(value)
-        }
-    }
-}
-
-fn from_vec_rpcvalue_for_value<T: Into<RpcValue>>(value: Vec<T>) -> Value {
-    Value::List(Box::new(
-        value
-        .into_iter()
-        .map(Into::into)
-        .collect::<Vec<_>>()))
-}
-
-fn from_map_rpcvalue_for_value<T: Into<RpcValue>>(value: BTreeMap<String, T>) -> Value {
-    Value::Map(Box::new(
-        value
-        .into_iter()
-        .map(|(k, v)| (k, v.into()))
-        .collect::<BTreeMap<_,_>>()
-    ))
-}
-
-fn from_imap_rpcvalue_for_value<T: Into<RpcValue>>(value: BTreeMap<i32, T>) -> Value {
-    Value::IMap(Box::new(
-        value
-        .into_iter()
-        .map(|(k, v)| (k, v.into()))
-        .collect::<BTreeMap<_,_>>()
-    ))
-}
-
+impl_container_conversions!();
 
 fn format_err_try_from(expected_type: &str, actual_type: &str) -> String {
     format!("Expected type `{expected_type}`, got `{actual_type}`")
