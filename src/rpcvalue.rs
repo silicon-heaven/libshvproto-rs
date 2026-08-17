@@ -260,6 +260,7 @@ impl_from_type_for_rpcvalue!(&[u8]);
 impl_from_type_for_rpcvalue!(i32);
 impl_from_type_for_rpcvalue!(i64);
 impl_from_type_for_rpcvalue!(isize);
+impl_from_type_for_rpcvalue!(usize);
 impl_from_type_for_rpcvalue!(u32);
 impl_from_type_for_rpcvalue!(u64);
 impl_from_type_for_rpcvalue!(f64);

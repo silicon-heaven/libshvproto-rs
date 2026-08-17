@@ -149,12 +149,6 @@ impl From<core::ops::Range<Option<RpcValue>>> for RpcValue {
     }
 }
 
-impl From<usize> for RpcValue {
-    fn from(value: usize) -> Self {
-        (value as u64).into()
-    }
-}
-
 impl jaq_all::jaq_std::ValT for RpcValue {
     fn into_seq<S: FromIterator<Self>>(self) -> Result<S, Self> {
         match self.value {
