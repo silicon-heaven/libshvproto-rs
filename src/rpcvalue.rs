@@ -1095,12 +1095,6 @@ impl RpcValue {
             _ => decimal::Decimal::new(0, 0),
         }
     }
-    // pub fn as_str(&self) -> Result<&str, Utf8Error> {
-    // 	match &self.value {
-    // 		Value::String(b) => std::str::from_utf8(b),
-    // 		_ => std::str::from_utf8(EMPTY_BYTES_REF),
-    // 	}
-    // }
     pub fn as_blob(&self) -> &[u8] {
         match &self.value {
             Value::Blob(b) => b,
