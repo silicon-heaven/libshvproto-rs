@@ -1,24 +1,16 @@
 #[cfg(test)]
+#[cfg(feature = "cp2cp")]
 mod test {
-    use assert_cmd::cargo_bin;
+    use assert_cmd::Command;
+
     use shvproto::RpcValue;
-    use std::io::Write;
-    use std::process::{Command, Output, Stdio};
-    use std::thread;
+    use std::process::Output;
 
     fn run_cp2cp(data: &str) -> Result<Output, String> {
         let block = hex::decode(data).expect("HEX decoding failed");
-        let mut cmd = Command::new(cargo_bin!("cp2cp"));
-        cmd.stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .arg("--chainpack-rpc-block");
-        let mut child = cmd.spawn().map_err(|e| e.to_string())?;
-        let mut stdin = child.stdin.take().expect("cp2cp should be running");
-        thread::spawn(move || {
-            stdin.write_all(&block).expect("Failed to write to stdin");
-        });
-        child.wait_with_output().map_err(|e| e.to_string())
+        Command::cargo_bin("cp2cp").unwrap().arg("--chainpack-rpc-block")
+            .write_stdin(block)
+            .output().map_err(|e| e.to_string())
     }
     #[test]
     fn chainpack_rpc_block_valid() -> Result<(), String> {
@@ -87,18 +79,12 @@ mod test {
 
         fn run_cq(data: &RpcValue, filter: &str) -> Result<RpcValue, String> {
             let block = data.to_chainpack();
-            let mut cmd = Command::new(cargo_bin!("cp2cp"));
-            cmd.stdin(Stdio::piped())
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped())
+            let output = Command::cargo_bin("cp2cp").unwrap()
                 .arg("--oc")
-                .arg("--cq").arg(filter);
-            let mut child = cmd.spawn().map_err(|e| e.to_string())?;
-            let mut stdin = child.stdin.take().expect("cp2cp should be running");
-            thread::spawn(move || {
-                stdin.write_all(&block).expect("Failed to write to stdin");
-            });
-            let output = child.wait_with_output().map_err(|err| err.to_string())?;
+                .arg("--cq").arg(filter)
+                .write_stdin(block)
+                .output()
+                .map_err(|e| e.to_string())?;
             RpcValue::from_chainpack(output.stdout).map_err(|err| format!("{}, stderr: {}", err, String::from_utf8_lossy(output.stderr.as_slice())))
         }
 
