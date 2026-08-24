@@ -1,6 +1,6 @@
 #![allow(clippy::cast_possible_truncation, reason = "Lots of casting here")]
 #![allow(clippy::indexing_slicing, reason = "Lots of indexing here")]
-use crate::datetime::datetime_overflow;
+use crate::datetime::DATETIME_OVERFLOW;
 use crate::reader::{ByteReader, ContainerType, MapKey, ReadError, ReadErrorReason, ReadSchema, Reader};
 use crate::rpcvalue::{IMap, Map};
 use crate::writer::{ByteWriter, Writer};
@@ -546,10 +546,10 @@ where
             d >>= 7;
         }
         if has_not_msec {
-            d = d.checked_mul(1000).ok_or_else(|| self.make_error(&datetime_overflow(), ReadErrorReason::NumericValueOverflow))?;
+            d = d.checked_mul(1000).ok_or_else(|| self.make_error(DATETIME_OVERFLOW, ReadErrorReason::NumericValueOverflow))?;
         }
         d += SHV_EPOCH_MSEC;
-        let dt = DateTime::from_epoch_msec_tz(d, (i32::from(offset) * 15) * 60).ok_or_else(|| self.make_error(&datetime_overflow(), ReadErrorReason::NumericValueOverflow))?;
+        let dt = DateTime::try_from_epoch_msec_tz(d, (i32::from(offset) * 15) * 60).ok_or_else(|| self.make_error(DATETIME_OVERFLOW, ReadErrorReason::NumericValueOverflow))?;
         Ok(Value::from(dt))
     }
     fn read_double_data(&mut self) -> Result<Value, ReadError> {
