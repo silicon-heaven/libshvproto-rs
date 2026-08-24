@@ -190,24 +190,6 @@ impl From<Decimal> for Value {
     }
 }
 
-impl From<List> for Value {
-    fn from(val: List) -> Self {
-        Value::List(Box::new(val))
-    }
-}
-
-impl From<Map> for Value {
-    fn from(val: Map) -> Self {
-        Value::Map(Box::new(val))
-    }
-}
-
-impl From<IMap> for Value {
-    fn from(val: IMap) -> Self {
-        Value::IMap(Box::new(val))
-    }
-}
-
 impl From<datetime::DateTime> for Value {
     fn from(val: datetime::DateTime) -> Self {
         Value::DateTime(val)
@@ -238,33 +220,14 @@ impl<Tz: chrono::TimeZone> TryFrom<&chrono::DateTime<Tz>> for Value {
     }
 }
 
-macro_rules! impl_from_type_for_rpcvalue {
-    ($from:ty) => {
-        impl From<$from> for RpcValue {
-            fn from(value: $from) -> Self {
-                $crate::RpcValue {
-                    meta: None,
-                    value: value.into(),
-                }
-            }
+impl<T: Into<Value>> From<T> for RpcValue {
+    fn from(value: T) -> Self {
+        crate::RpcValue {
+            meta: None,
+            value: value.into(),
         }
-    };
+    }
 }
-
-impl_from_type_for_rpcvalue!(());
-impl_from_type_for_rpcvalue!(bool);
-impl_from_type_for_rpcvalue!(&str);
-impl_from_type_for_rpcvalue!(String);
-impl_from_type_for_rpcvalue!(&String);
-impl_from_type_for_rpcvalue!(&[u8]);
-impl_from_type_for_rpcvalue!(i32);
-impl_from_type_for_rpcvalue!(i64);
-impl_from_type_for_rpcvalue!(isize);
-impl_from_type_for_rpcvalue!(u32);
-impl_from_type_for_rpcvalue!(u64);
-impl_from_type_for_rpcvalue!(f64);
-impl_from_type_for_rpcvalue!(Decimal);
-impl_from_type_for_rpcvalue!(DateTime);
 
 impl TryFrom<chrono::NaiveDateTime> for RpcValue {
     type Error = String;
@@ -296,14 +259,6 @@ impl<Tz: chrono::TimeZone> TryFrom<chrono::DateTime<Tz>> for RpcValue {
         })
     }
 }
-impl From<Vec<u8>> for RpcValue {
-    fn from(val: Vec<u8>) -> Self {
-        RpcValue {
-            meta: None,
-            value: Value::Blob(Box::new(val))
-        }
-    }
-}
 
 impl From<&RpcValue> for RpcValue {
     fn from(value: &RpcValue) -> Self {
@@ -320,114 +275,45 @@ where
     }
 }
 
-#[cfg(feature = "specialization")]
-macro_rules! with_specialization {
-    () => {
-        mod with_specialization {
-            use super::{
-                from_vec_rpcvalue_for_rpcvalue,
-                from_map_rpcvalue_for_rpcvalue,
-                from_imap_rpcvalue_for_rpcvalue
-            };
-            use crate::RpcValue;
-            use std::collections::BTreeMap;
-            use super::{List,Map,IMap};
-
-            impl<T: Into<RpcValue>> From<Vec<T>> for RpcValue {
-                default fn from(value: Vec<T>) -> Self {
-                    from_vec_rpcvalue_for_rpcvalue(value)
-                }
+macro_rules! impl_container_conversions {
+    ($($fn_specifier:ident)?) => {
+        impl<T: Into<RpcValue>> From<Vec<T>> for Value {
+            $($fn_specifier)? fn from(value: Vec<T>) -> Self {
+                Value::List(Box::new(
+                        value
+                        .into_iter()
+                        .map(Into::into)
+                        .collect::<Vec<_>>()))
             }
-            impl<T: Into<RpcValue>> From<BTreeMap<String, T>> for RpcValue {
-                default fn from(value: BTreeMap<String, T>) -> Self {
-                    from_map_rpcvalue_for_rpcvalue(value)
-                }
+        }
+        impl<T: Into<RpcValue>> From<BTreeMap<String, T>> for Value {
+            $($fn_specifier)? fn from(value: BTreeMap<String, T>) -> Self {
+                Value::Map(Box::new(
+                        value
+                        .into_iter()
+                        .map(|(k, v)| (k, v.into()))
+                        .collect::<BTreeMap<_,_>>()
+                ))
             }
-            impl<T: Into<RpcValue>> From<BTreeMap<i32, T>> for RpcValue {
-                default fn from(value: BTreeMap<i32, T>) -> Self {
-                    from_imap_rpcvalue_for_rpcvalue(value)
-                }
+        }
+        impl<T: Into<RpcValue>> From<BTreeMap<i32, T>> for Value {
+            $($fn_specifier)? fn from(value: BTreeMap<i32, T>) -> Self {
+                Value::IMap(Box::new(
+                        value
+                        .into_iter()
+                        .map(|(k, v)| (k, v.into()))
+                        .collect::<BTreeMap<_,_>>()
+                ))
             }
-
-            // Specializations of `impl From<Collection<RpcValue>> for RpcValue`
-            // for List, Map and IMap to just move the value instead of iterating
-            // through the collections.
-            impl_from_type_for_rpcvalue!(List);
-            impl_from_type_for_rpcvalue!(Map);
-            impl_from_type_for_rpcvalue!(IMap);
         }
     };
 }
 
 #[cfg(feature = "specialization")]
-with_specialization!();
+impl_container_conversions!(default);
 
 #[cfg(not(feature = "specialization"))]
-mod without_specialization {
-    use super::{
-        from_vec_rpcvalue_for_rpcvalue,
-        from_map_rpcvalue_for_rpcvalue,
-        from_imap_rpcvalue_for_rpcvalue}
-    ;
-    use crate::RpcValue;
-    use std::collections::BTreeMap;
-
-
-    impl<T: Into<RpcValue>> From<Vec<T>> for RpcValue {
-        fn from(value: Vec<T>) -> Self {
-            from_vec_rpcvalue_for_rpcvalue(value)
-        }
-    }
-
-    impl<T: Into<RpcValue>> From<BTreeMap<String, T>> for RpcValue {
-        fn from(value: BTreeMap<String, T>) -> Self {
-            from_map_rpcvalue_for_rpcvalue(value)
-        }
-    }
-
-    impl<T: Into<RpcValue>> From<BTreeMap<i32, T>> for RpcValue {
-        fn from(value: BTreeMap<i32, T>) -> Self {
-            from_imap_rpcvalue_for_rpcvalue(value)
-        }
-    }
-}
-
-fn from_vec_rpcvalue_for_rpcvalue<T: Into<RpcValue>>(value: Vec<T>) -> RpcValue {
-    RpcValue {
-        meta: None,
-        value: Value::List(Box::new(
-                value
-                .into_iter()
-                .map(Into::into)
-                .collect::<Vec<_>>()
-        ))
-    }
-}
-
-fn from_map_rpcvalue_for_rpcvalue<T: Into<RpcValue>>(value: BTreeMap<String, T>) -> RpcValue {
-    RpcValue {
-        meta: None,
-        value: Value::Map(Box::new(
-                value
-                .into_iter()
-                .map(|(k, v)| (k, v.into()))
-                .collect::<BTreeMap<_,_>>()
-        ))
-    }
-}
-
-fn from_imap_rpcvalue_for_rpcvalue<T: Into<RpcValue>>(value: BTreeMap<i32, T>) -> RpcValue {
-    RpcValue {
-        meta: None,
-        value: Value::IMap(Box::new(
-                value
-                .into_iter()
-                .map(|(k, v)| (k, v.into()))
-                .collect::<BTreeMap<_,_>>()
-        ))
-    }
-}
-
+impl_container_conversions!();
 
 fn format_err_try_from(expected_type: &str, actual_type: &str) -> String {
     format!("Expected type `{expected_type}`, got `{actual_type}`")
@@ -1069,10 +955,7 @@ where
 macro_rules! is_xxx {
     ($name:ident, $variant:pat) => {
         pub fn $name(&self) -> bool {
-            match &self.value {
-                $variant => true,
-                _ => false,
-            }
+            matches!(self.value, $variant)
         }
     };
 }
@@ -1212,12 +1095,6 @@ impl RpcValue {
             _ => decimal::Decimal::new(0, 0),
         }
     }
-    // pub fn as_str(&self) -> Result<&str, Utf8Error> {
-    // 	match &self.value {
-    // 		Value::String(b) => std::str::from_utf8(b),
-    // 		_ => std::str::from_utf8(EMPTY_BYTES_REF),
-    // 	}
-    // }
     pub fn as_blob(&self) -> &[u8] {
         match &self.value {
             Value::Blob(b) => b,
