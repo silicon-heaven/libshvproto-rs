@@ -5,7 +5,7 @@ name = "shvproto"
 description = "Rust implementation of the SHV protocol"
 license = "MIT"
 repository = "https://github.com/silicon-heaven/libshvproto-rs"
-version = "6.3.3"
+version = "6.4.0"
 edition = "2024"
 
 [dependencies]
@@ -20,8 +20,6 @@ jaq-all = { version = "0.3.0", optional = true }
 
 [dev-dependencies]
 assert_cmd = "2.0"
-# https://github.com/rust-lang/cargo/issues/2911#issuecomment-749580481
-shvproto = { path = ".", features = ["cp2cp"] }
 
 [features]
 cp2cp = ["dep:simple_logger"]

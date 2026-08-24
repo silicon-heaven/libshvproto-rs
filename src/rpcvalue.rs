@@ -537,6 +537,66 @@ impl TryFrom<Value> for Vec<u8> {
     }
 }
 
+impl<T> TryFrom<RpcValue> for Option<T>
+where
+    T: TryFrom<RpcValue, Error = String>
+{
+    type Error = String;
+
+    fn try_from(value: RpcValue) -> Result<Self, Self::Error> {
+        if value.is_null() {
+            return Ok(None);
+        }
+
+        Ok(Some(value.try_into()?))
+    }
+}
+
+impl<T> TryFrom<Value> for Option<T>
+where
+    T: TryFrom<Value, Error = String>
+{
+    type Error = String;
+
+    fn try_from(value: Value) -> Result<Self, Self::Error> {
+        if value == Value::Null {
+            return Ok(None);
+        }
+
+        Ok(Some(value.try_into()?))
+    }
+}
+
+impl<'a, T> TryFrom<&'a RpcValue> for Option<T>
+where
+    for <'b> T: TryFrom<&'b RpcValue, Error = String>
+{
+    type Error = String;
+
+    fn try_from(value: &'a RpcValue) -> Result<Self, Self::Error> {
+        if value.is_null() {
+            return Ok(None);
+        }
+
+        Ok(Some(value.try_into()?))
+    }
+}
+
+impl<'a, T> TryFrom<&'a Value> for Option<T>
+where
+    for <'b> T: TryFrom<&'b Value, Error = String>
+{
+    type Error = String;
+
+    fn try_from(value: &'a Value) -> Result<Self, Self::Error> {
+        if *value == Value::Null {
+            return Ok(None);
+        }
+
+        Ok(Some(value.try_into()?))
+    }
+}
+
 macro_rules! count {
     ($($xs:ident),+) => {
         [$((stringify!($xs))),+].len()
@@ -545,16 +605,16 @@ macro_rules! count {
 
 macro_rules! impl_try_from_tuple {
     ($(($T:ident, $var:ident, $idx:expr)),+) => {
-        impl<$($T),+> TryFrom<Value> for ($($T,)+)
+        impl<$($T),+> TryFrom<RpcValue> for ($($T,)+)
         where
-            $($T: TryFrom<Value, Error = String>),+
+            $($T: TryFrom<RpcValue, Error = String>),+
         {
             type Error = String;
 
-            fn try_from(value: Value) -> Result<Self, Self::Error> {
+            fn try_from(value: RpcValue) -> Result<Self, Self::Error> {
                 const COUNT: usize = count!($($T),+);
                 let expected_type = || format!("List of size {COUNT}");
-                match value {
+                match value.value {
                     Value::List(val) => {
                         let [$($var),+] = (*val)
                             .try_into()
@@ -566,7 +626,7 @@ macro_rules! impl_try_from_tuple {
                             })?;
 
                         Ok((
-                            $($var.value.try_into().map_err(|err| {
+                            $($var.try_into().map_err(|err| {
                                 format!("Error at tuple index {}: {}", $idx, err)
                             })?),+,
                         ))
@@ -576,14 +636,32 @@ macro_rules! impl_try_from_tuple {
             }
         }
 
-        impl<$($T),+> TryFrom<RpcValue> for ($($T,)+)
+        impl<'a, $($T),+> TryFrom<&'a RpcValue> for ($($T,)+)
         where
-            $($T: TryFrom<Value, Error = String>),+
+            $($T: TryFrom<&'a RpcValue, Error = String>),+
         {
             type Error = String;
 
-            fn try_from(value: RpcValue) -> Result<Self, Self::Error> {
-                value.value.try_into()
+            fn try_from(value: &'a RpcValue) -> Result<Self, Self::Error> {
+                const COUNT: usize = count!($($T),+);
+                let expected_type = || format!("List of size {COUNT}");
+                match &value.value {
+                    Value::List(val) => {
+                        let val = val.as_slice();
+                        let [$($var),+] = val else {
+                            return Err(format_err_try_from(
+                                &expected_type(),
+                                &format!("List of size {}", val.len()),
+                            ));
+                        };
+                        Ok((
+                            $($var.try_into().map_err(|err| {
+                                format!("Error at tuple index {}: {}", $idx, err)
+                            })?),+,
+                        ))
+                    }
+                    _ => Err(format_err_try_from(&expected_type(), value.type_name())),
+                }
             }
         }
     };
@@ -1257,9 +1335,11 @@ mod test {
     use std::mem::size_of;
 
     use chrono::Offset;
+    use libshvproto_macros::{FromRpcValue, ToRpcValue};
 
     use crate::metamap::MetaMap;
-    use crate::rpcvalue::{IMap, Map, RpcValue, Value};
+    use crate::rpcvalue::{IMap, Map, Value};
+    use crate::RpcValue;
     use crate::DateTime;
     use crate::Decimal;
 
@@ -1445,6 +1525,13 @@ mod test {
         assert_eq!(RpcValue::from(make_list!["some_string", 2, 3, 4, 5, 6]).try_into(), Ok(("some_string".to_string(), 2, 3, 4, 5, 6)));
         assert_eq!(RpcValue::from(make_list![RpcValue::null(), 2, 3_u32, "some_string", make_list!["some", "list", "elements"], make_map!("my_map" => "my_value")]).try_into(), Ok(((), 2, 3_u32, "some_string".to_string(), make_list!["some", "list", "elements"], make_map!("my_map" => "my_value"))));
 
+        // Optional tuple elements
+        assert_eq!(<(Option<i32>, i32, i32)>::try_from(RpcValue::from(make_list![RpcValue::null(), 2, 3])), Ok((None, 2, 3)));
+        assert_eq!(<(Option<i32>, Option<i32>, i32)>::try_from(RpcValue::from(make_list![RpcValue::null(), 2, 3])), Ok((None, Some(2), 3)));
+        assert_eq!(<(Option<i32>, Option<i32>, Option<i32>)>::try_from(RpcValue::from(make_list![1, 2, 3])), Ok((Some(1), Some(2), Some(3))));
+        assert_eq!(<(i32, Option<i32>, i32)>::try_from(RpcValue::from(make_list![1, 2, 3])), Ok((1, Some(2), 3)));
+        assert_eq!(<(Option<i32>, i32, i32)>::try_from(RpcValue::from(make_list![1, RpcValue::null(), 3])).unwrap_err(), "Error at tuple index 1: Expected type `Int or UInt`, got `Null`");
+
         // Mismatched base type
         assert_eq!(<(i32, i32, i32)>::try_from(RpcValue::null()).unwrap_err(), "Expected type `List of size 3`, got `Null`");
 
@@ -1454,5 +1541,26 @@ mod test {
         // Mismatched tuple types
         assert_eq!(<(String, i32, i32)>::try_from(RpcValue::from(make_list![1, 2, 3])).unwrap_err(), "Error at tuple index 0: Expected type `String`, got `Int`");
         assert_eq!(<(i32, String, i32)>::try_from(RpcValue::from(make_list![1, 2, 3])).unwrap_err(), "Error at tuple index 1: Expected type `String`, got `Int`");
+
+        // Needed for ToRpcValue/FromRpcValue
+        mod shvproto {
+            pub use crate::*;
+        }
+
+        #[derive(Debug, ToRpcValue, FromRpcValue, PartialEq)]
+        struct CustomType {
+            x: String,
+        }
+
+        assert_eq!(<(i32, CustomType)>::try_from(RpcValue::from(make_list!(1, make_map!{"x" => "asdf"}))), Ok((1, CustomType {x: "asdf".into()})));
+        assert_eq!(<(i32, Option<CustomType>)>::try_from(RpcValue::from(make_list!(1, make_map!{"x" => "asdf"}))), Ok((1, Some(CustomType {x: "asdf".into()}))));
+        assert_eq!(<(i32, Option<CustomType>)>::try_from(RpcValue::from(make_list!(1, RpcValue::null()))), Ok((1, None)));
+
+        // Parsing from references into references
+        let some_value = RpcValue::from(make_list!["asdf", "asdfasdf"]);
+        assert_eq!((&some_value).try_into(), Ok(("asdf", "asdfasdf")));
+        // Mix of references and owned values
+        let parsed: Result<(String, &str), _> = (&some_value).try_into();
+        assert_eq!(parsed, Ok((String::from("asdf"), "asdfasdf")));
     }
 }
