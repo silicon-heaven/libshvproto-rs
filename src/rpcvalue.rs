@@ -275,45 +275,37 @@ where
     }
 }
 
-macro_rules! impl_container_conversions {
-    ($($fn_specifier:ident)?) => {
-        impl<T: Into<RpcValue>> From<Vec<T>> for Value {
-            $($fn_specifier)? fn from(value: Vec<T>) -> Self {
-                Value::List(Box::new(
-                        value
-                        .into_iter()
-                        .map(Into::into)
-                        .collect::<Vec<_>>()))
-            }
-        }
-        impl<T: Into<RpcValue>> From<BTreeMap<String, T>> for Value {
-            $($fn_specifier)? fn from(value: BTreeMap<String, T>) -> Self {
-                Value::Map(Box::new(
-                        value
-                        .into_iter()
-                        .map(|(k, v)| (k, v.into()))
-                        .collect::<BTreeMap<_,_>>()
-                ))
-            }
-        }
-        impl<T: Into<RpcValue>> From<BTreeMap<i32, T>> for Value {
-            $($fn_specifier)? fn from(value: BTreeMap<i32, T>) -> Self {
-                Value::IMap(Box::new(
-                        value
-                        .into_iter()
-                        .map(|(k, v)| (k, v.into()))
-                        .collect::<BTreeMap<_,_>>()
-                ))
-            }
-        }
-    };
+impl<T: Into<RpcValue>> From<Vec<T>> for Value {
+    fn from(value: Vec<T>) -> Self {
+        Value::List(Box::new(
+                value
+                .into_iter()
+                .map(Into::into)
+                .collect::<Vec<_>>()))
+    }
 }
 
-#[cfg(feature = "specialization")]
-impl_container_conversions!(default);
+impl<T: Into<RpcValue>> From<BTreeMap<String, T>> for Value {
+    fn from(value: BTreeMap<String, T>) -> Self {
+        Value::Map(Box::new(
+                value
+                .into_iter()
+                .map(|(k, v)| (k, v.into()))
+                .collect::<BTreeMap<_,_>>()
+        ))
+    }
+}
 
-#[cfg(not(feature = "specialization"))]
-impl_container_conversions!();
+impl<T: Into<RpcValue>> From<BTreeMap<i32, T>> for Value {
+    fn from(value: BTreeMap<i32, T>) -> Self {
+        Value::IMap(Box::new(
+                value
+                .into_iter()
+                .map(|(k, v)| (k, v.into()))
+                .collect::<BTreeMap<_,_>>()
+        ))
+    }
+}
 
 fn format_err_try_from(expected_type: &str, actual_type: &str) -> String {
     format!("Expected type `{expected_type}`, got `{actual_type}`")
