@@ -123,32 +123,29 @@ mod test {
 
         #[test]
         fn arithmetics() -> Result<(), String> {
-            // FIXME: Add a way to specify UInt literals, and then use it here in the tests.
             impl_cq_test([
                 ("null", "(-false)", r"true"),
                 ("null", "(-true)", r"false"),
                 ("null", "(-1)", r"-1"),
 
                 ("null", "1 + 1", r"2"),
-                ("1", ". + 1", r"2"),
-                ("1u", ". + (-1)", r"0u"),
-                ("-1", ". + .", r"-2"),
-                ("1u", ". + 1", r"2u"),
-                ("1", ". + .", r"2"),
-                ("1u", ". + .", r"2u"),
+                ("null", "uint(1) + (-1)", r"0u"),
+                ("null", "(-1) + (-1)", r"-2"),
+                ("null", "uint(1) + 1", r"2u"),
+                ("null", "uint(1) + uint(1)", r"2u"),
 
-                ("1u", ". - .", r"0u"),
-                ("1u", ". - 1", r"0u"),
+                ("null", "uint(1) - uint(1)", r"0u"),
+                ("null", "uint(1) - 1", r"0u"),
                 ("null", "1 - 1", r"0"),
-                ("1", ". - 1", r"0"),
+                ("null", "1 - 1", r"0"),
 
                 ("null", "(10 * 10)", r"100"),
-                ("10u", ". * .", r"100u"),
-                ("10u", ". * 10", r"100u"),
+                ("null", "uint(10) * uint(10)", r"100u"),
+                ("null", "uint(10) * 10", r"100u"),
 
                 ("null", "(10 / 10)", r"1"),
-                ("10u", ". / .", r"1u"),
-                ("10u", ". / 10", r"1u"),
+                ("null", "uint(10) / uint(10)", r"1u"),
+                ("null", "uint(10) / 10", r"1u"),
 
                 ("null", "(10 % 10)", r"0"),
                 ("null", "(10 % 11)", r"10"),
@@ -174,22 +171,22 @@ mod test {
                 ("null", "1 < false", r"false"),
                 ("null", "1 < {}", r"true"),
                 ("null", "{} < 1", r"false"),
-                ("1u", ". < {}", r"true"),
-                ("1u", "{} < .", r"false"),
+                ("null", "uint(1) < {}", r"true"),
+                ("null", "{} < uint(1)", r"false"),
                 ("1.25p-2", ". < {}", r"true"),
                 ("1.25p-2", "{} < .", r"false"),
-                ("1e1", ". < {}", r"true"),
-                ("1e1", "{} < .", r"false"),
-                (r#"d"2017-05-03T15:52:31.123""#, ". < {}", r"true"),
-                (r#"d"2017-05-03T15:52:31.123""#, "{} < .", r"false"),
+                ("null", r#"decimal("1e1") < {}"#, r"true"),
+                ("null", r#"{} < decimal("1e1")"#, r"false"),
+                ("null", r#"datetime("2017-05-03T15:52:31.123") < {}"#, r"true"),
+                ("null", r#"{} < datetime("2017-05-03T15:52:31.123")"#, r"false"),
                 ("null", "\"asdf\" < {}", r"true"),
                 ("null", r#"{} < "asdf" "#, r"false"),
-                (r#"b"""#, ". < {}", r"true"),
-                (r#"b"""#, "{} < .", r"false"),
+                ("null", "blob([]) < {}", r"true"),
+                ("null", "{} < blob([])", r"false"),
                 ("null", "[] < {}", r"true"),
                 ("null", "{} < []", r"false"),
-                ("i{}", ". < {}", r"true"),
-                ("i{}", "{} < .", r"false"),
+                ("null", "imap({}) < {}", r"true"),
+                ("null", "{} < imap({})", r"false"),
 
                 ("null", "false < true", r"true"),
                 ("null", "1 < 2", r"true"),
@@ -197,12 +194,11 @@ mod test {
                 ("null", "[1] < [1, 1]", r"true"),
                 ("null", "{} < {a: 1}", r"true"),
 
-                // FIXME: No way of creating these values in cq yet.
-                ("1u", ". < (. + (1))", r"true"),
-                (r#"d"2017-05-03T15:52:31.123""#, ". < .", r"false"),
-                ("1e1", ". < .", r"false"),
-                (r#" b"" "#, ". < .", r"false"),
-                ("i{}", ". < .", r"false"),
+                ("null", "uint(1) < (uint(1) + (1))", r"true"),
+                ("null", r#"datetime("2017-05-03T15:52:31.123") < datetime("2017-05-03T15:52:31.123")"#, r"false"),
+                ("null", r#"decimal("1e1") < decimal("1e1")"#, r"false"),
+                ("null", "blob([120]) < blob([120])", r"false"),
+                ("null", r#"imap({"1": 1}) < imap({"1": 1})"#, r"false"),
             ])
         }
 

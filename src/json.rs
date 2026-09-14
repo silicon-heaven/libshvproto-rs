@@ -161,6 +161,11 @@ where W: Write
     fn write_bytes(&mut self, b: &[u8]) -> WriteResult {
         self.byte_writer.write_bytes(b)
     }
+    fn write_double(&mut self, n: f64) -> WriteResult {
+        let s = n.to_string();
+        let cnt = self.write_bytes(s.as_bytes())?;
+        Ok(self.write_count() - cnt)
+    }
 }
 
 impl<W> Writer for JsonWriter<'_, W>
