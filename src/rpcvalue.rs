@@ -585,11 +585,49 @@ macro_rules! try_from_integral_value {
 }
 
 try_from_integral_value!(i32);
-try_from_integral_value!(i64);
 try_from_integral_value!(isize);
 try_from_integral_value!(usize);
 try_from_integral_value!(u32);
-try_from_integral_value!(u64);
+
+// Must be inlined, otherwise we get a warning for unneeded copy+try_from.
+impl TryFrom<&Value> for u64 {
+    type Error = String;
+    fn try_from(value: &Value) -> Result<Self, Self::Error>{
+        match value {
+            Value::Int(val) =>  <u64>::try_from(*val).map_err(|e|e.to_string()),
+            Value::UInt(val) =>  Ok(*val),
+            _ => Err(format_err_try_from("Int or UInt", value.type_name()))
+        }
+    }
+}
+
+// Must be inlined, otherwise we get a warning for unneeded copy+try_from.
+impl TryFrom<Value> for u64 {
+    type Error = String;
+    fn try_from(value: Value) -> Result<Self, Self::Error>{
+        Self::try_from(&value)
+    }
+}
+
+// Must be inlined, otherwise we get a warning for unneeded copy+try_from.
+impl TryFrom<&Value> for i64 {
+    type Error = String;
+    fn try_from(value: &Value) -> Result<Self, Self::Error>{
+        match value {
+            Value::Int(val) =>  Ok(*val),
+            Value::UInt(val) =>  <i64>::try_from(*val).map_err(|e|e.to_string()),
+            _ => Err(format_err_try_from("Int or UInt", value.type_name()))
+        }
+    }
+}
+
+// Must be inlined, otherwise we get a warning for unneeded copy+try_from.
+impl TryFrom<Value> for i64 {
+    type Error = String;
+    fn try_from(value: Value) -> Result<Self, Self::Error>{
+        Self::try_from(&value)
+    }
+}
 
 impl TryFrom<&Value> for f64 {
     type Error = String;

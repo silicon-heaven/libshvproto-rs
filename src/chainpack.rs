@@ -606,7 +606,7 @@ where
                 }
                 Value::String(s) => {
                     if !self.dry_run {
-                        map.insert(&**s.clone(), val);
+                        map.insert(&**s, val);
                     }
                 }
                 _ => {
