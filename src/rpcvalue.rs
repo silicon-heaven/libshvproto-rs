@@ -249,16 +249,6 @@ impl<Tz: chrono::TimeZone> TryFrom<&chrono::DateTime<Tz>> for RpcValue {
         })
     }
 }
-impl<Tz: chrono::TimeZone> TryFrom<chrono::DateTime<Tz>> for RpcValue {
-    type Error = String;
-
-    fn try_from(value: chrono::DateTime<Tz>) -> Result<Self, Self::Error> {
-        Value::try_from(&value).map(|value| RpcValue {
-            meta: None,
-            value,
-        })
-    }
-}
 
 impl From<&RpcValue> for RpcValue {
     fn from(value: &RpcValue) -> Self {
@@ -804,6 +794,12 @@ impl TryFrom<Value> for chrono::DateTime<chrono::FixedOffset> {
     }
 }
 
+impl<Tz: chrono::TimeZone> From<chrono::DateTime<Tz>> for Value {
+    fn from(value: chrono::DateTime<Tz>) -> Self {
+        Value::DateTime(DateTime::from_datetime(&value))
+    }
+}
+
 // Cannot use generic trait implementation here.
 // See `rustc --explain E0210`
 macro_rules! try_from_rpc_value_ref {
@@ -1314,14 +1310,14 @@ mod test {
         assert_eq!(rv.try_into(), Ok(dc));
 
         let dt = chrono::offset::Utc::now();
-        let rv = RpcValue::try_from(dt).unwrap();
+        let rv = RpcValue::from(dt);
         assert_eq!(rv.as_datetime().epoch_msec(), dt.timestamp_millis());
         let rrv = &rv;
         assert_eq!(rrv.try_into(), Ok(DateTime::from_datetime(&dt)));
         assert_eq!(rv.try_into(), Ok(DateTime::from_datetime(&dt)));
 
         let dt = chrono::offset::Local::now();
-        let rv = RpcValue::try_from(dt).unwrap();
+        let rv = RpcValue::from(dt);
         assert_eq!(
             rv.as_datetime().epoch_msec() + i64::from(rv.as_datetime().utc_offset()) * 1000,
             dt.timestamp_millis() + i64::from(dt.offset().fix().local_minus_utc()) * 1000
