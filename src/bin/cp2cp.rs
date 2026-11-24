@@ -154,7 +154,7 @@ fn main() {
     }
 
     let mut reader: Box<dyn BufRead> = match opts.file {
-        None => Box::new(BufReader::new(io::stdin())),
+        None => Box::new(io::stdin().lock()),
         Some(filename) => Box::new(BufReader::new(fs::File::open(filename).expect("Opening files must work"))),
     };
 

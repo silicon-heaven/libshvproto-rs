@@ -341,6 +341,47 @@ impl TryFrom<NaiveDateTime> for DateTime {
     }
 }
 
+/// Serde `with` module serializing `chrono::DateTime<FixedOffset>` as SHV DateTime.
+///
+/// ```ignore
+/// #[derive(Serialize, Deserialize, RpcTypeStr)]
+/// struct Params {
+///     #[serde(with = "shvproto::datetime::chrono_datetime")]
+///     created: chrono::DateTime<chrono::FixedOffset>,
+/// }
+/// ```
+#[cfg(feature = "serde")]
+pub mod chrono_datetime {
+    use chrono::FixedOffset;
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    pub fn serialize<S: Serializer>(dt: &chrono::DateTime<FixedOffset>, serializer: S) -> Result<S::Ok, S::Error> {
+        super::DateTime::from_datetime(dt).serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<chrono::DateTime<FixedOffset>, D::Error> {
+        Ok(super::DateTime::deserialize(deserializer)?.to_chrono_datetime())
+    }
+}
+
+/// Serde `with` module serializing `Option<chrono::DateTime<FixedOffset>>` as SHV DateTime or null.
+///
+/// Use it together with `#[serde(default)]` to allow the field to be missing.
+#[cfg(feature = "serde")]
+pub mod chrono_datetime_opt {
+    use chrono::FixedOffset;
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    #[expect(clippy::ref_option, reason = "serde `with` requires this signature")]
+    pub fn serialize<S: Serializer>(dt: &Option<chrono::DateTime<FixedOffset>>, serializer: S) -> Result<S::Ok, S::Error> {
+        dt.as_ref().map(super::DateTime::from_datetime).serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<chrono::DateTime<FixedOffset>>, D::Error> {
+        Ok(Option::<super::DateTime>::deserialize(deserializer)?.map(super::DateTime::to_chrono_datetime))
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::DateTime;
