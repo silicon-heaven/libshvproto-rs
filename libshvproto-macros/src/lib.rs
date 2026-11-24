@@ -494,11 +494,11 @@ pub fn derive_to_rpcvalue(item: TokenStream) -> TokenStream {
 ///
 /// ```ignore
 /// #[derive(Serialize, Deserialize, RpcTypeStr)]
-/// struct PushEventDbParams {
-///     event_id: i64,
+/// struct PushDbParams {
+///     data_id: i64,
 ///     compressed_data: Vec<u8>,
 /// }
-/// // PushEventDbParams::RPC_TYPE_STR == "{i:event_id,x:compressed_data}"
+/// // PushDbParams::RPC_TYPE_STR == "{i:data_id,x:compressed_data}"
 /// ```
 ///
 /// The description mirrors serde's map serialization (KeyStruct), honouring
