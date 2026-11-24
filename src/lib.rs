@@ -8,6 +8,7 @@ pub mod decimal;
 pub mod metamap;
 pub mod reader;
 pub mod rpcvalue;
+pub mod rpctypestr;
 pub mod util;
 pub mod writer;
 mod textrdwr;
@@ -27,6 +28,15 @@ pub use cpon::{CponReader, CponWriter};
 pub use json::{JsonReader, JsonWriter};
 
 pub use libshvproto_macros::{FromRpcValue, ToRpcValue};
+pub use rpctypestr::RpcTypeStr;
+
+// Lets the derive macros refer to `::shvproto` from inside this crate too.
+extern crate self as shvproto;
+
+#[doc(hidden)]
+pub mod __private {
+    pub use const_format;
+}
 
 #[cfg(feature = "serde")]
 pub use crate::serde::{ValueSerializer, to_rpcvalue, ValueDeserializer, from_rpcvalue};

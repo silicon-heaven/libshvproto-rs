@@ -11,6 +11,7 @@ edition = "2024"
 [dependencies]
 libshvproto-macros = { path = "./libshvproto-macros", version = "0.2.1" }
 log = "0.4"
+const_format = "0.2"
 chrono = "0.4"
 hex = "0.4"
 clap = { version = "4.5", features = ["derive"], optional = true }

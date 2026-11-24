@@ -8,6 +8,8 @@ use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 
+mod rpc_type_str;
+
 fn is_option(ty: &syn::Type) -> bool {
     let syn::Type::Path(typepath) = ty else {
         return false
@@ -484,4 +486,41 @@ pub fn derive_to_rpcvalue(item: TokenStream) -> TokenStream {
         }
         _ => panic!("This macro can only be used on a struct or an enum.")
     }.into()
+}
+
+/// Implements `shvproto::rpctypestr::RpcTypeStr` for a struct with named fields or an enum,
+/// producing its SHV RPC type description as a compile-time `&'static str`
+/// (see <https://silicon-heaven.github.io/shv-doc/rpctypes.html>).
+///
+/// ```ignore
+/// #[derive(Serialize, Deserialize, RpcTypeStr)]
+/// struct PushEventDbParams {
+///     event_id: i64,
+///     compressed_data: Vec<u8>,
+/// }
+/// // PushEventDbParams::RPC_TYPE_STR == "{i:event_id,x:compressed_data}"
+/// ```
+///
+/// The description mirrors serde's map serialization (KeyStruct), honouring
+/// `#[serde(transparent)]` on the struct and `#[serde(rename = "...")]` on fields.
+/// `Option<T>` fields are described as `T|n`, `Vec<T>` as `[T]` (except `Vec<u8>`, which is
+/// a Blob `x`), `BTreeMap<K, V>` and `HashMap<K, V>` fields as `{V}`; every other field
+/// type has to implement `RpcTypeStr` itself.
+///
+/// An enum is described as an SHV String Enum `s[KEY,KEY:TYPE,...]` with the variant names as
+/// keys. Explicit discriminants are ignored, as serde ignores them. A data variant has its
+/// payload type after the colon: a newtype variant `V(T)` is `V:T` and a struct variant
+/// `V { f: T }` is `V:{T:f}`. The keys are the serde variant names, `#[serde(rename = "...")]` is
+/// honoured, `tag`, `content` and `untagged` enums are rejected.
+///
+/// Note that serde serializes the enum externally tagged, a unit variant as the `"V"` string and
+/// a data variant as the `{"V":value}` map, the type string describes the variants only.
+///
+/// The generated code refers to `::shvproto::rpctypestr::RpcTypeStr`.
+#[proc_macro_derive(RpcTypeStr)]
+pub fn derive_rpc_type_str(input: TokenStream) -> TokenStream {
+    let input = syn::parse_macro_input!(input as syn::DeriveInput);
+    rpc_type_str::expand(&input)
+        .unwrap_or_else(syn::Error::into_compile_error)
+        .into()
 }
