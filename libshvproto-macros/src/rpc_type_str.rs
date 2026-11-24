@@ -44,9 +44,11 @@ fn is_u8(ty: &Type) -> bool {
 /// Const string pieces describing `ty`.
 ///
 /// `Option<T>` is expanded here as `T|n`, `Vec<T>` as `[T]` and `BTreeMap<K, V>` /
-/// `HashMap<K, V>` as `{V}`,
-/// because a generic `impl RpcTypeStr` for them cannot concatenate the inner `RPC_TYPE_STR`
-/// into a `&'static str` on stable Rust.
+/// `HashMap<K, V>` as `{V}`, because a generic `impl RpcTypeStr` for them cannot concatenate
+/// the inner `RPC_TYPE_STR` into a `&'static str` on stable Rust: the buffer length
+/// depends on the generic parameter, which requires `#![feature(generic_const_exprs)]`
+/// (<https://github.com/rust-lang/rust/issues/76560>). Once it is stable, these can become
+/// generic impls and this special-casing can be removed.
 fn type_parts(ty: &Type) -> Vec<proc_macro2::TokenStream> {
     if let Type::Path(TypePath { qself: None, path, .. }) = ty {
     if let Some(seg) = path.segments.last() {
